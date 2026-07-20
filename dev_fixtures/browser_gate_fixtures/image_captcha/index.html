@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>Image Captcha Gate Fixture</title>
+  <style>
+    #captcha-img {
+      display: inline-block;
+      width: 120px;
+      height: 40px;
+      background: #eee;
+      line-height: 40px;
+      text-align: center;
+      font-family: monospace;
+      font-size: 18px;
+      letter-spacing: 4px;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="captcha-form">
+    <p>请输入图中验证码</p>
+    <div id="captcha-img" aria-label="captcha image">AB12</div>
+    <button id="refresh-captcha" type="button">换一张</button>
+    <label>验证码 <input id="captcha-input" type="text" autocomplete="off" /></label>
+    <button id="submit" type="button">提交</button>
+  </div>
+  <div id="passed" hidden>验证通过</div>
+  <script>
+    var codes = ["AB12", "XY99", "7K3M"];
+    var idx = 0;
+    function showCode() {
+      document.getElementById("captcha-img").textContent = codes[idx];
+    }
+    document.getElementById("refresh-captcha").addEventListener("click", function () {
+      idx = (idx + 1) % codes.length;
+      showCode();
+    });
+    document.getElementById("submit").addEventListener("click", function () {
+      var c = document.getElementById("captcha-input").value.trim().toUpperCase();
+      if (c === codes[idx]) {
+        document.getElementById("captcha-form").hidden = true;
+        document.getElementById("passed").hidden = false;
+      } else {
+        alert("验证码错误");
+      }
+    });
+  </script>
+</body>
+</html>

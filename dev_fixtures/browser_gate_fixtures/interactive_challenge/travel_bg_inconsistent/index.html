@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>Travel BG Inconsistent</title>
+  <style>
+    #challenge-box { width: 320px; padding: 16px; border: 1px solid #ddd; border-radius: 8px; background: #fafafa; }
+    #slider-track {
+      position: relative; height: 40px; border-radius: 4px; margin-top: 12px;
+      background: linear-gradient(90deg, #e8e8e8 0%, #e8e8e8 33%, #ffccc7 33%, #ffccc7 66%, #b7eb8f 66%, #b7eb8f 100%);
+    }
+    #slider-thumb { position: absolute; left: 0; top: 0; width: 40px; height: 40px; background: #1677ff; border-radius: 4px; cursor: grab; color: #fff; line-height: 40px; text-align: center; }
+    #slider-fill { display: none; }
+    .ok { color: #389e0d; display: none; margin-top: 12px; }
+    .hint { font-size: 12px; color: #888; }
+  </style>
+</head>
+<body>
+  <div id="challenge-box">
+    <p>轨道中段背景图案明显变化</p>
+    <p class="hint">应下发面板并带 visual_warning，不阻塞 interrupt</p>
+    <div id="slider-track">
+      <div id="slider-fill"></div>
+      <div id="slider-thumb" role="slider">→</div>
+    </div>
+    <p class="ok" id="success-msg">验证通过</p>
+  </div>
+  <script>
+    (function () {
+      var track = document.getElementById("slider-track");
+      var thumb = document.getElementById("slider-thumb");
+      var maxX = track.clientWidth - thumb.clientWidth;
+      var dragging = false, startX = 0, startLeft = 0;
+      function setPos(x) {
+        var left = Math.max(0, Math.min(x, maxX));
+        thumb.style.left = left + "px";
+        if (left >= maxX - 2) document.getElementById("success-msg").style.display = "block";
+      }
+      thumb.addEventListener("mousedown", function (e) { dragging = true; startX = e.clientX; startLeft = parseInt(thumb.style.left || "0", 10); e.preventDefault(); });
+      document.addEventListener("mousemove", function (e) { if (!dragging) return; setPos(startLeft + e.clientX - startX); });
+      document.addEventListener("mouseup", function () { dragging = false; });
+    })();
+  </script>
+</body>
+</html>

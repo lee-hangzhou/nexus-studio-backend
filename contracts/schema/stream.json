@@ -1,0 +1,1100 @@
+{
+  "$defs": {
+    "BrowserBlockedFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "conversation_id": {
+          "title": "Conversation Id",
+          "type": "integer"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "screenshot_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Screenshot Url"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "browser_blocked",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "turn_id",
+        "message",
+        "conversation_id"
+      ],
+      "title": "BrowserBlockedFrame",
+      "type": "object"
+    },
+    "BrowserFrameEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "frame_b64": {
+          "title": "Frame B64",
+          "type": "string"
+        },
+        "height": {
+          "title": "Height",
+          "type": "integer"
+        },
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "type": {
+          "const": "browser_frame",
+          "title": "Type",
+          "type": "string"
+        },
+        "width": {
+          "title": "Width",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "frame_b64",
+        "width",
+        "height"
+      ],
+      "title": "BrowserFrameEvent",
+      "type": "object"
+    },
+    "CancelledFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "cancelled",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "turn_id",
+        "reason"
+      ],
+      "title": "CancelledFrame",
+      "type": "object"
+    },
+    "CanvasEdgeType": {
+      "enum": [
+        "dependency"
+      ],
+      "title": "CanvasEdgeType",
+      "type": "string"
+    },
+    "CanvasEdgeView": {
+      "additionalProperties": false,
+      "properties": {
+        "edge_type": {
+          "$ref": "#/$defs/CanvasEdgeType"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        },
+        "source": {
+          "format": "uuid",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_port": {
+          "$ref": "#/$defs/CanvasSourcePort"
+        },
+        "target": {
+          "format": "uuid",
+          "title": "Target",
+          "type": "string"
+        },
+        "target_port": {
+          "$ref": "#/$defs/CanvasTargetPort"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "target",
+        "source_port",
+        "target_port",
+        "edge_type"
+      ],
+      "title": "CanvasEdgeView",
+      "type": "object"
+    },
+    "CanvasNodeKind": {
+      "enum": [
+        "text",
+        "image",
+        "video",
+        "audio"
+      ],
+      "title": "CanvasNodeKind",
+      "type": "string"
+    },
+    "CanvasNodeStatus": {
+      "enum": [
+        "idle",
+        "waiting_inputs",
+        "ready",
+        "running",
+        "success",
+        "failed",
+        "cancelled"
+      ],
+      "title": "CanvasNodeStatus",
+      "type": "string"
+    },
+    "CanvasNodeView": {
+      "additionalProperties": false,
+      "properties": {
+        "duration_sec": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Sec"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Message"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "input_prompt": {
+          "default": "",
+          "title": "Input Prompt",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/CanvasNodeKind"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "output_asset_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Asset Ids"
+        },
+        "output_asset_urls": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Asset Urls"
+        },
+        "output_text": {
+          "default": "",
+          "title": "Output Text",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/CanvasPosition"
+        },
+        "ratio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ratio"
+        },
+        "resolution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolution"
+        },
+        "status": {
+          "$ref": "#/$defs/CanvasNodeStatus",
+          "default": "idle"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
+        },
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        },
+        "voice_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Voice Id"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "position"
+      ],
+      "title": "CanvasNodeView",
+      "type": "object"
+    },
+    "CanvasPatchFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "$ref": "#/$defs/CanvasPatchResponse"
+        },
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "turn_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Turn Id"
+        },
+        "type": {
+          "const": "canvas_patch",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "data"
+      ],
+      "title": "CanvasPatchFrame",
+      "type": "object"
+    },
+    "CanvasPatchResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "deleted_edge_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Deleted Edge Ids",
+          "type": "array"
+        },
+        "deleted_node_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Deleted Node Ids",
+          "type": "array"
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/CanvasEdgeView"
+          },
+          "title": "Edges",
+          "type": "array"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/CanvasNodeView"
+          },
+          "title": "Nodes",
+          "type": "array"
+        },
+        "op_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Op Id"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "title": "CanvasPatchResponse",
+      "type": "object"
+    },
+    "CanvasPosition": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "CanvasPosition",
+      "type": "object"
+    },
+    "CanvasSourcePort": {
+      "enum": [
+        "output_text",
+        "output_asset"
+      ],
+      "title": "CanvasSourcePort",
+      "type": "string"
+    },
+    "CanvasTargetPort": {
+      "enum": [
+        "prompt_input",
+        "reference_asset"
+      ],
+      "title": "CanvasTargetPort",
+      "type": "string"
+    },
+    "ConversationTitleFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "conversation_id": {
+          "title": "Conversation Id",
+          "type": "integer"
+        },
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "type": {
+          "const": "conversation_title",
+          "title": "Type",
+          "type": "string"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "conversation_id",
+        "title",
+        "updated_at"
+      ],
+      "title": "ConversationTitleFrame",
+      "type": "object"
+    },
+    "DoneFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "message_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Message Ids",
+          "type": "array"
+        },
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "done",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "turn_id"
+      ],
+      "title": "DoneFrame",
+      "type": "object"
+    },
+    "ErrorFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/StreamErrorCode"
+        },
+        "data": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "turn_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Turn Id"
+        },
+        "type": {
+          "const": "error",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "code",
+        "message"
+      ],
+      "title": "ErrorFrame",
+      "type": "object"
+    },
+    "GenerationProgress": {
+      "additionalProperties": false,
+      "properties": {
+        "node_id": {
+          "format": "uuid",
+          "title": "Node Id",
+          "type": "string"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/CanvasNodeStatus"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
+        }
+      },
+      "required": [
+        "node_id",
+        "status",
+        "revision"
+      ],
+      "title": "GenerationProgress",
+      "type": "object"
+    },
+    "GenerationProgressFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "$ref": "#/$defs/GenerationProgress"
+        },
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "turn_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Turn Id"
+        },
+        "type": {
+          "const": "generation_progress",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "data"
+      ],
+      "title": "GenerationProgressFrame",
+      "type": "object"
+    },
+    "HeartbeatFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "ts": {
+          "title": "Ts",
+          "type": "integer"
+        },
+        "turn_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Turn Id"
+        },
+        "type": {
+          "const": "heartbeat",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "ts"
+      ],
+      "title": "HeartbeatFrame",
+      "type": "object"
+    },
+    "StreamErrorCode": {
+      "enum": [
+        "agent_recovery_exhausted",
+        "canvas_duplicate_turn",
+        "canvas_project_busy",
+        "generation_failed",
+        "generation_timeout",
+        "gateway_upstream_failed",
+        "internal",
+        "max_iterations",
+        "tool_parse_fatal",
+        "turn_failed",
+        "wall_clock"
+      ],
+      "title": "StreamErrorCode",
+      "type": "string"
+    },
+    "TokenChannel": {
+      "enum": [
+        "answer",
+        "think"
+      ],
+      "title": "TokenChannel",
+      "type": "string"
+    },
+    "TokenFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "$ref": "#/$defs/TokenChannel"
+        },
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "token",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "channel",
+        "text"
+      ],
+      "title": "TokenFrame",
+      "type": "object"
+    },
+    "ToolEndFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "data": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolRecoveryFrameData"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "preview": {
+          "default": "",
+          "title": "Preview",
+          "type": "string"
+        },
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "type": {
+          "const": "tool_end",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "call_id",
+        "name",
+        "ok"
+      ],
+      "title": "ToolEndFrame",
+      "type": "object"
+    },
+    "ToolPendingFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "tool_pending",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "call_id",
+        "name",
+        "turn_id"
+      ],
+      "title": "ToolPendingFrame",
+      "type": "object"
+    },
+    "ToolRecoveryFrameData": {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "protocol_version": {
+          "default": 2,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "recoverable": {
+          "default": false,
+          "title": "Recoverable",
+          "type": "boolean"
+        },
+        "recovery_attempt": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recovery Attempt"
+        },
+        "synthetic": {
+          "default": false,
+          "title": "Synthetic",
+          "type": "boolean"
+        }
+      },
+      "title": "ToolRecoveryFrameData",
+      "type": "object"
+    },
+    "ToolStartFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": true,
+          "title": "Args",
+          "type": "object"
+        },
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "type": {
+          "const": "tool_start",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "call_id",
+        "name"
+      ],
+      "title": "ToolStartFrame",
+      "type": "object"
+    },
+    "UserGateRequiredFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "assets": {
+          "additionalProperties": true,
+          "title": "Assets",
+          "type": "object"
+        },
+        "choices": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Choices",
+          "type": "array"
+        },
+        "domain": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Domain"
+        },
+        "fields": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Fields",
+          "type": "array"
+        },
+        "gate_id": {
+          "title": "Gate Id",
+          "type": "string"
+        },
+        "gate_type": {
+          "title": "Gate Type",
+          "type": "string"
+        },
+        "phase": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Phase"
+        },
+        "prompt": {
+          "default": "",
+          "title": "Prompt",
+          "type": "string"
+        },
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "user_gate_required",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "turn_id",
+        "gate_id",
+        "gate_type"
+      ],
+      "title": "UserGateRequiredFrame",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "browser_blocked": "#/$defs/BrowserBlockedFrame",
+      "browser_frame": "#/$defs/BrowserFrameEvent",
+      "cancelled": "#/$defs/CancelledFrame",
+      "canvas_patch": "#/$defs/CanvasPatchFrame",
+      "conversation_title": "#/$defs/ConversationTitleFrame",
+      "done": "#/$defs/DoneFrame",
+      "error": "#/$defs/ErrorFrame",
+      "generation_progress": "#/$defs/GenerationProgressFrame",
+      "heartbeat": "#/$defs/HeartbeatFrame",
+      "token": "#/$defs/TokenFrame",
+      "tool_end": "#/$defs/ToolEndFrame",
+      "tool_pending": "#/$defs/ToolPendingFrame",
+      "tool_start": "#/$defs/ToolStartFrame",
+      "user_gate_required": "#/$defs/UserGateRequiredFrame"
+    },
+    "propertyName": "type"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/TokenFrame"
+    },
+    {
+      "$ref": "#/$defs/ToolStartFrame"
+    },
+    {
+      "$ref": "#/$defs/ToolEndFrame"
+    },
+    {
+      "$ref": "#/$defs/HeartbeatFrame"
+    },
+    {
+      "$ref": "#/$defs/ErrorFrame"
+    },
+    {
+      "$ref": "#/$defs/DoneFrame"
+    },
+    {
+      "$ref": "#/$defs/CancelledFrame"
+    },
+    {
+      "$ref": "#/$defs/ConversationTitleFrame"
+    },
+    {
+      "$ref": "#/$defs/CanvasPatchFrame"
+    },
+    {
+      "$ref": "#/$defs/GenerationProgressFrame"
+    },
+    {
+      "$ref": "#/$defs/ToolPendingFrame"
+    },
+    {
+      "$ref": "#/$defs/UserGateRequiredFrame"
+    },
+    {
+      "$ref": "#/$defs/BrowserBlockedFrame"
+    },
+    {
+      "$ref": "#/$defs/BrowserFrameEvent"
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>QR Scan Gate Fixture</title>
+  <style>
+    #qr-canvas {
+      width: 200px;
+      height: 200px;
+      border: 1px solid #ccc;
+      display: block;
+      margin: 16px 0;
+    }
+    .hint { color: #666; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>扫码登录（Fixture）</h1>
+  <p class="hint">模拟 QR 登录：点击下方区域刷新二维码</p>
+  <div id="qr-wrap">
+    <canvas id="qr-canvas" width="200" height="200"></canvas>
+    <button id="refresh-qr" type="button">点击刷新二维码</button>
+  </div>
+  <div id="logged-in" hidden>
+    <p>扫码成功（fixture 模拟：3 秒后自动登录）</p>
+  </div>
+  <script>
+    var token = 0;
+    function drawQr() {
+      token += 1;
+      var canvas = document.getElementById("qr-canvas");
+      var ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, 200, 200);
+      ctx.fillStyle = "#000";
+      ctx.font = "12px monospace";
+      ctx.fillText("QR-FIXTURE-" + token, 20, 100);
+      for (var i = 0; i < 8; i++) {
+        ctx.fillRect(20 + i * 20, 120, 10, 10);
+      }
+    }
+    document.getElementById("qr-canvas").addEventListener("click", drawQr);
+    document.getElementById("refresh-qr").addEventListener("click", drawQr);
+    drawQr();
+    // Dev: simulate scan after panel "done" — agent continues with exec probe
+  </script>
+</body>
+</html>

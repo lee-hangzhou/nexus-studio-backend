@@ -1,0 +1,27 @@
+name: backend-quality
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt ruff mypy
+      - run: python -m compileall -q app
+      - run: make test
+      - run: ruff check --select E9,F63,F7 app scripts/export_contracts.py
+      - run: make type-check
+      - run: python scripts/export_contracts.py --check
+      - run: make docker-config-check
+      - run: docker build --tag dream-drama-backend:ci .

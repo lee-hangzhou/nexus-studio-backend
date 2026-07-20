@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>Geometry Drift</title>
+  <style>
+    #challenge-box { width: 320px; padding: 16px; border: 1px solid #ddd; border-radius: 8px; background: #fafafa; transition: margin-left 0.2s; }
+    #slider-track { position: relative; height: 40px; background: #e8e8e8; border-radius: 4px; margin-top: 12px; }
+    #slider-thumb { position: absolute; left: 0; top: 0; width: 40px; height: 40px; background: #1677ff; border-radius: 4px; cursor: grab; color: #fff; line-height: 40px; text-align: center; }
+    #slider-fill { position: absolute; left: 0; top: 0; height: 40px; width: 0; background: #91caff; pointer-events: none; }
+    .ok { color: #389e0d; display: none; margin-top: 12px; }
+    .hint { font-size: 12px; color: #888; }
+  </style>
+</head>
+<body>
+  <div id="challenge-box">
+    <p>几何漂移：preflight 后访问 <code>?action=shift</code> 使容器偏移</p>
+    <p class="hint">用于验收 challenge_changed / attempt_valid=false</p>
+    <div id="slider-track">
+      <div id="slider-fill"></div>
+      <div id="slider-thumb" role="slider">→</div>
+    </div>
+    <p class="ok" id="success-msg">验证通过</p>
+  </div>
+  <script>
+    (function () {
+      var box = document.getElementById("challenge-box");
+      if (new URLSearchParams(location.search).get("action") === "shift") {
+        box.style.marginLeft = "24px";
+        box.dataset.drifted = "1";
+      }
+      var track = document.getElementById("slider-track");
+      var thumb = document.getElementById("slider-thumb");
+      var fill = document.getElementById("slider-fill");
+      var maxX = track.clientWidth - thumb.clientWidth;
+      var dragging = false, startX = 0, startLeft = 0;
+      function setPos(x) {
+        var left = Math.max(0, Math.min(x, maxX));
+        thumb.style.left = left + "px";
+        fill.style.width = (left + thumb.clientWidth / 2) + "px";
+        if (left >= maxX - 2) document.getElementById("success-msg").style.display = "block";
+      }
+      thumb.addEventListener("mousedown", function (e) { dragging = true; startX = e.clientX; startLeft = parseInt(thumb.style.left || "0", 10); e.preventDefault(); });
+      document.addEventListener("mousemove", function (e) { if (!dragging) return; setPos(startLeft + e.clientX - startX); });
+      document.addEventListener("mouseup", function () { dragging = false; });
+    })();
+  </script>
+</body>
+</html>

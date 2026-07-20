@@ -1,0 +1,990 @@
+{
+  "$defs": {
+    "CanvasEdgeType": {
+      "enum": [
+        "dependency"
+      ],
+      "title": "CanvasEdgeType",
+      "type": "string"
+    },
+    "CanvasEdgeView": {
+      "additionalProperties": false,
+      "properties": {
+        "edge_type": {
+          "$ref": "#/$defs/CanvasEdgeType"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        },
+        "source": {
+          "format": "uuid",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_port": {
+          "$ref": "#/$defs/CanvasSourcePort"
+        },
+        "target": {
+          "format": "uuid",
+          "title": "Target",
+          "type": "string"
+        },
+        "target_port": {
+          "$ref": "#/$defs/CanvasTargetPort"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "target",
+        "source_port",
+        "target_port",
+        "edge_type"
+      ],
+      "title": "CanvasEdgeView",
+      "type": "object"
+    },
+    "CanvasNodeKind": {
+      "enum": [
+        "text",
+        "image",
+        "video",
+        "audio"
+      ],
+      "title": "CanvasNodeKind",
+      "type": "string"
+    },
+    "CanvasNodeStatus": {
+      "enum": [
+        "idle",
+        "waiting_inputs",
+        "ready",
+        "running",
+        "success",
+        "failed",
+        "cancelled"
+      ],
+      "title": "CanvasNodeStatus",
+      "type": "string"
+    },
+    "CanvasNodeView": {
+      "additionalProperties": false,
+      "properties": {
+        "duration_sec": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Sec"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Message"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "input_prompt": {
+          "default": "",
+          "title": "Input Prompt",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/CanvasNodeKind"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "output_asset_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Asset Ids"
+        },
+        "output_asset_urls": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Asset Urls"
+        },
+        "output_text": {
+          "default": "",
+          "title": "Output Text",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/CanvasPosition"
+        },
+        "ratio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ratio"
+        },
+        "resolution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolution"
+        },
+        "status": {
+          "$ref": "#/$defs/CanvasNodeStatus",
+          "default": "idle"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
+        },
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        },
+        "voice_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Voice Id"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "position"
+      ],
+      "title": "CanvasNodeView",
+      "type": "object"
+    },
+    "CanvasPatchRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_revision": {
+          "title": "Expected Revision",
+          "type": "integer"
+        },
+        "ops": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "connect": "#/$defs/ConnectNodesOp",
+                "create_node": "#/$defs/CreateNodeOp",
+                "delete_node": "#/$defs/DeleteNodeOp",
+                "disconnect": "#/$defs/DisconnectNodesOp",
+                "update_node": "#/$defs/UpdateNodeOp"
+              },
+              "propertyName": "op"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/CreateNodeOp"
+              },
+              {
+                "$ref": "#/$defs/UpdateNodeOp"
+              },
+              {
+                "$ref": "#/$defs/DeleteNodeOp"
+              },
+              {
+                "$ref": "#/$defs/ConnectNodesOp"
+              },
+              {
+                "$ref": "#/$defs/DisconnectNodesOp"
+              }
+            ]
+          },
+          "minItems": 1,
+          "title": "Ops",
+          "type": "array"
+        }
+      },
+      "required": [
+        "expected_revision",
+        "ops"
+      ],
+      "title": "CanvasPatchRequest",
+      "type": "object"
+    },
+    "CanvasPatchResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "deleted_edge_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Deleted Edge Ids",
+          "type": "array"
+        },
+        "deleted_node_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Deleted Node Ids",
+          "type": "array"
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/CanvasEdgeView"
+          },
+          "title": "Edges",
+          "type": "array"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/CanvasNodeView"
+          },
+          "title": "Nodes",
+          "type": "array"
+        },
+        "op_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Op Id"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "title": "CanvasPatchResponse",
+      "type": "object"
+    },
+    "CanvasPosition": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "CanvasPosition",
+      "type": "object"
+    },
+    "CanvasSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/CanvasEdgeView"
+          },
+          "title": "Edges",
+          "type": "array"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/CanvasNodeView"
+          },
+          "title": "Nodes",
+          "type": "array"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision",
+        "nodes",
+        "edges"
+      ],
+      "title": "CanvasSnapshot",
+      "type": "object"
+    },
+    "CanvasSourcePort": {
+      "enum": [
+        "output_text",
+        "output_asset"
+      ],
+      "title": "CanvasSourcePort",
+      "type": "string"
+    },
+    "CanvasTargetPort": {
+      "enum": [
+        "prompt_input",
+        "reference_asset"
+      ],
+      "title": "CanvasTargetPort",
+      "type": "string"
+    },
+    "ConnectNodesOp": {
+      "additionalProperties": false,
+      "properties": {
+        "edge": {
+          "$ref": "#/$defs/CreateEdgePayload"
+        },
+        "op": {
+          "const": "connect",
+          "title": "Op",
+          "type": "string"
+        }
+      },
+      "required": [
+        "op",
+        "edge"
+      ],
+      "title": "ConnectNodesOp",
+      "type": "object"
+    },
+    "CreateEdgePayload": {
+      "additionalProperties": false,
+      "properties": {
+        "edge_type": {
+          "$ref": "#/$defs/CanvasEdgeType",
+          "default": "dependency"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        },
+        "source": {
+          "format": "uuid",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_port": {
+          "$ref": "#/$defs/CanvasSourcePort"
+        },
+        "target": {
+          "format": "uuid",
+          "title": "Target",
+          "type": "string"
+        },
+        "target_port": {
+          "$ref": "#/$defs/CanvasTargetPort"
+        }
+      },
+      "required": [
+        "source",
+        "target",
+        "source_port",
+        "target_port"
+      ],
+      "title": "CreateEdgePayload",
+      "type": "object"
+    },
+    "CreateNodeConnectAnchor": {
+      "additionalProperties": false,
+      "description": "拉线新建节点时，与锚点节点在同一事务内连边。",
+      "properties": {
+        "edge_type": {
+          "$ref": "#/$defs/CanvasEdgeType",
+          "default": "dependency"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        },
+        "node_id": {
+          "format": "uuid",
+          "title": "Node Id",
+          "type": "string"
+        },
+        "side": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "title": "Side",
+          "type": "string"
+        },
+        "source_port": {
+          "$ref": "#/$defs/CanvasSourcePort"
+        },
+        "target_port": {
+          "$ref": "#/$defs/CanvasTargetPort"
+        }
+      },
+      "required": [
+        "node_id",
+        "side",
+        "source_port",
+        "target_port"
+      ],
+      "title": "CreateNodeConnectAnchor",
+      "type": "object"
+    },
+    "CreateNodeOp": {
+      "additionalProperties": false,
+      "properties": {
+        "connect_anchor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CreateNodeConnectAnchor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "node": {
+          "$ref": "#/$defs/CreateNodePayload"
+        },
+        "op": {
+          "const": "create_node",
+          "title": "Op",
+          "type": "string"
+        }
+      },
+      "required": [
+        "op",
+        "node"
+      ],
+      "title": "CreateNodeOp",
+      "type": "object"
+    },
+    "CreateNodePayload": {
+      "additionalProperties": false,
+      "properties": {
+        "duration_sec": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Sec"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Message"
+        },
+        "input_prompt": {
+          "default": "",
+          "title": "Input Prompt",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/CanvasNodeKind"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "output_asset_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Asset Ids"
+        },
+        "output_text": {
+          "default": "",
+          "title": "Output Text",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/CanvasPosition"
+        },
+        "ratio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ratio"
+        },
+        "resolution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolution"
+        },
+        "status": {
+          "$ref": "#/$defs/CanvasNodeStatus",
+          "default": "idle"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
+        },
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        },
+        "voice_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Voice Id"
+        }
+      },
+      "required": [
+        "kind",
+        "position"
+      ],
+      "title": "CreateNodePayload",
+      "type": "object"
+    },
+    "DeleteNodeOp": {
+      "additionalProperties": false,
+      "properties": {
+        "node_id": {
+          "format": "uuid",
+          "title": "Node Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "delete_node",
+          "title": "Op",
+          "type": "string"
+        }
+      },
+      "required": [
+        "op",
+        "node_id"
+      ],
+      "title": "DeleteNodeOp",
+      "type": "object"
+    },
+    "DisconnectNodesOp": {
+      "additionalProperties": false,
+      "properties": {
+        "edge_id": {
+          "format": "uuid",
+          "title": "Edge Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "disconnect",
+          "title": "Op",
+          "type": "string"
+        }
+      },
+      "required": [
+        "op",
+        "edge_id"
+      ],
+      "title": "DisconnectNodesOp",
+      "type": "object"
+    },
+    "GenerationProgress": {
+      "additionalProperties": false,
+      "properties": {
+        "node_id": {
+          "format": "uuid",
+          "title": "Node Id",
+          "type": "string"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/CanvasNodeStatus"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
+        }
+      },
+      "required": [
+        "node_id",
+        "status",
+        "revision"
+      ],
+      "title": "GenerationProgress",
+      "type": "object"
+    },
+    "UpdateNodeOp": {
+      "additionalProperties": false,
+      "properties": {
+        "node_id": {
+          "format": "uuid",
+          "title": "Node Id",
+          "type": "string"
+        },
+        "op": {
+          "const": "update_node",
+          "title": "Op",
+          "type": "string"
+        },
+        "patch": {
+          "$ref": "#/$defs/UpdateNodePatch"
+        }
+      },
+      "required": [
+        "op",
+        "node_id",
+        "patch"
+      ],
+      "title": "UpdateNodeOp",
+      "type": "object"
+    },
+    "UpdateNodePatch": {
+      "additionalProperties": false,
+      "properties": {
+        "duration_sec": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Sec"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Message"
+        },
+        "input_prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Prompt"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanvasNodeKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "output_asset_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Asset Ids"
+        },
+        "output_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Text"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanvasPosition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ratio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ratio"
+        },
+        "resolution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolution"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanvasNodeStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "voice_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Voice Id"
+        }
+      },
+      "title": "UpdateNodePatch",
+      "type": "object"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/CanvasSnapshot"
+    },
+    {
+      "$ref": "#/$defs/CanvasPatchRequest"
+    },
+    {
+      "$ref": "#/$defs/CanvasPatchResponse"
+    },
+    {
+      "$ref": "#/$defs/GenerationProgress"
+    },
+    {
+      "discriminator": {
+        "mapping": {
+          "connect": "#/$defs/ConnectNodesOp",
+          "create_node": "#/$defs/CreateNodeOp",
+          "delete_node": "#/$defs/DeleteNodeOp",
+          "disconnect": "#/$defs/DisconnectNodesOp",
+          "update_node": "#/$defs/UpdateNodeOp"
+        },
+        "propertyName": "op"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/CreateNodeOp"
+        },
+        {
+          "$ref": "#/$defs/UpdateNodeOp"
+        },
+        {
+          "$ref": "#/$defs/DeleteNodeOp"
+        },
+        {
+          "$ref": "#/$defs/ConnectNodesOp"
+        },
+        {
+          "$ref": "#/$defs/DisconnectNodesOp"
+        }
+      ]
+    }
+  ]
+}

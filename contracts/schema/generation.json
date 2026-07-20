@@ -1,0 +1,537 @@
+{
+  "$defs": {
+    "GatewayResultItem": {
+      "additionalProperties": true,
+      "properties": {
+        "height": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Height"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Type"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "title": "GatewayResultItem",
+      "type": "object"
+    },
+    "GenerateModelItem": {
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/GenerationKind"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "param_options": {
+          "$ref": "#/$defs/GenerateParamOptions"
+        },
+        "supports_vision": {
+          "default": false,
+          "title": "Supports Vision",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "model_id",
+        "label",
+        "kind"
+      ],
+      "title": "GenerateModelItem",
+      "type": "object"
+    },
+    "GenerateParamOptions": {
+      "additionalProperties": false,
+      "properties": {
+        "counts": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Counts",
+          "type": "array"
+        },
+        "durations": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Durations",
+          "type": "array"
+        },
+        "ratios": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ratios",
+          "type": "array"
+        },
+        "ratios_by_resolution": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Ratios By Resolution",
+          "type": "object"
+        },
+        "reference_modes": {
+          "items": {
+            "$ref": "#/$defs/ReferenceModeOption"
+          },
+          "title": "Reference Modes",
+          "type": "array"
+        },
+        "resolutions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Resolutions",
+          "type": "array"
+        }
+      },
+      "title": "GenerateParamOptions",
+      "type": "object"
+    },
+    "GenerateRefMaterial": {
+      "properties": {
+        "asset_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asset Id"
+        },
+        "attachment_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attachment Id"
+        },
+        "filename": {
+          "title": "Filename",
+          "type": "string"
+        },
+        "mime_type": {
+          "title": "Mime Type",
+          "type": "string"
+        },
+        "source_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Type"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "filename",
+        "mime_type",
+        "url"
+      ],
+      "title": "GenerateRefMaterial",
+      "type": "object"
+    },
+    "GenerateTaskView": {
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "duration": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Message"
+        },
+        "estimated_wait_seconds": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estimated Wait Seconds"
+        },
+        "is_favorited": {
+          "default": false,
+          "title": "Is Favorited",
+          "type": "boolean"
+        },
+        "kind": {
+          "$ref": "#/$defs/GenerationKind"
+        },
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "queue_position": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Queue Position"
+        },
+        "queue_status": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Queue Status"
+        },
+        "queue_total": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Queue Total"
+        },
+        "ratio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ratio"
+        },
+        "ref_materials": {
+          "items": {
+            "$ref": "#/$defs/GenerateRefMaterial"
+          },
+          "title": "Ref Materials",
+          "type": "array"
+        },
+        "reference_mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReferenceMode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "resolution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolution"
+        },
+        "result_asset_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Result Asset Ids",
+          "type": "array"
+        },
+        "result_count": {
+          "default": 0,
+          "title": "Result Count",
+          "type": "integer"
+        },
+        "result_urls": {
+          "items": {
+            "$ref": "#/$defs/GatewayResultItem"
+          },
+          "title": "Result Urls",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/GenerationTaskStatus"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "task_id",
+        "kind",
+        "status",
+        "prompt",
+        "model_id",
+        "created_at"
+      ],
+      "title": "GenerateTaskView",
+      "type": "object"
+    },
+    "GenerationKind": {
+      "enum": [
+        "image",
+        "video",
+        "audio"
+      ],
+      "title": "GenerationKind",
+      "type": "string"
+    },
+    "GenerationTaskStatus": {
+      "enum": [
+        "pending",
+        "running",
+        "success",
+        "failed"
+      ],
+      "title": "GenerationTaskStatus",
+      "type": "string"
+    },
+    "ReferenceMode": {
+      "enum": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "title": "ReferenceMode",
+      "type": "integer"
+    },
+    "ReferenceModeOption": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/ReferenceMode"
+        }
+      },
+      "required": [
+        "value",
+        "label"
+      ],
+      "title": "ReferenceModeOption",
+      "type": "object"
+    },
+    "SubmitGenerateRequest": {
+      "properties": {
+        "count": {
+          "default": 1,
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Count",
+          "type": "integer"
+        },
+        "duration": {
+          "anyOf": [
+            {
+              "maximum": 15,
+              "minimum": 3,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration"
+        },
+        "kind": {
+          "$ref": "#/$defs/GenerationKind"
+        },
+        "model_id": {
+          "minLength": 1,
+          "title": "Model Id",
+          "type": "string"
+        },
+        "prompt": {
+          "minLength": 1,
+          "title": "Prompt",
+          "type": "string"
+        },
+        "ratio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ratio"
+        },
+        "ref_asset_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Ref Asset Ids",
+          "type": "array"
+        },
+        "ref_attachment_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Ref Attachment Ids",
+          "type": "array"
+        },
+        "reference_mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReferenceMode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "resolution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolution"
+        },
+        "voice_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Voice Id"
+        }
+      },
+      "required": [
+        "kind",
+        "prompt",
+        "model_id"
+      ],
+      "title": "SubmitGenerateRequest",
+      "type": "object"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/SubmitGenerateRequest"
+    },
+    {
+      "$ref": "#/$defs/GenerateTaskView"
+    },
+    {
+      "$ref": "#/$defs/GenerateModelItem"
+    },
+    {
+      "$ref": "#/$defs/GenerateParamOptions"
+    }
+  ]
+}
