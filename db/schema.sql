@@ -137,6 +137,73 @@ BEFORE UPDATE ON assets
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 
+-- 通用 Chat 会话、消息与附件
+
+CREATE TABLE IF NOT EXISTS chat_conversations (
+  id                     BIGSERIAL PRIMARY KEY,
+  user_id                BIGINT NOT NULL,
+  title                  VARCHAR(255) NOT NULL,
+  default_model          VARCHAR(128) NOT NULL,
+  status                 INTEGER NOT NULL,
+  active_turn_id         VARCHAR(64),
+  active_turn_started_at TIMESTAMPTZ,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_conversations_user_updated
+  ON chat_conversations (user_id, updated_at DESC);
+
+DROP TRIGGER IF EXISTS trg_chat_conversations_updated_at ON chat_conversations;
+CREATE TRIGGER trg_chat_conversations_updated_at
+BEFORE UPDATE ON chat_conversations
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id              BIGSERIAL PRIMARY KEY,
+  conversation_id BIGINT NOT NULL,
+  user_id         BIGINT NOT NULL,
+  role            INTEGER NOT NULL,
+  content         TEXT NOT NULL,
+  payload         JSONB NOT NULL,
+  metadata        JSONB NOT NULL DEFAULT '{}',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation
+  ON chat_messages (conversation_id, created_at);
+
+CREATE TABLE IF NOT EXISTS chat_attachments (
+  id              BIGSERIAL PRIMARY KEY,
+  conversation_id BIGINT NOT NULL,
+  message_id      BIGINT,
+  asset_id        BIGINT,
+  user_id         BIGINT NOT NULL,
+  filename        VARCHAR(512) NOT NULL,
+  mime_type       VARCHAR(128) NOT NULL,
+  storage_key     VARCHAR(1024) NOT NULL,
+  size            BIGINT NOT NULL,
+  status          INTEGER NOT NULL DEFAULT 1,
+  is_attached     BOOLEAN NOT NULL DEFAULT TRUE,
+  detached_at     TIMESTAMPTZ,
+  parse_error     TEXT,
+  file_sha256     VARCHAR(64),
+  source          VARCHAR(32) NOT NULL DEFAULT 'user_upload',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE chat_attachments ADD COLUMN IF NOT EXISTS asset_id BIGINT;
+
+CREATE INDEX IF NOT EXISTS idx_chat_attachments_conversation
+  ON chat_attachments (conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_chat_attachments_active
+  ON chat_attachments (conversation_id, is_attached, status);
+CREATE INDEX IF NOT EXISTS idx_chat_attachments_message_id
+  ON chat_attachments (message_id);
+CREATE INDEX IF NOT EXISTS idx_chat_attachments_asset_id
+  ON chat_attachments (asset_id);
+
 -- 主翻页索引：匹配 status='all' 的默认 cursor 翻页（ORDER BY created_at DESC, id DESC）
 CREATE INDEX IF NOT EXISTS idx_generate_task_user_created
     ON generate_task (user_id, created_at DESC, id DESC);

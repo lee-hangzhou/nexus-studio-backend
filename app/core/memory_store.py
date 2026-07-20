@@ -37,6 +37,12 @@ async def _embed_texts(texts: list[str]) -> list[list[float]]:
     )
 
 
+async def _ensure_store_base_schema(uri: str) -> None:
+    """Bootstrap LangGraph's non-vector tables before adding vector storage."""
+    async with AsyncPostgresStore.from_conn_string(uri) as store:
+        await store.setup()
+
+
 async def _ensure_store_vector_schema(uri: str, *, dims: int) -> None:
     """LangGraph async setup 在 dims>2000 时会尝试建 HNSW 并失败；此处预建表并标记 migration。"""
     safe_dims = int(dims)
@@ -104,6 +110,7 @@ async def create_memory_store() -> AsyncGenerator[BaseStore | None, None]:
         "dims": settings.ASSET_VECTOR_DIMENSION,
         "embed": _embed_texts,
     }
+    await _ensure_store_base_schema(uri)
     await _ensure_store_vector_schema(uri, dims=settings.ASSET_VECTOR_DIMENSION)
     async with AsyncPostgresStore.from_conn_string(uri, index=index) as store:
         await store.setup()
