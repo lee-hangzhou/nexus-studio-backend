@@ -1,8 +1,35 @@
 {
   "$defs": {
     "GatewayResultItem": {
-      "additionalProperties": true,
+      "additionalProperties": false,
       "properties": {
+        "duration": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration"
+        },
+        "framesPerSecond": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Framespersecond"
+        },
         "height": {
           "anyOf": [
             {
@@ -14,6 +41,30 @@
           ],
           "default": null,
           "title": "Height"
+        },
+        "ratio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ratio"
+        },
+        "resolution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolution"
         },
         "type": {
           "anyOf": [
@@ -28,6 +79,7 @@
           "title": "Type"
         },
         "url": {
+          "minLength": 1,
           "title": "Url",
           "type": "string"
         },

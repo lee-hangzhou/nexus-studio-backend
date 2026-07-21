@@ -25,10 +25,10 @@ async def set_gate_pending(
     gate_type: str,
     model_key: str,
     prompt: str,
-    fields: list[dict[str, Any]] | None = None,
-    choices: list[dict[str, Any]] | None = None,
+    fields: list[dict[str, Any]],
+    choices: list[dict[str, Any]],
     phase: str | None = None,
-    assets: dict[str, Any] | None = None,
+    assets: dict[str, Any],
     status: GatePendingStatus = "pending",
     domain: str | None = None,
 ) -> None:
@@ -39,9 +39,9 @@ async def set_gate_pending(
             "gate_type": gate_type,
             "model_key": model_key,
             "prompt": prompt,
-            "fields": normalize_field_defs(list(fields or [])),
-            "choices": list(choices or []),
-            "assets": dict(assets or {}),
+            "fields": normalize_field_defs(fields),
+            "choices": list(choices),
+            "assets": dict(assets),
             "status": status,
         }
     )
@@ -76,15 +76,23 @@ def _parse_gate_pending_raw(raw: str | None) -> dict[str, Any] | None:
         return None
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-    if isinstance(data, dict):
-        parsed = strip_public_gate_payload(data)
-        raw_fields = parsed.get("fields")
-        if isinstance(raw_fields, list):
-            parsed["fields"] = normalize_field_defs(raw_fields)
-        return parsed
-    return None
+    except json.JSONDecodeError as exc:
+        raise ValueError("gate pending state is not valid JSON") from exc
+    if not isinstance(data, dict):
+        raise ValueError("gate pending state must be an object")
+    parsed = strip_public_gate_payload(data)
+    required_strings = ("turn_id", "gate_id", "gate_type", "model_key", "prompt", "status")
+    if any(not isinstance(parsed.get(key), str) or not parsed[key] for key in required_strings):
+        raise ValueError("gate pending state is missing required fields")
+    if parsed["status"] not in {"pending", "submitted", "resuming", "expired", "cancelled"}:
+        raise ValueError("gate pending state has unknown status")
+    raw_fields = parsed.get("fields")
+    raw_choices = parsed.get("choices")
+    raw_assets = parsed.get("assets")
+    if not isinstance(raw_fields, list) or not isinstance(raw_choices, list) or not isinstance(raw_assets, dict):
+        raise ValueError("gate pending state has invalid collections")
+    parsed["fields"] = normalize_field_defs(raw_fields)
+    return parsed
 
 
 async def get_gate_pending(conversation_id: int) -> dict[str, Any] | None:

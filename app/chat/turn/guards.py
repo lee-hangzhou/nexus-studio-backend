@@ -63,17 +63,17 @@ class TurnGuards:
             self._last_stop_reason = "max_tools"
             return "stop_turn"
         if error_class == "gate_setup_failed":
-            count = self._tool_errors_by_name.get(tool_name or "unknown", 0) + 1
-            self._tool_errors_by_name[tool_name or "unknown"] = count
+            count = self._tool_errors_by_name.get(tool_name, 0) + 1
+            self._tool_errors_by_name[tool_name] = count
             if count >= 1:
                 self._last_stop_reason = "error"
                 return "stop_turn"
-        if is_repeat_guard_eligible(tool_name=tool_name or "unknown", error_class=error_class):
-            count = self._tool_errors_by_name.get(tool_name or "unknown", 0) + 1
-            self._tool_errors_by_name[tool_name or "unknown"] = count
+        if is_repeat_guard_eligible(tool_name=tool_name, error_class=error_class):
+            count = self._tool_errors_by_name.get(tool_name, 0) + 1
+            self._tool_errors_by_name[tool_name] = count
             if count >= self.tool_repeat_guard:
                 self._last_stop_reason = "error"
                 return "stop_turn"
         elif error_class is None:
-            self._tool_errors_by_name.pop(tool_name or "unknown", None)
+            self._tool_errors_by_name.pop(tool_name, None)
         return "continue"

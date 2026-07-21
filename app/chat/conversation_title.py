@@ -16,7 +16,6 @@ from app.core.config import settings
 from app.core.gateway import gateway_client
 from app.core.logger import log_exception, logger
 from app.domain.chat_enums import ChatMessageRole
-from app.domain.constants import GATEWAY_RESPONSE_DATA_KEY
 from app.models.chat_attachments import ChatAttachments
 from app.models.chat_conversations import ChatConversations
 from app.models.chat_messages import ChatMessages
@@ -82,18 +81,8 @@ def _gateway_error_code(response: dict) -> int | None:
     return int(code) if isinstance(code, int) else None
 
 
-def _chat_completion_body(response: dict) -> dict:
-    if "choices" in response:
-        return response
-    data = response.get(GATEWAY_RESPONSE_DATA_KEY)
-    if isinstance(data, dict) and "choices" in data:
-        return data
-    return response
-
-
 def parse_title_decision(response: dict, *, adapter: ModelAdapter) -> ConversationTitleDecision:
-    body = _chat_completion_body(response)
-    parsed = adapter.parse_response(body)
+    parsed = adapter.parse_response(response)
     content = str(parsed.get("content") or "").strip()
     if not content:
         raise ValueError("chat completion returned empty content")

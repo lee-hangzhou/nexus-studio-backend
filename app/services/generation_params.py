@@ -109,9 +109,9 @@ def validate_reference_materials(
             raise AppError(ErrorCode.INVALID_PARAMS, "图片生成仅支持引用图片素材")
         return
 
-    reference_mode = req.reference_mode or capabilities.default_reference_mode
+    reference_mode = req.reference_mode
     if reference_mode is None:
-        raise AppError(ErrorCode.INVALID_PARAMS, "当前视频模型未配置参考模式")
+        raise AppError(ErrorCode.INVALID_PARAMS, "视频生成必须显式选择参考模式")
     if reference_mode == ReferenceMode.FIRST_FRAME:
         if image_count != 1 or video_count or audio_count:
             raise AppError(ErrorCode.INVALID_PARAMS, "首帧参考模式需要且仅需要 1 张图片")

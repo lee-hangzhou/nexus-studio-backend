@@ -41,9 +41,11 @@ async def get_turn_auth(conversation_id: int, turn_id: str) -> dict[str, Any] | 
         return None
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
+    except json.JSONDecodeError as exc:
+        raise ValueError("turn auth state is not valid JSON") from exc
+    if not isinstance(data, dict):
+        raise ValueError("turn auth state must be an object")
+    return data
 
 
 async def set_method_selected(

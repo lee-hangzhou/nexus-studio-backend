@@ -8,6 +8,8 @@ from app.domain.canvas.enums import CanvasNodeStatus
 from app.domain.enums import GatewayTaskStatus
 from app.models.canvas_nodes import CanvasNodes
 from app.models.generate_task import GenerateTask
+from app.exceptions.base import AppError
+from app.exceptions.codes import ErrorCode
 from app.services.generation_assets import ensure_result_assets
 
 TERMINAL_TASK_STATUSES = {
@@ -30,7 +32,11 @@ def _node_status_from_task(status: int) -> CanvasNodeStatus:
         return CanvasNodeStatus.SUCCESS
     if status in {GatewayTaskStatus.FAILED, GatewayTaskStatus.CANCELLED}:
         return CanvasNodeStatus.FAILED
-    return CanvasNodeStatus.IDLE
+    raise AppError(
+        ErrorCode.GENERATION_STATUS_UNAVAILABLE,
+        "任务状态不符合协议",
+        {"status": status},
+    )
 
 
 def canvas_node_needs_sync(node: CanvasNodes, task: GenerateTask) -> bool:
@@ -76,6 +82,8 @@ async def reconcile_canvas_node_for_task(
 
 async def sync_canvas_node_from_generate_task(
     task: GenerateTask,
+    *,
+    publish: bool = True,
 ) -> CanvasPatchResponse | None:
     """把 generate_task 状态写回 canvas node 并 SSE 广播"""
     node = await CanvasNodes.filter(task_id=task.id, deleted_at__isnull=True).first()
@@ -99,11 +107,30 @@ async def sync_canvas_node_from_generate_task(
     )
     await canvas_service.refresh_node_asset_urls([node_view])
     payload = CanvasPatchResponse(revision=rev, nodes=[node_view])
+    if publish:
+        await publish_canvas_node_result(task, payload)
+    return payload
+
+
+async def publish_canvas_node_result(
+    task: GenerateTask,
+    payload: CanvasPatchResponse | None,
+) -> None:
+    if payload is None:
+        return
+    node = await CanvasNodes.filter(task_id=task.id, deleted_at__isnull=True).first()
+    if node is None:
+        raise AppError(
+            ErrorCode.RESOURCE_NOT_FOUND,
+            "生成任务关联的 Canvas 节点不存在",
+            {"task_id": task.id},
+        )
+    status = _node_status_from_task(int(task.status))
     progress = GenerationProgress(
         node_id=node.id,
         task_id=task.id,
         status=status,
-        revision=rev,
+        revision=payload.revision,
     )
     await canvas_generation_hub.publish(
         int(node.project_id),
@@ -113,11 +140,9 @@ async def sync_canvas_node_from_generate_task(
         },
     )
     if status in {CanvasNodeStatus.SUCCESS, CanvasNodeStatus.FAILED}:
-        # 成功推进下游, 失败让下游保持等待或不提交
         await dispatch_node_terminal(
             int(node.project_id),
             str(node.id),
             user_id=int(task.user_id),
             status=status,
         )
-    return payload

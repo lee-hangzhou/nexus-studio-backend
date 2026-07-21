@@ -150,7 +150,6 @@ class Settings(BaseSettings):
     CHAT_MAX_TOOL_CALLS: int = Field(default=80)
     CHAT_TURN_WALL_CLOCK_SEC: int = Field(default=900)
     CHAT_TOOL_REPEAT_GUARD: int = Field(default=3)
-    CHAT_TOOL_SELF_HEAL_ENABLED: bool = Field(default=True)
     CHAT_EMPTY_RECOVERY_ATTEMPTS: int = Field(default=2, ge=0, le=3)
     CHAT_EMPTY_RECOVERY_TIMEOUT_SEC: int = Field(default=45, ge=5, le=120)
     CHAT_TURN_USAGE_LOG_PATH: str = Field(default="/tmp/dream-drama-chat-turn-usage.jsonl")

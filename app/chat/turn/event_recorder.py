@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import cast
 
 from langchain_core.messages import AIMessage, ToolMessage
 
 from app.chat.agent.events import AgentEvent, AgentEventType
-from app.chat.agent.tool_recovery import INTERNAL_TOOL_NAME
 from app.chat.tools.lc_tools import ChatToolContext
 from app.chat.tools.ui_preview import sanitize_tool_step_preview
 from app.chat.turn.guards import TurnGuards
 from app.chat.turn.observation import TurnObservationContext
 from app.chat.turn.persistence import finalize_assistant
-from app.chat.turn.trace import log_stage
 from app.contracts.metadata import (
     AssistantMessageMetadata,
     InvalidToolCallMetadata,
@@ -30,7 +29,6 @@ from app.core.logger import logger
 class TurnAgentEventRecorder:
     observation: TurnObservationContext
     tool_steps: list[ToolStepMetadata] = field(default_factory=list)
-    pending_recovery_tools: set[str] = field(default_factory=set)
     final_persisted: bool = False
     last_model_message: AIMessage | None = None
     last_step_index: int = 0
@@ -45,9 +43,9 @@ class TurnAgentEventRecorder:
         if event.type == AgentEventType.TOOL_STARTED:
             self.observation.usage_collector.note_tool_start(
                 step_index=event.step_index,
-                call_id=(event.call_id or "").strip(),
-                name=event.tool_name or "",
-                args=event.tool_args or {},
+                call_id=event.call_id.strip(),
+                name=event.tool_name,
+                args=event.tool_args,
             )
             return None
 
@@ -61,7 +59,7 @@ class TurnAgentEventRecorder:
             await self._record_tool_finished(event)
             if guards is None:
                 return None
-            return guards.on_tool_finished(event.tool_name or "", event.error_class)
+            return cast(str, guards.on_tool_finished(event.tool_name, event.error_class))
 
         return None
 
@@ -80,23 +78,6 @@ class TurnAgentEventRecorder:
             tool_calls=[str(call.get("name") or "") for call in (ai_message.tool_calls or [])],
             content_len=len(str(ai_message.content or "")),
         )
-        recovery_calls = [
-            call
-            for call in (ai_message.tool_calls or [])
-            if str(call.get("name") or "") == INTERNAL_TOOL_NAME
-        ]
-        for call in recovery_calls:
-            args = call.get("args") or {}
-            log_stage(
-                "tool_recovery.detected",
-                model=self.observation.model_key,
-                tool_name=str(args.get("original_tool") or "unknown"),
-                error_code=str(args.get("error_code") or "invalid_arguments"),
-                fields=list(args.get("fields") or []),
-                raw_length=int(args.get("raw_length") or 0),
-                recovery_attempt=int(args.get("recovery_attempt") or 1),
-                step_index=event.step_index,
-            )
         invalid_tool_calls = [
             InvalidToolCallMetadata(
                 call_id=item.call_id,
@@ -161,36 +142,17 @@ class TurnAgentEventRecorder:
         self.final_persisted = True
 
     async def _record_tool_finished(self, event: AgentEvent) -> None:
-        call_id = (event.call_id or "").strip()
-        tool_preview = (event.tool_result or "")[:2000]
+        call_id = event.call_id.strip()
+        tool_preview = event.tool_result[:2000]
         self.observation.usage_collector.note_tool_finish(
             step_index=event.step_index,
             call_id=call_id,
-            name=event.tool_name or "",
+            name=event.tool_name,
             args=event.tool_args,
             ok=not event.tool_error,
             error_type=event.error_class,
             preview=tool_preview,
         )
-        if event.synthetic:
-            self.observation.usage_collector.note_tool_recovery()
-            self.pending_recovery_tools.add(event.tool_name or "unknown")
-            log_stage(
-                "tool_recovery.feedback_emitted",
-                model=self.observation.model_key,
-                tool_name=event.tool_name or "unknown",
-                error_code=event.error_class or "invalid_arguments",
-                step_index=event.step_index,
-            )
-        elif not event.tool_error and (event.tool_name or "") in self.pending_recovery_tools:
-            self.pending_recovery_tools.discard(event.tool_name or "")
-            self.observation.usage_collector.note_tool_recovery_corrected()
-            log_stage(
-                "tool_recovery.corrected",
-                model=self.observation.model_key,
-                tool_name=event.tool_name or "",
-                step_index=event.step_index,
-            )
         if not call_id:
             logger.warning(
                 "chat.turn.tool_missing_call_id",
@@ -204,7 +166,7 @@ class TurnAgentEventRecorder:
         tool_message = ToolMessage(
             content=event.tool_result,
             tool_call_id=call_id,
-            name=event.tool_name or "tool",
+            name=event.tool_name,
         )
         await self.observation.persistence.persist_tool_result(
             turn_id=self.observation.turn_id,
@@ -213,9 +175,6 @@ class TurnAgentEventRecorder:
                 name=event.tool_name,
                 call_id=call_id,
                 error_class=event.error_class,
-                synthetic=event.synthetic,
-                recovery_reason=event.error_class if event.synthetic else None,
-                recovery_attempt=event.recovery_attempt if event.synthetic else None,
                 stream=self.observation.stream_meta,
             ),
         )
@@ -223,14 +182,13 @@ class TurnAgentEventRecorder:
             ToolStepMetadata(
                 call_id=call_id,
                 name=event.tool_name,
-                args=event.tool_args or {},
+                args=event.tool_args,
                 ok=not event.tool_error,
                 error_type=event.error_class,
                 result_preview=sanitize_tool_step_preview(
-                    event.tool_name or "",
-                    (event.tool_result or "")[:2000],
+                    event.tool_name,
+                    event.tool_result[:2000],
                     ok=not event.tool_error,
                 ),
-                synthetic=event.synthetic,
             )
         )

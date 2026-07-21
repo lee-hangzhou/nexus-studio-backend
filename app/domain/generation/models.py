@@ -35,14 +35,6 @@ class GenerationModelCapabilities:
     material_limits: MaterialLimits
     ratios_by_resolution: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
-    @property
-    def default_reference_mode(self) -> ReferenceMode | None:
-        return self.reference_modes[0] if self.reference_modes else None
-
-    @property
-    def default_duration(self) -> int | None:
-        return self.durations[0] if self.durations else None
-
     def ratios_for_resolution(self, resolution: str | None) -> tuple[str, ...]:
         if resolution is not None:
             for configured_resolution, ratios in self.ratios_by_resolution:

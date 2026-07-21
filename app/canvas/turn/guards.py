@@ -29,7 +29,7 @@ class CanvasTurnGuards(TurnGuards):
             self._last_stop_reason = "max_tools"
             return "stop_turn"
         if error_class in _CANVAS_REPEATABLE_ERRORS:
-            key = tool_name or "unknown"
+            key = tool_name
             count = self._tool_errors_by_name.get(key, 0) + 1
             self._tool_errors_by_name[key] = count
             if count >= self.tool_repeat_guard:

@@ -46,12 +46,13 @@ from app.services.generation_assets import (
     task_result_asset_ids,
     to_result_urls,
 )
-from app.services.generation_canvas_bridge import reconcile_canvas_for_task, sync_canvas_for_task
+from app.services.generation_canvas_bridge import reconcile_canvas_for_task
 from app.services.generation_models import list_generate_models
 from app.services.generation_params import validate_material_upload
 from app.services.generation_status import (
     _fallback_poll as fallback_poll_generate_task,
 )
+from app.services.generation_result import apply_generation_result, normalize_generation_result
 from app.services.generation_status import (
     _fetch_queue_info as fetch_generate_queue_info,
 )
@@ -74,6 +75,7 @@ NON_TERMINAL: set[int] = {
     GatewayTaskStatus.RUNNING,
 }
 
+
 def _status_label(status: int) -> str:
     """DB 状态整数 → 前端 status 字符串"""
     if status in (GatewayTaskStatus.CREATED, GatewayTaskStatus.QUEUED, GatewayTaskStatus.WAITING):
@@ -82,7 +84,13 @@ def _status_label(status: int) -> str:
         return "running"
     if status == GatewayTaskStatus.SUCCEEDED:
         return "success"
-    return "failed"  # FAILED(6) 和 CANCELLED(7) 均展示为失败
+    if status in {GatewayTaskStatus.FAILED, GatewayTaskStatus.CANCELLED}:
+        return "failed"
+    raise AppError(
+        ErrorCode.GENERATION_STATUS_UNAVAILABLE,
+        "任务状态不符合协议",
+        {"status": status},
+    )
 
 
 def _encode_cursor(created_at: datetime, row_id: int) -> str:
@@ -328,7 +336,7 @@ class GenerateService:
     # ── 历史列表（cursor 分页）────────────────────────────────────────────────
 
     async def list_history(self, user_id: int, req: HistoryRequest) -> HistoryResponse:
-        qs = GenerateTask.filter(user_id=user_id)
+        qs = GenerateTask.filter(user_id=user_id, deleted_at__isnull=True)
 
         if req.kind != "all":
             qs = qs.filter(kind=req.kind)
@@ -386,7 +394,7 @@ class GenerateService:
     # ── 取消 ──────────────────────────────────────────────────────────────────
 
     async def cancel(self, task_id: int, user_id: int) -> None:
-        task = await GenerateTask.get_or_none(id=task_id, user_id=user_id)
+        task = await GenerateTask.get_or_none(id=task_id, user_id=user_id, deleted_at__isnull=True)
         if task is None:
             raise AppError(ErrorCode.TASK_NOT_FOUND, "任务不存在")
 
@@ -415,7 +423,7 @@ class GenerateService:
     # ── 收藏 ──────────────────────────────────────────────────────────────────
 
     async def toggle_favorite(self, task_id: int, user_id: int, favorited: bool) -> None:
-        task = await GenerateTask.get_or_none(id=task_id, user_id=user_id)
+        task = await GenerateTask.get_or_none(id=task_id, user_id=user_id, deleted_at__isnull=True)
         if task is None:
             raise AppError(ErrorCode.TASK_NOT_FOUND, "任务不存在")
         if task.status == GatewayTaskStatus.SUCCEEDED and not _task_result_asset_ids(task):
@@ -430,7 +438,7 @@ class GenerateService:
         ).update(favorite=favorited)
 
     async def delete_task(self, task_id: int, user_id: int) -> None:
-        task = await GenerateTask.get_or_none(id=task_id, user_id=user_id)
+        task = await GenerateTask.get_or_none(id=task_id, user_id=user_id, deleted_at__isnull=True)
         if task is None:
             raise AppError(ErrorCode.TASK_NOT_FOUND, "任务不存在")
 
@@ -445,7 +453,9 @@ class GenerateService:
                     error=str(exc),
                 )
 
-        await task.delete()
+        await GenerateTask.filter(id=task.id, deleted_at__isnull=True).update(
+            deleted_at=datetime.now(timezone.utc),
+        )
 
     # ── 模型列表 ──────────────────────────────────────────────────────────────
 
@@ -457,8 +467,9 @@ class GenerateService:
     async def handle_callback(self, payload: GenerateCallbackPayload) -> None:
         task = await GenerateTask.get_or_none(union_task_id=payload.task_id)
         if task is None:
-            logger.warning("generate.callback.task_not_found", union_task_id=payload.task_id)
-            return
+            raise AppError(ErrorCode.TASK_NOT_FOUND, "回调任务不存在")
+        if task.deleted_at is not None:
+            raise AppError(ErrorCode.TASK_DELETED, "回调任务已删除")
 
         if task.callback_sent and task.status in TERMINAL:
             logger.info(
@@ -469,50 +480,18 @@ class GenerateService:
             await reconcile_canvas_for_task(task, source="callback_idempotent")
             return
 
-        mapped_status = int(payload.status)
-        update_kwargs: dict[str, Any] = {
-            "status": mapped_status,
-            "callback_sent": True,
-        }
-        if payload.urls:
-            update_kwargs["result_keys"] = [
-                item.model_dump(mode="json", exclude_none=True)
-                for item in payload.urls
-            ]
-        if payload.reason:
-            update_kwargs["error_message"] = payload.reason
-
-        updated = await GenerateTask.filter(
-            union_task_id=payload.task_id,
-            status__not_in=list(TERMINAL),
-        ).update(**update_kwargs)
-
-        if updated:
-            logger.info(
-                "generate.callback.written",
-                task_id=task.id,
-                status=mapped_status,
-            )
-            task = await GenerateTask.get(id=task.id)
-            if int(task.status) == int(GatewayTaskStatus.SUCCEEDED):
-                task = await ensure_result_assets(task)
-            await sync_canvas_for_task(task, source="callback")
-        else:
-            logger.warning(
-                "generate.callback.already_terminal",
-                task_id=task.id,
-                current_status=task.status,
-                incoming_status=mapped_status,
-            )
-            ack_fields: dict[str, Any] = {"callback_sent": True}
-            if payload.urls:
-                ack_fields["result_keys"] = [
-                    item.model_dump(mode="json", exclude_none=True)
-                    for item in payload.urls
-                ]
-            await GenerateTask.filter(union_task_id=payload.task_id).update(**ack_fields)
-            task = await GenerateTask.get(id=task.id)
-            await reconcile_canvas_for_task(task, source="callback_already_terminal")
+        result = normalize_generation_result(payload.status, payload.urls, payload.reason)
+        task, applied = await apply_generation_result(
+            task,
+            result,
+            source="callback",
+            callback_sent=True,
+        )
+        if applied:
+            logger.info("generate.callback.written", task_id=task.id, status=int(task.status))
+            return
+        await GenerateTask.filter(id=task.id, deleted_at__isnull=True).update(callback_sent=True)
+        await reconcile_canvas_for_task(task, source="callback_already_terminal")
 
 
 # ── 辅助函数 ──────────────────────────────────────────────────────────────────
@@ -537,7 +516,7 @@ def _time_range_cutoff(time_range: str) -> datetime:
         return (now_local - timedelta(days=7)).astimezone(timezone.utc)
     if time_range == "month":
         return (now_local - timedelta(days=30)).astimezone(timezone.utc)
-    return now_local.astimezone(timezone.utc)  # fallback，不应到达
+    raise AppError(ErrorCode.INVALID_PARAMS, "无效的时间范围", {"time_range": time_range})
 
 
 generate_service = GenerateService()

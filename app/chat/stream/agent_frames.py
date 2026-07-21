@@ -22,7 +22,7 @@ def frames_from_agent_event(event, *, turn_id: str) -> list[StreamFrame]:
             create_stream_frame(
                 type=StreamFrameType.TOKEN,
                 protocol_version=settings.CHAT_SSE_PROTOCOL_VERSION,
-                channel=event.channel or "answer",
+                channel=event.channel,
                 text=event.text,
             )
         )
@@ -31,37 +31,27 @@ def frames_from_agent_event(event, *, turn_id: str) -> list[StreamFrame]:
             create_stream_frame(
                 type=StreamFrameType.TOOL_START,
                 protocol_version=settings.CHAT_SSE_PROTOCOL_VERSION,
-                call_id=event.call_id or "",
-                name=event.tool_name or "",
-                args=event.tool_args or {},
+                call_id=event.call_id,
+                name=event.tool_name,
+                args=event.tool_args,
             )
         )
     elif event.type == AgentEventType.TOOL_FINISHED:
-        recoverable = bool(event.synthetic)
         frames.append(
             create_stream_frame(
                 type=StreamFrameType.TOOL_END,
                 protocol_version=settings.CHAT_SSE_PROTOCOL_VERSION,
-                call_id=event.call_id or "",
-                name=event.tool_name or "",
+                call_id=event.call_id,
+                name=event.tool_name,
                 ok=not event.tool_error,
                 preview=(
-                    "参数异常，正在自动修复"
-                    if recoverable
-                    else sanitize_tool_step_preview(
-                        event.tool_name or "",
-                        (event.tool_result or "")[:2000],
+                    sanitize_tool_step_preview(
+                        event.tool_name,
+                        event.tool_result[:2000],
                         ok=not event.tool_error,
                     )
                 ),
-                data={
-                    "synthetic": recoverable,
-                    "recoverable": recoverable,
-                    "recovery_attempt": event.recovery_attempt,
-                    "error_code": event.error_class,
-                }
-                if recoverable
-                else {},
+                data={"error_code": event.error_class} if event.tool_error else {},
             )
         )
     elif event.type == AgentEventType.TURN_FAILED:
@@ -74,7 +64,7 @@ def frames_from_agent_event(event, *, turn_id: str) -> list[StreamFrame]:
                 type=StreamFrameType.ERROR,
                 protocol_version=settings.CHAT_SSE_PROTOCOL_VERSION,
                 code=error_code,
-                message=event.error or "turn failed",
+                message=event.error,
             )
         )
     return frames

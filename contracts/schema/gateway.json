@@ -49,6 +49,7 @@
       "type": "integer"
     },
     "GatewayGenerateCallback": {
+      "additionalProperties": false,
       "description": "对齐 union_lm api.TaskResponse（callback 直 POST，无外层信封）。",
       "properties": {
         "reason": {
@@ -63,19 +64,39 @@
           "default": null,
           "title": "Reason"
         },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JsonValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "status": {
           "$ref": "#/$defs/GatewayTaskStatus"
         },
         "taskId": {
+          "minimum": 1,
           "title": "Taskid",
           "type": "integer"
         },
         "urls": {
-          "items": {
-            "$ref": "#/$defs/GatewayResultItem"
-          },
-          "title": "Urls",
-          "type": "array"
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/GatewayResultItem"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Urls"
         }
       },
       "required": [
@@ -169,39 +190,19 @@
       "type": "object"
     },
     "GatewayModelItem": {
-      "description": "OpenAI /v1/models 兼容目录项；忽略未建模字段（如 object、owned_by）。",
+      "additionalProperties": false,
+      "description": "Strict OpenAI-compatible model catalog item.",
       "properties": {
-        "display_name": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Display Name"
-        },
         "id": {
           "minLength": 1,
           "title": "Id",
           "type": "string"
         },
         "object": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Object"
+          "title": "Object",
+          "type": "string"
         },
         "supports_vision": {
-          "default": false,
           "title": "Supports Vision",
           "type": "boolean"
         },
@@ -211,7 +212,9 @@
       },
       "required": [
         "id",
-        "task_type"
+        "object",
+        "task_type",
+        "supports_vision"
       ],
       "title": "GatewayModelItem",
       "type": "object"
@@ -228,6 +231,7 @@
       "type": "integer"
     },
     "GatewayModelsResponse": {
+      "additionalProperties": false,
       "description": "OpenAI /v1/models 兼容列表信封。",
       "properties": {
         "data": {
@@ -238,25 +242,19 @@
           "type": "array"
         },
         "object": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Object"
+          "title": "Object",
+          "type": "string"
         }
       },
       "required": [
-        "data"
+        "data",
+        "object"
       ],
       "title": "GatewayModelsResponse",
       "type": "object"
     },
     "GatewayQueueData": {
+      "additionalProperties": false,
       "properties": {
         "tasks": {
           "items": {
@@ -266,10 +264,14 @@
           "type": "array"
         }
       },
+      "required": [
+        "tasks"
+      ],
       "title": "GatewayQueueData",
       "type": "object"
     },
     "GatewayQueueItem": {
+      "additionalProperties": false,
       "properties": {
         "estimatedWaitSeconds": {
           "anyOf": [
@@ -296,18 +298,11 @@
           "title": "Position"
         },
         "status": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Status"
+          "title": "Status",
+          "type": "integer"
         },
         "taskId": {
+          "minimum": 1,
           "title": "Taskid",
           "type": "integer"
         },
@@ -325,15 +320,16 @@
         }
       },
       "required": [
-        "taskId"
+        "taskId",
+        "status"
       ],
       "title": "GatewayQueueItem",
       "type": "object"
     },
     "GatewayQueueResponse": {
+      "additionalProperties": false,
       "properties": {
         "code": {
-          "default": 0,
           "title": "Code",
           "type": "integer"
         },
@@ -341,27 +337,48 @@
           "$ref": "#/$defs/GatewayQueueData"
         },
         "message": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Message"
+          "title": "Message",
+          "type": "string"
         }
       },
       "required": [
+        "code",
+        "message",
         "data"
       ],
       "title": "GatewayQueueResponse",
       "type": "object"
     },
     "GatewayResultItem": {
-      "additionalProperties": true,
+      "additionalProperties": false,
       "properties": {
+        "duration": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration"
+        },
+        "framesPerSecond": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Framespersecond"
+        },
         "height": {
           "anyOf": [
             {
@@ -373,6 +390,30 @@
           ],
           "default": null,
           "title": "Height"
+        },
+        "ratio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ratio"
+        },
+        "resolution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolution"
         },
         "type": {
           "anyOf": [
@@ -387,6 +428,7 @@
           "title": "Type"
         },
         "url": {
+          "minLength": 1,
           "title": "Url",
           "type": "string"
         },
@@ -424,6 +466,7 @@
       "type": "integer"
     },
     "GatewayTaskStatusData": {
+      "additionalProperties": false,
       "description": "对齐 union_lm api.TaskResponse。",
       "properties": {
         "reason": {
@@ -438,19 +481,39 @@
           "default": null,
           "title": "Reason"
         },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JsonValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "status": {
           "$ref": "#/$defs/GatewayTaskStatus"
         },
         "taskId": {
+          "minimum": 1,
           "title": "Taskid",
           "type": "integer"
         },
         "urls": {
-          "items": {
-            "$ref": "#/$defs/GatewayResultItem"
-          },
-          "title": "Urls",
-          "type": "array"
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/GatewayResultItem"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Urls"
         }
       },
       "required": [
@@ -461,9 +524,9 @@
       "type": "object"
     },
     "GatewayTaskStatusResponse": {
+      "additionalProperties": false,
       "properties": {
         "code": {
-          "default": 0,
           "title": "Code",
           "type": "integer"
         },
@@ -471,27 +534,23 @@
           "$ref": "#/$defs/GatewayTaskStatusData"
         },
         "message": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Message"
+          "title": "Message",
+          "type": "string"
         }
       },
       "required": [
+        "code",
+        "message",
         "data"
       ],
       "title": "GatewayTaskStatusResponse",
       "type": "object"
     },
     "GatewayTaskSubmitData": {
+      "additionalProperties": false,
       "properties": {
         "taskId": {
+          "minimum": 1,
           "title": "Taskid",
           "type": "integer"
         }
@@ -503,9 +562,9 @@
       "type": "object"
     },
     "GatewayTaskSubmitResponse": {
+      "additionalProperties": false,
       "properties": {
         "code": {
-          "default": 0,
           "title": "Code",
           "type": "integer"
         },
@@ -513,19 +572,13 @@
           "$ref": "#/$defs/GatewayTaskSubmitData"
         },
         "message": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Message"
+          "title": "Message",
+          "type": "string"
         }
       },
       "required": [
+        "code",
+        "message",
         "data"
       ],
       "title": "GatewayTaskSubmitResponse",
@@ -598,6 +651,7 @@
       "title": "GatewayVideoSubmitRequest",
       "type": "object"
     },
+    "JsonValue": {},
     "MaterialType": {
       "enum": [
         1,

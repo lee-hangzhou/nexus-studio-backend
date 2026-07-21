@@ -26,6 +26,7 @@ class GenerateTask(BaseModel):
     error_message = fields.TextField(null=True)
     is_favorited = fields.BooleanField(null=False, default=False)
     callback_sent = fields.BooleanField(null=False, default=False)
+    deleted_at = fields.DatetimeField(null=True)
 
     class Meta(BaseModel.Meta):
         table = "generate_task"

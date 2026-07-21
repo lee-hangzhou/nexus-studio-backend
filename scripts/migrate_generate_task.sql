@@ -20,16 +20,22 @@ CREATE TABLE IF NOT EXISTS generate_task (
     error_message  TEXT         NULL,
     is_favorited   BOOLEAN      NOT NULL DEFAULT FALSE,
     callback_sent  BOOLEAN      NOT NULL DEFAULT FALSE,
+    deleted_at     TIMESTAMPTZ  NULL,
     created_at     TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 兼容已存在的表：补充引用素材列
 ALTER TABLE generate_task ADD COLUMN IF NOT EXISTS ref_attachment_ids JSONB NULL;
+ALTER TABLE generate_task ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ NULL;
 
 -- 主翻页索引：匹配 status='all' 的默认 cursor 翻页（ORDER BY created_at DESC, id DESC）
 CREATE INDEX IF NOT EXISTS idx_generate_task_user_created
     ON generate_task (user_id, created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_generate_task_active_user_created
+    ON generate_task (user_id, created_at DESC, id DESC)
+    WHERE deleted_at IS NULL;
 
 -- 状态过滤索引：匹配带 status 过滤的翻页（in_progress / success / failed）
 CREATE INDEX IF NOT EXISTS idx_generate_task_user_status

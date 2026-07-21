@@ -281,7 +281,9 @@ async def gate_bridge_status(request: Request, body: BridgeCreateRequest) -> Res
     from app.chat.gate.session_bridge import get_bridge_status_by_gate
 
     status = await get_bridge_status_by_gate(body.gate_id)
-    return Response(data={"status": status or {"status": "unknown"}})
+    if status is None:
+        raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "bridge 状态不存在")
+    return Response(data={"status": status})
 
 
 @router.post("/gate/bridge/import")

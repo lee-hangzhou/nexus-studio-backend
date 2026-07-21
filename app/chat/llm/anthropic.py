@@ -10,6 +10,7 @@ from langchain_core.messages import (
 )
 
 from app.chat.llm.adapter import ModelAdapter
+from app.core.gateway_errors import GatewayChatError
 from app.chat.llm.openai_compat import OpenAICompatAdapter
 from app.chat.vision.refs import (
     EMPTY_VISION_CONTEXT,
@@ -133,33 +134,54 @@ class AnthropicAdapter(ModelAdapter):
         if isinstance(raw, str):
             try:
                 raw = json.loads(raw)
-            except json.JSONDecodeError:
-                return {"content": raw, "tool_calls": [], "usage": {}}
+            except json.JSONDecodeError as exc:
+                raise GatewayChatError("gateway_protocol_error", "Anthropic response is not valid JSON", retryable=False) from exc
 
         if not isinstance(raw, dict):
-            return {"content": str(raw), "tool_calls": [], "usage": {}}
+            raise GatewayChatError("gateway_protocol_error", "Anthropic response is not an object", retryable=False)
 
-        content_blocks = raw.get("content") or []
+        content_blocks = raw.get("content")
+        if not isinstance(content_blocks, list):
+            raise GatewayChatError("gateway_protocol_error", "Anthropic response is missing content", retryable=False)
         text_parts: list[str] = []
         tool_calls: list[dict[str, Any]] = []
         for block in content_blocks:
+            if not isinstance(block, dict):
+                raise GatewayChatError("gateway_protocol_error", "Anthropic content block is invalid", retryable=False)
             if block.get("type") == "text":
-                text_parts.append(block.get("text", ""))
+                text = block.get("text")
+                if not isinstance(text, str):
+                    raise GatewayChatError("gateway_protocol_error", "Anthropic text block is invalid", retryable=False)
+                text_parts.append(text)
             elif block.get("type") == "tool_use":
+                if not isinstance(block.get("id"), str) or not block["id"]:
+                    raise GatewayChatError("gateway_protocol_error", "Anthropic tool call is missing id", retryable=False)
+                if not isinstance(block.get("name"), str) or not block["name"]:
+                    raise GatewayChatError("gateway_protocol_error", "Anthropic tool call is missing name", retryable=False)
+                if not isinstance(block.get("input"), dict):
+                    raise GatewayChatError("gateway_protocol_error", "Anthropic tool input is invalid", retryable=False)
                 tool_calls.append(
                     {
-                        "id": block.get("id", ""),
-                        "name": block.get("name", ""),
-                        "args": block.get("input") or {},
+                        "id": block["id"],
+                        "name": block["name"],
+                        "args": block["input"],
                     }
                 )
+            else:
+                raise GatewayChatError("gateway_protocol_error", "Anthropic content block type is unknown", retryable=False)
 
-        usage = raw.get("usage") or {}
+        usage = raw.get("usage")
+        if not isinstance(usage, dict):
+            raise GatewayChatError("gateway_protocol_error", "Anthropic response is missing usage", retryable=False)
+        input_tokens = usage.get("input_tokens")
+        output_tokens = usage.get("output_tokens")
+        if not isinstance(input_tokens, int) or not isinstance(output_tokens, int):
+            raise GatewayChatError("gateway_protocol_error", "Anthropic usage is invalid", retryable=False)
         return {
             "content": "".join(text_parts),
             "tool_calls": tool_calls,
             "usage": {
-                "prompt_tokens": usage.get("input_tokens", 0),
-                "completion_tokens": usage.get("output_tokens", 0),
+                "prompt_tokens": input_tokens,
+                "completion_tokens": output_tokens,
             },
         }

@@ -14,4 +14,4 @@ async def signal_browser_blocked(
 ) -> ToolResult:
     """Signal that automation cannot continue; no screenshot or disk artifact."""
     _ = conversation_id, workspace, label
-    return ToolResult(success=True, output="{}", error_type=BROWSER_BLOCKED)
+    return ToolResult.fail(BROWSER_BLOCKED, detail=reason, output="{}")

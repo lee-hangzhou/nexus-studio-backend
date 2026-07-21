@@ -10,10 +10,6 @@ from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from app.chat.llm.gateway_chat_model import GatewayChatModel
-from app.chat.llm.pseudo_tool_markup import (
-    content_looks_like_tool_hallucination,
-    strip_pseudo_tool_markup,
-)
 from app.core.logger import log_exception, logger
 
 
@@ -158,28 +154,6 @@ async def recover_empty_answer(
         if not raw_text:
             failure_reason = "empty"
             logger.warning("chat.empty_recovery.still_empty", attempt=attempt)
-            continue
-        if content_looks_like_tool_hallucination(raw_text):
-            cleaned = strip_pseudo_tool_markup(raw_text)
-            if cleaned and not content_looks_like_tool_hallucination(cleaned):
-                logger.warning(
-                    "chat.empty_recovery.stripped_pseudo_markup",
-                    attempt=attempt,
-                    raw_chars=len(raw_text),
-                    cleaned_chars=len(cleaned),
-                )
-                return EmptyRecoveryResult(
-                    text=cleaned,
-                    attempts=attempts_started,
-                    failure_reason=None,
-                    duration_ms=round((time.perf_counter() - started) * 1000, 2),
-                )
-            failure_reason = "recovery_invalid_output"
-            logger.warning(
-                "chat.empty_recovery.pseudo_tool_markup",
-                attempt=attempt,
-                raw_chars=len(raw_text),
-            )
             continue
         return EmptyRecoveryResult(
             text=raw_text,

@@ -3,15 +3,13 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from typing import Any
-from uuid import uuid4
 
 from langchain_core.messages import AIMessage, AIMessageChunk
 from langchain_core.outputs import ChatGenerationChunk
 
 from app.chat.llm.tag_stream import push_tag_aware_text
 from app.chat.llm.thinking import ThinkingConfig, ThinkingMode, ThinkTagStreamState, TokenPiece
-from app.chat.llm.tool_args import repair_tool_arguments
-from app.core.logger import logger
+from app.core.gateway_errors import GatewayChatError
 
 
 @dataclass(frozen=True)
@@ -52,14 +50,18 @@ class OpenAIStreamAssembler:
 
         try:
             payload = json.loads(data)
-        except json.JSONDecodeError:
-            return [], []
+        except json.JSONDecodeError as exc:
+            raise GatewayChatError("gateway_protocol_error", "SSE data is not valid JSON", retryable=False) from exc
 
-        choices = payload.get("choices") or []
-        if not choices:
-            return [], []
+        if not isinstance(payload, dict):
+            raise GatewayChatError("gateway_protocol_error", "SSE data is not an object", retryable=False)
+        choices = payload.get("choices")
+        if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+            raise GatewayChatError("gateway_protocol_error", "SSE data has no valid choice", retryable=False)
         choice = choices[0]
-        delta = choice.get("delta") or {}
+        delta = choice.get("delta")
+        if not isinstance(delta, dict):
+            raise GatewayChatError("gateway_protocol_error", "SSE choice is missing delta", retryable=False)
         finish_reason = choice.get("finish_reason")
         if finish_reason:
             self._finish_reason = finish_reason
@@ -68,10 +70,13 @@ class OpenAIStreamAssembler:
         self._token_pieces.extend(token_pieces)
         chunks: list[ChatGenerationChunk] = []
 
-        for item in delta.get("tool_calls") or []:
-            if not isinstance(item, dict):
-                continue
-            index = int(item.get("index", 0))
+        raw_tool_calls = delta.get("tool_calls", [])
+        if not isinstance(raw_tool_calls, list):
+            raise GatewayChatError("gateway_protocol_error", "SSE tool_calls is not a list", retryable=False)
+        for item in raw_tool_calls:
+            if not isinstance(item, dict) or not isinstance(item.get("index"), int):
+                raise GatewayChatError("gateway_protocol_error", "SSE tool call is missing index", retryable=False)
+            index = item["index"]
             slot = self._tool_slots.setdefault(index, ToolSlot(index=index))
             if item.get("id"):
                 slot.id = str(item["id"])
@@ -139,21 +144,28 @@ class OpenAIStreamAssembler:
         invalid_calls: list[InvalidToolCall] = []
 
         for slot in self._normalize_tool_slots():
-            call_id = slot.id or f"call_{uuid4().hex[:12]}"
-            name = slot.name or "unknown"
+            if not slot.id or not slot.name:
+                raise GatewayChatError("gateway_protocol_error", "streamed tool call is missing id or name", retryable=False)
+            call_id = slot.id
+            name = slot.name
             raw_args = "".join(slot.argument_fragments)
-            args, err = repair_tool_arguments(raw_args)
-            if err:
-                invalid_calls.append(
-                    InvalidToolCall(
-                        call_id=call_id,
-                        name=name,
-                        raw_arguments=raw_args,
-                        parse_error=err,
-                    )
+            if not raw_args:
+                raise GatewayChatError("gateway_protocol_error", "streamed tool call is missing arguments", retryable=False)
+            try:
+                args = json.loads(raw_args)
+            except json.JSONDecodeError as exc:
+                raise GatewayChatError(
+                    "gateway_protocol_error",
+                    "streamed tool arguments are not valid JSON",
+                    retryable=False,
+                ) from exc
+            if not isinstance(args, dict):
+                raise GatewayChatError(
+                    "gateway_protocol_error",
+                    "streamed tool arguments must be an object",
+                    retryable=False,
                 )
-            else:
-                valid_calls.append({"id": call_id, "name": name, "args": args or {}})
+            valid_calls.append({"id": call_id, "name": name, "args": args})
 
         content = "".join(p.text for p in self._token_pieces if p.lane == "answer")
         message = AIMessage(content=content, tool_calls=valid_calls)
@@ -198,21 +210,21 @@ class OpenAIStreamAssembler:
                 if result and result[-1].name and not args_text(result[-1]).strip():
                     result[-1].argument_fragments.extend(slot.argument_fragments)
                     continue
-                logger.warning(
-                    "chat.stream_assembler.orphan_arguments_slot_dropped",
-                    index=slot.index,
+                raise GatewayChatError(
+                    "gateway_protocol_error",
+                    "streamed tool arguments have no tool id or name",
+                    retryable=False,
                 )
-                continue
             if slot.name == "unknown" and not slot.id and args_text(slot).strip():
                 if result and result[-1].name and result[-1].name != "unknown":
                     if not args_text(result[-1]).strip():
                         result[-1].argument_fragments.extend(slot.argument_fragments)
                         continue
-                logger.warning(
-                    "chat.stream_assembler.unknown_args_slot_dropped",
-                    index=slot.index,
+                raise GatewayChatError(
+                    "gateway_protocol_error",
+                    "streamed tool arguments have an unknown tool name",
+                    retryable=False,
                 )
-                continue
             result.append(slot)
 
         return result

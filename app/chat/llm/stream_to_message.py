@@ -7,7 +7,6 @@ from typing import List
 from langchain_core.messages import BaseMessage
 
 from app.chat.llm.gateway_chat_model import GatewayChatModel
-from app.chat.llm.pseudo_tool_markup import strip_pseudo_tool_markup
 from app.chat.llm.thinking import build_ai_message
 
 
@@ -27,9 +26,8 @@ async def stream_to_ai_message(
         assembled_think = str(info.get("assembled_think_content") or "")
         tool_calls = list(chunk.message.tool_calls or [])
         break
-    content = strip_pseudo_tool_markup(assembled_content)
     return build_ai_message(
-        content=content,
+        content=assembled_content,
         tool_calls=tool_calls,
         reasoning=assembled_think or None,
     )

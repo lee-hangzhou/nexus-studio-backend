@@ -55,7 +55,7 @@ async def _active_task_id_for_node(row: CanvasNodes) -> int | None:
     """若节点关联非终态 generate_task，返回 task_id。"""
     if row.task_id is None:
         return None
-    task = await GenerateTask.filter(id=row.task_id).first()
+    task = await GenerateTask.filter(id=row.task_id, deleted_at__isnull=True).first()
     if task is None:
         return None
     if int(task.status) in _NON_TERMINAL_TASK_STATUSES:

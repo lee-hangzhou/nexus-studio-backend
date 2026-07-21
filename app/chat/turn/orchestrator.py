@@ -13,7 +13,6 @@ from langchain_core.runnables import RunnableConfig
 from app.chat.agent.events import AgentEventType
 from app.chat.agent.factory import build_chat_agent
 from app.chat.agent.runner import run_agent_turn_stream
-from app.chat.agent.tool_recovery import INTERNAL_TOOL_NAME, build_internal_tool
 from app.chat.attachments.service import chat_attachment_service
 from app.chat.attachments.status import attachment_status_label
 from app.chat.attachments.turn_prep import apply_attachment_intent
@@ -244,8 +243,6 @@ async def stream_turn(
             plan_enable_tools = enable_tools and turn_ctx.enable_tools
             tools = build_langchain_tools(ctx, enable_tools=plan_enable_tools)
             tools = tools + load_mcp_tools()
-            if settings.CHAT_TOOL_SELF_HEAL_ENABLED:
-                tools.append(build_internal_tool())
             attachment_briefs = [
                 AttachmentBrief(
                     attachment_id=row.id,
@@ -486,7 +483,6 @@ async def stream_turn(
                 [turn_human],
                 turn_id=turn_id,
                 config=config,
-                tools_by_name={tool.name: tool for tool in tools},
             ):
                 if cancel_event.is_set():
                     terminated_by = "error"
@@ -532,13 +528,6 @@ async def stream_turn(
                     )
                     turn_emitted_done = True
                     terminated_by = "wall_clock"
-                    await emit(
-                        create_stream_frame(
-                            type=StreamFrameType.DONE,
-                            turn_id=turn_id,
-                            message_ids=persistence.message_ids,
-                        )
-                    )
                     break
                 touch()
                 if event.type == AgentEventType.MODEL_TOKEN and event.channel == "answer" and event.text:
@@ -581,13 +570,6 @@ async def stream_turn(
                         )
                         turn_emitted_done = True
                         terminated_by = "max_steps"
-                        await emit(
-                            create_stream_frame(
-                                type=StreamFrameType.DONE,
-                                turn_id=turn_id,
-                                message_ids=persistence.message_ids,
-                            )
-                        )
                         break
 
                     answer_text = str(event.ai_message.content or "").strip()
@@ -640,7 +622,7 @@ async def stream_turn(
                         usage_collector.note_termination(terminated_by="completed", message=None)
                         log_stage(
                             "browser_blocked.exit",
-                            tool_name=event.tool_name or "signal_browser_blocked",
+                            tool_name=event.tool_name,
                             has_screenshot=False,
                             model_text_len=len(_blocked_model_text),
                             step_index=event.step_index,
@@ -661,7 +643,7 @@ async def stream_turn(
                         log_stage(
                             "tool_recovery.exhausted",
                             model=model_key,
-                            tool_name=event.tool_name or "unknown",
+                            tool_name=event.tool_name,
                             error_code=event.error_class,
                             stop_reason=stop_reason,
                             step_index=event.step_index,
@@ -827,7 +809,7 @@ async def stream_turn(
 
                 if event.type == AgentEventType.TURN_FAILED:
                     terminated_by = "error"
-                    gateway_error = (event.error_class or "") in {
+                    gateway_error = event.error_class in {
                         "gateway_empty_stream",
                         "gateway_upstream_timeout",
                         "gateway_upstream_failed",
@@ -835,13 +817,13 @@ async def stream_turn(
                     fail_message = (
                         "模型服务暂时无响应，请重试"
                         if gateway_error
-                        else (event.error or "turn failed")
+                        else event.error
                     )
                     await persistence.persist_turn_error(
                         turn_id=turn_id,
                         step_index=event.step_index,
                         content=fail_message,
-                        error_code=event.error_class or "turn_failed",
+                        error_code=event.error_class,
                     )
                     usage_collector.note_failure(message=fail_message)
                     usage_collector.note_termination(terminated_by="error", message=fail_message)
@@ -851,7 +833,7 @@ async def stream_turn(
                         turn_id=turn_id,
                         step_index=event.step_index,
                         error=fail_message,
-                        error_class=event.error_class or "internal",
+                        error_class=event.error_class,
                     )
                     if not cancel_event.is_set():
                         await emit(
@@ -870,32 +852,25 @@ async def stream_turn(
                             create_stream_frame(
                                 type=StreamFrameType.CANCELLED,
                                 turn_id=turn_id,
-                                reason=event.error_class or "user_cancelled",
+                                reason=event.error_class,
                             )
                         )
-                    if not turn_emitted_done:
-                        await emit(
-                            create_stream_frame(
-                                type=StreamFrameType.DONE,
-                                turn_id=turn_id,
-                                message_ids=persistence.message_ids,
-                            )
-                        )
-                        turn_emitted_done = True
+                    turn_emitted_done = True
                     break
 
             if force_recovery_messages is not None and not turn_emitted_done and not cancel_event.is_set():
-                await attempt_final_recovery(
+                recovery_succeeded = await attempt_final_recovery(
                     force_recovery_messages,
                     reason="tool_recovery_exhausted",
                 )
-                await emit(
-                    create_stream_frame(
-                        type=StreamFrameType.DONE,
-                        turn_id=turn_id,
-                        message_ids=persistence.message_ids,
+                if recovery_succeeded:
+                    await emit(
+                        create_stream_frame(
+                            type=StreamFrameType.DONE,
+                            turn_id=turn_id,
+                            message_ids=persistence.message_ids,
+                        )
                     )
-                )
                 turn_emitted_done = True
 
             if agent is not None and not gate_interrupted and not cancel_event.is_set():
@@ -950,13 +925,6 @@ async def stream_turn(
                         type=StreamFrameType.ERROR,
                         code="internal",
                         message="turn failed",
-                    )
-                )
-                await emit(
-                    create_stream_frame(
-                        type=StreamFrameType.DONE,
-                        turn_id=turn_id,
-                        message_ids=persistence.message_ids,
                     )
                 )
                 turn_emitted_done = True

@@ -111,7 +111,13 @@ async def get_bridge_status_by_gate(gate_id: str) -> dict[str, Any] | None:
     record = await _get_bridge_record(token_hash)
     if record is None:
         return {"status": "expired"}
-    return {"status": record.get("status", "pending"), "domain": record.get("expected_domain")}
+    status = record.get("status")
+    if not isinstance(status, str) or status not in {"pending", "imported", "expired"}:
+        raise ValueError("bridge status violates contract")
+    expected_domain = record.get("expected_domain")
+    if not isinstance(expected_domain, str) or not expected_domain:
+        raise ValueError("bridge record missing expected_domain")
+    return {"status": status, "domain": expected_domain}
 
 
 async def _get_bridge_record(token_hash: str) -> dict[str, Any] | None:

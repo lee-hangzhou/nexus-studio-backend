@@ -9,7 +9,6 @@ from langgraph.store.base import BaseStore
 
 from app.chat.agent.gate_solo_middleware import GateSoloBatchMiddleware
 from app.chat.agent.prompts import DEFAULT_CHAT_SYSTEM
-from app.chat.agent.tool_recovery import ToolSelfHealMiddleware
 from app.chat.llm.gateway_chat_model import GatewayChatModel
 from app.core.config import settings
 
@@ -32,8 +31,6 @@ def build_chat_agent(
             trim_tokens_to_summarize=settings.CHAT_SUMMARY_TRIM_TO_SUMMARIZE,
         )
     ]
-    if settings.CHAT_TOOL_SELF_HEAL_ENABLED:
-        middleware.append(ToolSelfHealMiddleware(tools))
     return create_agent(
         llm,
         tools=tools or None,

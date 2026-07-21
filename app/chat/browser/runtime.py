@@ -22,11 +22,7 @@ from app.chat.browser.exec_result import (
 )
 from app.chat.browser.session_lock import session_page_lock
 from app.chat.gate.fields import field_def_name
-from app.chat.llm.pseudo_tool_markup import (
-    browser_script_uses_playwright_selector_in_evaluate,
-    content_looks_like_tool_hallucination,
-    strip_pseudo_tool_markup,
-)
+from app.chat.browser.script_validate import browser_script_uses_playwright_selector_in_evaluate
 from app.chat.tools.result import (
     BROWSER_ERROR,
     BROWSER_UNAVAILABLE,

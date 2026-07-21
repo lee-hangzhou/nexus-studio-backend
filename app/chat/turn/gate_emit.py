@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from langgraph.graph.state import CompiledStateGraph
 from langchain_core.runnables import RunnableConfig
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.chat.gate.fields import normalize_field_defs
 from app.chat.gate.pending import set_gate_pending
@@ -16,10 +17,36 @@ from app.chat.stream.frames import StreamFrame, StreamFrameType, create_stream_f
 from app.core.config import settings
 
 
+class UserGateInterrupt(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    gate_id: str = Field(min_length=1)
+    gate_type: Literal[
+        "login_method",
+        "credentials",
+        "phone_otp",
+        "qr_scan",
+        "image_captcha",
+        "confirm",
+        "session_bridge",
+    ]
+    prompt: str = Field(min_length=1)
+    fields: list[dict[str, Any]]
+    assets: dict[str, Any]
+    choices: list[dict[str, Any]] | None
+
+
+def _parse_user_gate_interrupt(value: object) -> UserGateInterrupt | None:
+    if not isinstance(value, dict) or "gate_type" not in value:
+        return None
+    try:
+        return UserGateInterrupt.model_validate(value)
+    except ValidationError as exc:
+        raise ValueError("user gate interrupt violates contract") from exc
+
+
 def interrupt_value_is_user_gate(value: object) -> bool:
-    if not isinstance(value, dict):
-        return False
-    return bool(value.get("gate_type"))
+    return _parse_user_gate_interrupt(value) is not None
 
 
 async def has_pending_user_gate(agent: CompiledStateGraph, config: RunnableConfig) -> bool:
@@ -28,7 +55,7 @@ async def has_pending_user_gate(agent: CompiledStateGraph, config: RunnableConfi
         return False
     for intr in snap.interrupts:
         value = intr.value if hasattr(intr, "value") else intr
-        if interrupt_value_is_user_gate(value):
+        if _parse_user_gate_interrupt(value) is not None:
             return True
     return False
 
@@ -50,16 +77,14 @@ async def emit_user_gates(
     emitted = False
     for intr in snap.interrupts:
         value = intr.value if hasattr(intr, "value") else intr
-        if not isinstance(value, dict):
+        gate = _parse_user_gate_interrupt(value)
+        if gate is None:
             continue
-        gate_id = str(value.get("gate_id") or "")
-        gate_type_raw = value.get("gate_type")
-        if not gate_type_raw:
-            continue
-        gate_type = str(gate_type_raw)
-        phase_raw = value.get("phase")
+        gate_id = gate.gate_id
+        gate_type = gate.gate_type
+        public = strip_public_gate_payload(gate.model_dump(mode="python"))
+        phase_raw = public.get("phase")
         phase = str(phase_raw) if phase_raw is not None else None
-        public = strip_public_gate_payload(dict(value))
         assets: dict[str, Any] = public.get("assets") if isinstance(public.get("assets"), dict) else {}
         raw_choices = public.get("choices") if isinstance(public.get("choices"), list) else []
         choices = public_login_choices(raw_choices)
@@ -81,22 +106,19 @@ async def emit_user_gates(
                 domain=str(public.get("domain") or "") or None,
             )
         )
-        if gate_id:
-            await set_gate_pending(
-                conversation_id,
-                turn_id=turn_id,
-                gate_id=gate_id,
-                gate_type=gate_type,
-                model_key=model_key,
-                prompt=str(public.get("prompt") or ""),
-                fields=normalize_field_defs(
-                    public.get("fields") if isinstance(public.get("fields"), list) else []
-                ),
-                choices=choices,
-                phase=phase,
-                assets=assets,
-                status="pending",
-                domain=str(public.get("domain") or "") or None,
-            )
+        await set_gate_pending(
+            conversation_id,
+            turn_id=turn_id,
+            gate_id=gate_id,
+            gate_type=gate_type,
+            model_key=model_key,
+            prompt=gate.prompt,
+            fields=normalize_field_defs(gate.fields),
+            choices=choices,
+            phase=phase,
+            assets=assets,
+            status="pending",
+            domain=str(public.get("domain") or "") or None,
+        )
         emitted = True
     return emitted

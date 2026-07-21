@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 from langchain_core.messages import AIMessage, BaseMessage
 
@@ -23,21 +23,74 @@ class AgentEventType(str, Enum):
 
 
 @dataclass(frozen=True)
-class AgentEvent:
-    type: AgentEventType
+class ModelTokenEvent:
+    type: ClassVar[AgentEventType] = AgentEventType.MODEL_TOKEN
     turn_id: str
     step_index: int
-    channel: Literal["answer", "think"] | None = None
-    text: str | None = None
-    ai_message: AIMessage | None = None
+    channel: Literal["answer", "think"]
+    text: str
+
+
+@dataclass(frozen=True)
+class ModelStepFinishedEvent:
+    type: ClassVar[AgentEventType] = AgentEventType.MODEL_STEP_FINISHED
+    turn_id: str
+    step_index: int
+    ai_message: AIMessage
     invalid_tool_calls: list[InvalidToolCall] = field(default_factory=list)
-    call_id: str | None = None
-    tool_name: str | None = None
-    tool_args: dict[str, Any] | None = None
-    tool_result: str | None = None
-    tool_error: bool = False
-    synthetic: bool = False
-    recovery_attempt: int | None = None
-    error_class: str | None = None
-    messages: list[BaseMessage] | None = None
-    error: str | None = None
+
+
+@dataclass(frozen=True)
+class ToolStartedEvent:
+    type: ClassVar[AgentEventType] = AgentEventType.TOOL_STARTED
+    turn_id: str
+    step_index: int
+    call_id: str
+    tool_name: str
+    tool_args: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ToolFinishedEvent:
+    type: ClassVar[AgentEventType] = AgentEventType.TOOL_FINISHED
+    turn_id: str
+    step_index: int
+    call_id: str
+    tool_name: str
+    tool_args: dict[str, Any]
+    tool_result: str
+    tool_error: bool
+    error_class: str | None
+
+    def __post_init__(self) -> None:
+        if self.tool_error and not self.error_class:
+            raise ValueError("failed tool event requires error_class")
+        if not self.tool_error and self.error_class is not None:
+            raise ValueError("successful tool event cannot contain error_class")
+
+
+@dataclass(frozen=True)
+class TurnCompletedEvent:
+    type: ClassVar[AgentEventType] = AgentEventType.TURN_COMPLETED
+    turn_id: str
+    step_index: int
+    messages: list[BaseMessage]
+
+
+@dataclass(frozen=True)
+class TurnFailedEvent:
+    type: ClassVar[AgentEventType] = AgentEventType.TURN_FAILED
+    turn_id: str
+    step_index: int
+    error: str
+    error_class: str
+
+
+AgentEvent = (
+    ModelTokenEvent
+    | ModelStepFinishedEvent
+    | ToolStartedEvent
+    | ToolFinishedEvent
+    | TurnCompletedEvent
+    | TurnFailedEvent
+)

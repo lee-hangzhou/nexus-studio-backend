@@ -192,8 +192,8 @@ async def stream_chat_resume(
                     and event.error_class in _GATE_RESUME_FATAL_ERRORS
                 ):
                     gate_resume_failed = {
-                        "error_class": event.error_class or BROWSER_ERROR,
-                        "message": (event.tool_result or "").strip() or "gate resume failed",
+                        "error_class": event.error_class,
+                        "message": event.tool_result.strip(),
                     }
                     log_stage(
                         "chat.turn.gate_resume_failed",

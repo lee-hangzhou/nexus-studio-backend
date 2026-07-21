@@ -52,10 +52,11 @@ async def create_secret(gate_id: str, field_name: str, value: str) -> str:
     if raw:
         try:
             parsed = json.loads(raw)
-            if isinstance(parsed, dict):
-                mapping = {str(k): str(v) for k, v in parsed.items()}
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as exc:
+            raise ValueError("gate vault metadata is not valid JSON") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError("gate vault metadata must be an object")
+        mapping = {str(k): str(v) for k, v in parsed.items()}
     mapping[field_name] = handle
     await redis_client.set(
         _gate_handles_key(gate_id),
@@ -92,9 +93,11 @@ async def peek_meta(gate_id: str) -> dict[str, str]:
         return {}
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError:
-        return {}
-    return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+    except json.JSONDecodeError as exc:
+        raise ValueError("gate vault metadata is not valid JSON") from exc
+    if not isinstance(data, dict):
+        raise ValueError("gate vault metadata must be an object")
+    return {str(k): str(v) for k, v in data.items()}
 
 
 async def put(gate_id: str, fields: dict[str, Any]) -> None:

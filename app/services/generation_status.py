@@ -16,8 +16,9 @@ from app.models.assets import Assets
 from app.models.chat_attachments import ChatAttachments
 from app.models.generate_task import GenerateTask
 from app.schemas.generate import GenerateRefMaterial, GenerateTasksStatusResponse, GenerateTaskView
-from app.services.generation_assets import ensure_result_assets, task_result_asset_ids, to_result_urls
+from app.services.generation_assets import task_result_asset_ids, to_result_urls
 from app.services.generation_canvas_bridge import reconcile_canvas_for_task
+from app.services.generation_result import apply_generation_result, normalize_generation_result
 
 FallbackPoll = Callable[[GenerateTask], Awaitable[GenerateTask]]
 QueueInfo = Callable[[int, int], Awaitable[Optional[GatewayQueueItem]]]
@@ -46,10 +47,25 @@ def _status_label(status: int) -> str:
         return "running"
     if status == GatewayTaskStatus.SUCCEEDED:
         return "success"
-    return "failed"
+    if status in {GatewayTaskStatus.FAILED, GatewayTaskStatus.CANCELLED}:
+        return "failed"
+    raise AppError(
+        ErrorCode.GENERATION_STATUS_UNAVAILABLE,
+        "任务状态不符合协议",
+        {"status": status},
+    )
 
 
 def _should_update(current: int, fresh: int) -> bool:
+    try:
+        current = int(GatewayTaskStatus(current))
+        fresh = int(GatewayTaskStatus(fresh))
+    except ValueError as exc:
+        raise AppError(
+            ErrorCode.GENERATION_STATUS_UNAVAILABLE,
+            "任务状态不符合协议",
+            {"current": current, "fresh": fresh},
+        ) from exc
     if current in TERMINAL_STATUSES:
         return False
     if fresh in TERMINAL_STATUSES:
@@ -161,37 +177,24 @@ async def _fallback_poll(task: GenerateTask) -> GenerateTask:
     try:
         resp = await gateway_client.get_task(task.union_task_id)
         data = resp.data
-        fresh_status = int(data.status)
+        fresh_status = int(GatewayTaskStatus(data.status))
         if not _should_update(task.status, fresh_status):
             return task
-
-        update_fields: dict[str, Any] = {"status": fresh_status}
-        if fresh_status in TERMINAL_STATUSES:
-            fresh_urls = [
-                item.model_dump(mode="json", exclude_none=True)
-                for item in data.urls
-            ]
-            if fresh_urls:
-                update_fields["result_keys"] = fresh_urls
-            if fresh_status == GatewayTaskStatus.FAILED:
-                update_fields["error_message"] = data.reason or "任务失败"
-
-        updated = await GenerateTask.filter(
-            id=task.id,
-            status__not_in=list(TERMINAL_STATUSES),
-        ).update(**update_fields)
-
+        result = normalize_generation_result(data.status, data.urls, data.reason)
+        task, updated = await apply_generation_result(
+            task,
+            result,
+            source="fallback_poll",
+            callback_sent=task.callback_sent,
+        )
         if updated:
-            task = await GenerateTask.get(id=task.id)
-            if task.status == GatewayTaskStatus.SUCCEEDED:
-                task = await ensure_result_assets(task)
             logger.info(
                 "generate.fallback_poll.updated",
                 task_id=task.id,
-                status=fresh_status,
+                status=int(task.status),
             )
-            if task.status in TERMINAL_STATUSES:
-                await reconcile_canvas_for_task(task, source="fallback_poll", ensure_assets=False)
+    except AppError:
+        raise
     except Exception as exc:
         logger.warning(
             "generate.fallback_poll.error",
@@ -199,7 +202,11 @@ async def _fallback_poll(task: GenerateTask) -> GenerateTask:
             union_task_id=task.union_task_id,
             error=str(exc),
         )
-    return task
+        raise AppError(
+            ErrorCode.GENERATION_STATUS_UNAVAILABLE,
+            "查询生成任务状态失败",
+            {"task_id": task.id},
+        ) from exc
 
 
 async def _fetch_queue_info(task_id: int, union_task_id: int) -> Optional[GatewayQueueItem]:
@@ -213,7 +220,11 @@ async def _fetch_queue_info(task_id: int, union_task_id: int) -> Optional[Gatewa
             union_task_id=union_task_id,
             error=str(exc),
         )
-        return None
+        raise AppError(
+            ErrorCode.GENERATION_QUEUE_UNAVAILABLE,
+            "查询生成队列状态失败",
+            {"task_id": task_id},
+        ) from exc
 
 
 async def _fetch_queue_info_map(tasks: list[GenerateTask]) -> dict[int, GatewayQueueItem]:
@@ -238,7 +249,11 @@ async def _fetch_queue_info_map(tasks: list[GenerateTask]) -> dict[int, GatewayQ
             union_task_ids=union_task_ids,
             error=str(exc),
         )
-        return {}
+        raise AppError(
+            ErrorCode.GENERATION_QUEUE_UNAVAILABLE,
+            "查询生成队列状态失败",
+            {"task_ids": [int(task.id) for task in tasks]},
+        ) from exc
 
 
 async def _reconcile_canvas(task: GenerateTask, source: str) -> Any:
@@ -255,7 +270,7 @@ async def get_generate_task_status(
     favorite_map_for_tasks: FavoriteMap = _favorite_map_for_tasks,
     reconcile_canvas: CanvasReconcile = _reconcile_canvas,
 ) -> GenerateTaskView:
-    task = await GenerateTask.get_or_none(id=task_id, user_id=user_id)
+    task = await GenerateTask.get_or_none(id=task_id, user_id=user_id, deleted_at__isnull=True)
     if task is None:
         raise AppError(ErrorCode.TASK_NOT_FOUND, "任务不存在")
 
@@ -293,6 +308,7 @@ async def get_generate_tasks_status(
     tasks = await GenerateTask.filter(
         id__in=requested_ids,
         user_id=user_id,
+        deleted_at__isnull=True,
     ).all()
     task_by_id = {int(task.id): task for task in tasks}
     missing_task_ids = [task_id for task_id in requested_ids if task_id not in task_by_id]

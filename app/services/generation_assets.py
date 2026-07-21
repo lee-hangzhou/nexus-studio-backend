@@ -96,7 +96,7 @@ async def ensure_result_assets(task: GenerateTask) -> GenerateTask:
                 "resolution": task.resolution,
                 "duration": task.duration,
                 "index": index,
-                "gateway_result": item.model_dump(mode="json", exclude_none=True),
+                "gateway_result": item.model_dump(mode="json", exclude_none=False),
                 "canvas_node_id": str(canvas_node.id) if canvas_node is not None else None,
                 "canvas_project_id": project_id,
             },

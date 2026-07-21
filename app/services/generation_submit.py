@@ -120,10 +120,10 @@ async def submit_to_gateway(
         )
         resp = await gateway_client.submit_tts(tts_payload, rid)
     else:
-        reference_mode = req.reference_mode or capabilities.default_reference_mode
-        duration = req.duration if req.duration is not None else capabilities.default_duration
+        reference_mode = req.reference_mode
+        duration = req.duration
         if reference_mode is None or duration is None:
-            raise AppError(ErrorCode.INVALID_PARAMS, "视频模型缺少默认参考模式或时长配置")
+            raise AppError(ErrorCode.INVALID_PARAMS, "视频生成必须显式选择参考模式和时长")
         video_payload = GatewayVideoSubmitRequest(
             model=req.model_id,
             content=content_with_materials(req.prompt, materials),
@@ -152,7 +152,9 @@ async def submit_generate_task(user_id: int, req: SubmitGenerateRequest) -> Gene
 
     reference_mode = None
     if req.kind == GenerationKind.VIDEO:
-        reference_mode = req.reference_mode or capabilities.default_reference_mode
+        reference_mode = req.reference_mode
+        if reference_mode is None:
+            raise AppError(ErrorCode.INVALID_PARAMS, "视频生成必须显式选择参考模式")
 
     task = await GenerateTask.create(
         user_id=user_id,

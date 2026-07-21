@@ -6,8 +6,9 @@ from typing import Any
 
 
 def field_def_name(item: dict[str, Any]) -> str:
-    """Return canonical field name; accept legacy agent `key` alias."""
-    return str(item.get("name") or item.get("key") or "").strip()
+    """Return the canonical field name required by the gate contract."""
+    value = item.get("name")
+    return value.strip() if isinstance(value, str) else ""
 
 
 def field_names(field_defs: list[dict[str, Any]]) -> set[str]:
@@ -15,7 +16,7 @@ def field_names(field_defs: list[dict[str, Any]]) -> set[str]:
 
 
 def normalize_field_defs(field_defs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Ensure each field def exposes `name` for frontend forms and vault keys."""
+    """Validate and retain field definitions with their canonical name."""
     out: list[dict[str, Any]] = []
     for raw in field_defs:
         if not isinstance(raw, dict):
@@ -23,7 +24,5 @@ def normalize_field_defs(field_defs: list[dict[str, Any]]) -> list[dict[str, Any
         name = field_def_name(raw)
         if not name:
             continue
-        item = dict(raw)
-        item["name"] = name
-        out.append(item)
+        out.append(dict(raw))
     return out

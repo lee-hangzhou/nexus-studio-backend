@@ -35,10 +35,13 @@ async def resolve_node_generation_config(
         if capabilities is None:
             capabilities = await generation_capabilities.require(model_id, GenerationKind.VIDEO)
         allowed = list(capabilities.durations)
-        if allowed:
-            duration = default_duration if default_duration in allowed else allowed[0]
-        else:
-            duration = default_duration
+        if not allowed or default_duration not in allowed:
+            raise AppError(
+                ErrorCode.GENERATION_MODEL_CAPABILITY_UNAVAILABLE,
+                "Canvas 默认视频时长不在模型能力范围内",
+                {"model_id": model_id, "duration": default_duration},
+            )
+        duration = default_duration
         changed = True
 
     return model_id, duration, changed

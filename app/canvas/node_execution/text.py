@@ -12,21 +12,13 @@ from app.core.config import settings
 from app.core.gateway import gateway_client
 from app.core.logger import log_exception, logger
 from app.domain.canvas.enums import CanvasNodeKind, CanvasNodeStatus
-from app.chat.llm.gateway_chat_model import _openai_chat_response_body
 from app.exceptions.base import AppError
 from app.exceptions.codes import ErrorCode
 from app.models.projects import Projects
 
 
-def _gateway_error_code(response: dict) -> int | None:
-    code = response.get("code")
-    if isinstance(code, int) and code != 0:
-        return code
-    return None
-
-
 def _extract_completion_text(response: dict, *, adapter) -> str:
-    parsed = adapter.parse_response(_openai_chat_response_body(response))
+    parsed = adapter.parse_response(response)
     text = str(parsed.get("content") or "").strip()
     if not text:
         raise AppError(ErrorCode.GATEWAY_PROTOCOL_ERROR, "模型返回空文本")
@@ -81,13 +73,6 @@ async def execute_text_node_generation(
             payload,
             timeout_sec=settings.CHAT_GATEWAY_TIMEOUT_SEC,
         )
-        error_code = _gateway_error_code(response)
-        if error_code is not None:
-            raise AppError(
-                ErrorCode.GATEWAY_PROTOCOL_ERROR,
-                str(response.get("message") or "gateway error"),
-                {"code": error_code},
-            )
         output_text = _extract_completion_text(response, adapter=adapter)
     except AppError as exc:
         rev, node_view = await canvas_service.update_node_text_output(

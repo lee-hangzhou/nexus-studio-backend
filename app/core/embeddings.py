@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import base64
+import math
 import time
 from typing import Any, List, Sequence, Union
 from uuid import uuid4
@@ -54,21 +55,41 @@ class GatewayEmbeddingsClient:
         }
 
     @staticmethod
-    def _parse_vectors(body: dict[str, Any]) -> list[list[float]]:
+    def _parse_vectors(
+        body: dict[str, Any],
+        *,
+        expected_count: int,
+        expected_dimensions: int | None,
+    ) -> list[list[float]]:
         data = body.get("data")
-        if not isinstance(data, list):
+        if not isinstance(data, list) or len(data) != expected_count:
             raise GatewayEmbeddingError("embeddings response missing data list", error_type="invalid_response")
-        indexed: list[tuple[int, list[float]]] = []
+        indexed: dict[int, list[float]] = {}
         for item in data:
-            if not isinstance(item, dict):
-                continue
+            if not isinstance(item, dict) or set(item) != {"object", "embedding", "index"}:
+                raise GatewayEmbeddingError("embedding item violates response contract", error_type="invalid_response")
             embedding = item.get("embedding")
-            if isinstance(embedding, list):
-                indexed.append((int(item.get("index", len(indexed))), [float(v) for v in embedding]))
-        if not indexed:
-            raise GatewayEmbeddingError("embeddings response has no vectors", error_type="invalid_response")
-        indexed.sort(key=lambda pair: pair[0])
-        return [vector for _, vector in indexed]
+            index = item.get("index")
+            if item.get("object") != "embedding" or not isinstance(index, int) or isinstance(index, bool):
+                raise GatewayEmbeddingError("embedding item has invalid object or index", error_type="invalid_response")
+            if index in indexed or index < 0 or index >= expected_count:
+                raise GatewayEmbeddingError("embedding indexes are not a complete sequence", error_type="invalid_response")
+            if not isinstance(embedding, list) or not embedding:
+                raise GatewayEmbeddingError("embedding vector is missing or empty", error_type="invalid_response")
+            vector: list[float] = []
+            for value in embedding:
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+                    raise GatewayEmbeddingError("embedding vector contains a non-number", error_type="invalid_response")
+                vector.append(float(value))
+            if expected_dimensions is not None and len(vector) != expected_dimensions:
+                raise GatewayEmbeddingError("embedding vector dimension mismatch", error_type="invalid_response")
+            indexed[index] = vector
+        if set(indexed) != set(range(expected_count)):
+            raise GatewayEmbeddingError("embedding indexes are not a complete sequence", error_type="invalid_response")
+        dimensions = {len(vector) for vector in indexed.values()}
+        if len(dimensions) != 1:
+            raise GatewayEmbeddingError("embedding vectors have inconsistent dimensions", error_type="invalid_response")
+        return [indexed[index] for index in range(expected_count)]
 
     @staticmethod
     def _raise_for_error_response(response: httpx.Response) -> None:
@@ -124,7 +145,12 @@ class GatewayEmbeddingsClient:
         body = response.json()
         if not isinstance(body, dict):
             raise GatewayEmbeddingError("embeddings response is not json object", error_type="invalid_response")
-        vectors = self._parse_vectors(body)
+        expected_count = 1 if isinstance(input, str) or (input and isinstance(input[0], dict)) else len(input)
+        vectors = self._parse_vectors(
+            body,
+            expected_count=expected_count,
+            expected_dimensions=dimensions,
+        )
         logger.info(
             "gateway.embeddings.done",
             endpoint=endpoint,
@@ -166,6 +192,8 @@ class GatewayEmbeddingsClient:
         request_id: str | None = None,
     ) -> list[float]:
         vectors = await self.embed_texts_batch([text], model=model, request_id=request_id)
+        if len(vectors) != 1:
+            raise GatewayEmbeddingError("single embedding request returned multiple vectors", error_type="invalid_response")
         return vectors[0]
 
     @staticmethod
@@ -202,6 +230,8 @@ class GatewayEmbeddingsClient:
                 mime_type=request.mime_type,
             )
         vectors = await self.create(model=model, input=embedding_input)
+        if len(vectors) != 1:
+            raise GatewayEmbeddingError("asset embedding returned multiple vectors", error_type="invalid_response")
         return AssetEmbeddingResult(embedding=vectors[0])
 
 

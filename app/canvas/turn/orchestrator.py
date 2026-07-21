@@ -27,7 +27,6 @@ from app.canvas.turn.persistence import (
 from app.chat.agent.events import AgentEventType
 from app.chat.agent.runner import run_agent_turn_stream
 from app.chat.llm.gateway_chat_model import GatewayChatModel
-from app.chat.llm.pseudo_tool_markup import strip_pseudo_tool_markup
 from app.chat.llm.registry import get_model_spec
 from app.chat.stream.agent_frames import chunk_text, frames_from_agent_event
 from app.chat.stream.encoder import encode_sse_frame
@@ -117,7 +116,7 @@ async def _emit_assistant_text_backfill(
             continue
         if message.tool_calls:
             continue
-        text = strip_pseudo_tool_markup(str(message.content or "")).strip()
+        text = str(message.content or "").strip()
         if not text:
             continue
         for piece in chunk_text(text):
@@ -318,7 +317,7 @@ async def stream_canvas_turn(
                 for frame in frames_from_agent_event(event, turn_id=turn_id):
                     if frame.type == StreamFrameType.TOKEN and frame.text:
                         # 剥离伪工具调用文本, 避免前端误以为已执行工具
-                        cleaned = strip_pseudo_tool_markup(frame.text)
+                        cleaned = frame.text
                         if cleaned:
                             answer_parts.append(cleaned)
                             if cleaned != frame.text:
@@ -388,9 +387,7 @@ async def stream_canvas_turn(
                         )
                     if event.ai_message is not None:
                         # 无流式 token 时从无工具调用的最终 AIMessage 补正文
-                        step_answer = strip_pseudo_tool_markup(
-                            str(event.ai_message.content or "")
-                        ).strip()
+                        step_answer = str(event.ai_message.content or "").strip()
                         if step_answer and not event.ai_message.tool_calls and not answer_parts:
                             for piece in chunk_text(step_answer):
                                 answer_parts.append(piece)
@@ -406,7 +403,7 @@ async def stream_canvas_turn(
                     # 工具结束后持久化步骤, 同步 patch 或生成结果给前端
                     tool_calls_count += 1
                     action = guards.on_tool_finished(
-                        event.tool_name or "",
+                        event.tool_name,
                         event.error_class,
                     )
                     await persist_canvas_tool_step(
@@ -417,7 +414,7 @@ async def stream_canvas_turn(
                             call_id=event.call_id,
                             name=event.tool_name,
                             ok=not event.tool_error,
-                            preview=(event.tool_result or "")[:500],
+                            preview=event.tool_result[:500],
                             error_type=event.error_class,
                         ),
                     )
@@ -427,32 +424,32 @@ async def stream_canvas_turn(
                 if event.type == AgentEventType.TURN_FAILED:
                     turn_failed = True
                     terminated_by = "turn_failed"
-                    turn_failed_error = event.error or "turn failed"
+                    turn_failed_error = event.error
                     logger.error(
                         "canvas.turn.agent_failed",
                         project_id=project_id,
                         turn_id=turn_id,
                         step_index=event.step_index,
                         error=turn_failed_error,
-                        error_class=event.error_class or "internal",
+                        error_class=event.error_class,
                     )
                     await repair_canvas_checkpoint_if_needed(
                         agent,
                         config,
                         project_id=project_id,
                         turn_id=turn_id,
-                        reason=event.error_class or "internal",
+                        reason=event.error_class,
                     )
                     break
                 if event.type == AgentEventType.TURN_COMPLETED:
                     terminated_by = "completed"
                     await _emit_assistant_text_backfill(
-                        list(event.messages or []),
+                        list(event.messages),
                         answer_parts=answer_parts,
                         emit=emit,
                     )
                     schedule_canvas_memory_extract(
-                        messages=list(event.messages or []),
+                        messages=list(event.messages),
                         user_id=user_id,
                         project_id=project_id,
                     )
@@ -462,18 +459,9 @@ async def stream_canvas_turn(
                 terminated_by = "interrupted"
             elif not cancel_event.is_set():
                 if turn_failed:
-                    await persist_canvas_assistant_message(
-                        project_id=project_id,
-                        user_id=user_id,
-                        content=f"执行中断：{turn_failed_error}",
-                        client_turn_id=client_turn_id,
-                        turn_id=turn_id,
-                        tool_calls_count=tool_calls_count,
-                    )
                     await _touch_project(project_id)
-                    await emit(create_stream_frame(type=StreamFrameType.DONE, turn_id=turn_id))
                 else:
-                    answer_text = strip_pseudo_tool_markup("".join(answer_parts)).strip()
+                    answer_text = "".join(answer_parts).strip()
                     if not answer_text:
                         logger.warning(
                             "canvas.turn.empty",
@@ -482,11 +470,20 @@ async def stream_canvas_turn(
                             project_id=project_id,
                             turn_id=turn_id,
                         )
-                    assistant_content = answer_text or "（无文本回复）"
+                        await emit(
+                            create_stream_frame(
+                                type=StreamFrameType.ERROR,
+                                code="empty_response",
+                                message="模型未返回有效回答",
+                                turn_id=turn_id,
+                            )
+                        )
+                        terminated_by = "error"
+                        return
                     await persist_canvas_assistant_message(
                         project_id=project_id,
                         user_id=user_id,
-                        content=assistant_content,
+                        content=answer_text,
                         client_turn_id=client_turn_id,
                         turn_id=turn_id,
                         tool_calls_count=tool_calls_count,

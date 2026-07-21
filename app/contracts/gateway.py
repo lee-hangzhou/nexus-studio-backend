@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictBool, StrictFloat, StrictInt, StrictStr
 
 from app.domain.enums import GatewayTaskStatus
 from app.domain.generation.enums import (
@@ -23,10 +23,10 @@ class GatewayContract(BaseModel):
 
 
 class GatewayResponseData(BaseModel):
-    """union_lm 响应 data 内层（及 callback 体）；忽略未建模字段。"""
+    """Typed payload returned by the gateway."""
 
     model_config = ConfigDict(
-        extra="ignore",
+        extra="forbid",
         populate_by_name=True,
         use_enum_values=True,
     )
@@ -36,25 +36,24 @@ class GatewayEnvelopeResponse(BaseModel):
     """union_lm 任务类 API 的标准响应信封 {code, message, data}。"""
 
     model_config = ConfigDict(
-        extra="ignore",
+        extra="forbid",
         populate_by_name=True,
         use_enum_values=True,
     )
 
-    code: int = 0
-    message: str | None = None
+    code: StrictInt
+    message: StrictStr
 
 
 class GatewayModelItem(BaseModel):
-    """OpenAI /v1/models 兼容目录项；忽略未建模字段（如 object、owned_by）。"""
+    """Strict OpenAI-compatible model catalog item."""
 
-    model_config = ConfigDict(extra="ignore", use_enum_values=True)
+    model_config = ConfigDict(extra="forbid", use_enum_values=True)
 
-    id: str = Field(min_length=1)
-    object: str | None = None
-    display_name: str | None = None
+    id: StrictStr = Field(min_length=1)
+    object: StrictStr
     task_type: GatewayModelTaskType
-    supports_vision: bool = False
+    supports_vision: StrictBool
 
     @property
     def generation_kind(self) -> GenerationKind | None:
@@ -70,10 +69,10 @@ class GatewayModelItem(BaseModel):
 class GatewayModelsResponse(BaseModel):
     """OpenAI /v1/models 兼容列表信封。"""
 
-    model_config = ConfigDict(extra="ignore", use_enum_values=True)
+    model_config = ConfigDict(extra="forbid", use_enum_values=True)
 
     data: list[GatewayModelItem]
-    object: str | None = None
+    object: str
 
 
 class GatewayGenerateMaterial(GatewayContract):
@@ -127,19 +126,19 @@ class GatewayTTSSubmitRequest(GatewayContract):
 
 
 class GatewayVoiceItem(GatewayResponseData):
-    voice_id: str = Field(alias="voiceId")
-    name: str = ""
-    description: str = ""
+    voice_id: StrictStr = Field(alias="voiceId", min_length=1)
+    name: StrictStr = Field(min_length=1)
+    description: StrictStr = Field(min_length=1)
 
 
 class GatewayListVoicesResponse(GatewayResponseData):
-    object: str | None = None
-    model: str | None = None
-    data: list[GatewayVoiceItem] = Field(default_factory=list)
+    object: str
+    model: str
+    data: list[GatewayVoiceItem]
 
 
 class GatewayTaskSubmitData(GatewayResponseData):
-    task_id: int = Field(alias="taskId")
+    task_id: StrictInt = Field(alias="taskId", ge=1)
 
 
 class GatewayTaskSubmitResponse(GatewayEnvelopeResponse):
@@ -147,21 +146,26 @@ class GatewayTaskSubmitResponse(GatewayEnvelopeResponse):
 
 
 class GatewayResultItem(GatewayResponseData):
-    model_config = ConfigDict(extra="allow", populate_by_name=True)
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    url: str
-    type: int | None = None
-    width: int | None = None
-    height: int | None = None
+    url: StrictStr = Field(min_length=1)
+    type: StrictInt | None = None
+    width: StrictInt | None = None
+    height: StrictInt | None = None
+    duration: StrictFloat | StrictInt | None = None
+    ratio: StrictStr | None = None
+    resolution: StrictStr | None = None
+    frames_per_second: StrictInt | None = Field(default=None, alias="framesPerSecond")
 
 
 class GatewayTaskStatusData(GatewayResponseData):
     """对齐 union_lm api.TaskResponse。"""
 
-    task_id: int = Field(alias="taskId")
+    task_id: StrictInt = Field(alias="taskId", ge=1)
     status: GatewayTaskStatus
-    urls: list[GatewayResultItem] = Field(default_factory=list)
+    urls: list[GatewayResultItem] | None = None
     reason: str | None = None
+    result: JsonValue | None = None
 
 
 class GatewayTaskStatusResponse(GatewayEnvelopeResponse):
@@ -169,15 +173,15 @@ class GatewayTaskStatusResponse(GatewayEnvelopeResponse):
 
 
 class GatewayQueueItem(GatewayResponseData):
-    task_id: int = Field(alias="taskId")
-    status: int | None = None
-    position: int | None = None
-    total: int | None = None
-    estimated_wait_seconds: int | None = Field(default=None, alias="estimatedWaitSeconds")
+    task_id: StrictInt = Field(alias="taskId", ge=1)
+    status: StrictInt
+    position: StrictInt | None = None
+    total: StrictInt | None = None
+    estimated_wait_seconds: StrictInt | None = Field(default=None, alias="estimatedWaitSeconds")
 
 
 class GatewayQueueData(GatewayResponseData):
-    tasks: list[GatewayQueueItem] = Field(default_factory=list)
+    tasks: list[GatewayQueueItem]
 
 
 class GatewayQueueResponse(GatewayEnvelopeResponse):
@@ -187,10 +191,11 @@ class GatewayQueueResponse(GatewayEnvelopeResponse):
 class GatewayGenerateCallback(GatewayResponseData):
     """对齐 union_lm api.TaskResponse（callback 直 POST，无外层信封）。"""
 
-    task_id: int = Field(alias="taskId")
+    task_id: StrictInt = Field(alias="taskId", ge=1)
     status: GatewayTaskStatus
     reason: str | None = None
-    urls: list[GatewayResultItem] = Field(default_factory=list)
+    urls: list[GatewayResultItem] | None = None
+    result: JsonValue | None = None
 
 
 def safe_gateway_response_summary(payload: Any) -> dict[str, Any]:

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from app.core.turn.tool_loop_guard import TOOL_LOOP_EXHAUSTED
 
@@ -43,16 +44,32 @@ CHALLENGE_OUTCOME_DISMISSED = "challenge_outcome_dismissed"
 CHALLENGE_OUTCOME_INCONCLUSIVE = "challenge_outcome_inconclusive"
 
 
-@dataclass(frozen=True)
-class ToolResult:
+class ToolResultProtocolError(ValueError):
+    """Raised when a tool message violates the single supported result contract."""
+
+
+class ToolResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
     success: bool
     output: str
-    error_type: str | None = None
+    error_type: str | None = Field(default=None, min_length=1)
     error_detail: str | None = None
+
+    @model_validator(mode="after")
+    def validate_outcome(self) -> "ToolResult":
+        if self.success:
+            if not self.output:
+                raise ValueError("successful tool result requires non-empty output")
+            if self.error_type is not None or self.error_detail is not None:
+                raise ValueError("successful tool result cannot contain error fields")
+        elif self.error_type is None:
+            raise ValueError("failed tool result requires error_type")
+        return self
 
     @classmethod
     def ok(cls, output: str) -> ToolResult:
-        return cls(success=True, output=output or "")
+        return cls(success=True, output=output)
 
     @classmethod
     def fail(
@@ -70,54 +87,26 @@ class ToolResult:
         )
 
     def to_tool_message(self) -> str:
-        payload = {
-            "success": self.success,
-            "output": self.output,
-            "error_type": self.error_type,
-            "error_detail": self.error_detail,
-        }
+        payload = self.model_dump(mode="json")
         return json.dumps({"tool_result": payload}, ensure_ascii=False)
 
     @classmethod
     def parse_tool_message(cls, content: str) -> ToolResult:
-        text = (content or "").strip()
+        if not isinstance(content, str):
+            raise ToolResultProtocolError("tool result must be a JSON string")
+        text = content.strip()
         if not text:
-            return cls.ok("")
-
-        if text.startswith("{"):
-            try:
-                raw = json.loads(text)
-            except json.JSONDecodeError:
-                return cls.ok(text)
-            if isinstance(raw, dict) and "tool_result" in raw:
-                item = raw["tool_result"]
-                if isinstance(item, dict):
-                    return cls(
-                        success=bool(item.get("success")),
-                        output=str(item.get("output") or ""),
-                        error_type=item.get("error_type"),
-                        error_detail=item.get("error_detail"),
-                    )
-
-        # Legacy plain-text tool outputs (pre-ToolResult).
-        if text.startswith("tool_error: invalid_arguments"):
-            return cls.fail(INVALID_ARGUMENTS, detail=text)
-        if text.startswith("tool_error: duplicate_call"):
-            return cls.fail(DUPLICATE_CALL, detail=text)
-        if text.startswith("tool_error:"):
-            return cls.fail(INTERNAL, detail=text)
-        if text.startswith("file not ready:"):
-            return cls.fail(FILE_NOT_READY, detail=text, output=text)
-        if text.startswith("file not found:") or text.startswith("publish_file: file not found"):
-            return cls.fail(FILE_NOT_FOUND, detail=text, output=text)
-        if text.startswith("execute_python: timeout"):
-            return cls.fail(SANDBOX_TIMEOUT, detail=text, output=text)
-        if text.startswith("execute_python: docker not available"):
-            return cls.fail(SANDBOX_UNAVAILABLE, detail=text, output=text)
-        if text.startswith("exit=") and "stderr:" in text:
-            return cls.fail(SANDBOX_ERROR, detail=text, output=text)
-
-        return cls.ok(text)
+            raise ToolResultProtocolError("tool result cannot be empty")
+        try:
+            raw = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ToolResultProtocolError("tool result is not valid JSON") from exc
+        if not isinstance(raw, dict) or set(raw) != {"tool_result"}:
+            raise ToolResultProtocolError("tool result envelope must contain only tool_result")
+        try:
+            return cls.model_validate(raw["tool_result"])
+        except ValidationError as exc:
+            raise ToolResultProtocolError("tool result payload violates contract") from exc
 
     @property
     def display_text(self) -> str:

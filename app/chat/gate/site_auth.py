@@ -36,9 +36,11 @@ async def get_site_auth(conversation_id: int, domain: str) -> dict[str, Any] | N
         return None
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
+    except json.JSONDecodeError as exc:
+        raise ValueError("site auth state is not valid JSON") from exc
+    if not isinstance(data, dict):
+        raise ValueError("site auth state must be an object")
+    return data
 
 
 async def _set_site_auth(conversation_id: int, domain: str, payload: dict[str, Any]) -> None:

@@ -7,7 +7,7 @@ T = TypeVar("T")
 
 class Response(BaseModel, Generic[T]):
     code: int = Field(default=0)
-    data: Optional[T] = Field(default=None)
+    data: T
     msg: str = Field(default="success")
 
 

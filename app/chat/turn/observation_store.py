@@ -68,9 +68,11 @@ async def load_turn_observation_snapshot(
         return None
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
+    except json.JSONDecodeError as exc:
+        raise ValueError("turn observation snapshot is not valid JSON") from exc
+    if not isinstance(data, dict):
+        raise ValueError("turn observation snapshot must be an object")
+    return data
 
 
 async def clear_turn_observation_snapshot(conversation_id: int, turn_id: str) -> None:

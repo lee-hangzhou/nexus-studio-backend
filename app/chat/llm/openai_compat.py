@@ -34,6 +34,7 @@ from app.chat.vision.refs import (
 )
 from app.chat.vision.types import IMAGE_REF_TYPE, TEXT_BLOCK_TYPE
 from app.core.config import settings
+from app.core.gateway_errors import GatewayChatError
 from app.core.logger import logger
 
 
@@ -97,10 +98,7 @@ def lc_to_openai_message(message: BaseMessage, *, vision_ctx: VisionBuildContext
             "tool_call_id": message.tool_call_id,
             "content": str(message.content),
         }
-    role = getattr(message, "type", "user")
-    if role == "human":
-        role = "user"
-    return {"role": role, "content": str(message.content)}
+    raise TypeError(f"unsupported LangChain message type: {type(message).__name__}")
 
 
 def validate_openai_messages(messages: List[Dict[str, Any]]) -> None:
@@ -120,8 +118,7 @@ def validate_openai_messages(messages: List[Dict[str, Any]]) -> None:
                     "chat.openai.orphan_tool_payload",
                     tool_call_id=call_id,
                 )
-                if settings.DEBUG:
-                    raise ValueError(f"orphan OpenAI tool message: tool_call_id={call_id}")
+                raise ValueError(f"orphan OpenAI tool message: tool_call_id={call_id}")
         else:
             pending_ids = set()
 
@@ -211,42 +208,76 @@ class OpenAICompatAdapter(ModelAdapter):
         if isinstance(raw, str):
             try:
                 raw = json.loads(raw)
-            except json.JSONDecodeError:
-                return {"content": raw, "tool_calls": [], "usage": {}}
+            except json.JSONDecodeError as exc:
+                raise GatewayChatError(
+                    "gateway_protocol_error",
+                    "chat completion response is not valid JSON",
+                    retryable=False,
+                ) from exc
 
         if not isinstance(raw, dict):
-            return {"content": str(raw), "tool_calls": [], "usage": {}}
+            raise GatewayChatError(
+                "gateway_protocol_error",
+                "chat completion response is not an object",
+                retryable=False,
+            )
 
-        choices = raw.get("choices") or []
-        if not choices:
-            return {"content": raw.get("content", ""), "tool_calls": [], "usage": raw.get("usage", {})}
+        choices = raw.get("choices")
+        if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+            raise GatewayChatError(
+                "gateway_protocol_error",
+                "chat completion response has no valid choice",
+                retryable=False,
+            )
 
-        message = choices[0].get("message") or {}
+        message = choices[0].get("message")
+        if not isinstance(message, dict):
+            raise GatewayChatError(
+                "gateway_protocol_error",
+                "chat completion choice is missing message",
+                retryable=False,
+            )
         tool_calls: list[dict[str, Any]] = []
-        for item in message.get("tool_calls") or []:
-            fn = item.get("function") or {}
-            args_raw = fn.get("arguments", "{}")
+        raw_tool_calls = message.get("tool_calls", [])
+        if not isinstance(raw_tool_calls, list):
+            raise GatewayChatError("gateway_protocol_error", "message tool_calls is not a list", retryable=False)
+        for item in raw_tool_calls:
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"]:
+                raise GatewayChatError("gateway_protocol_error", "tool call is missing id", retryable=False)
+            fn = item.get("function")
+            if not isinstance(fn, dict) or not isinstance(fn.get("name"), str) or not fn["name"]:
+                raise GatewayChatError("gateway_protocol_error", "tool call is missing function name", retryable=False)
+            args_raw = fn.get("arguments")
+            if not isinstance(args_raw, str) or not args_raw:
+                raise GatewayChatError("gateway_protocol_error", "tool call is missing arguments", retryable=False)
             try:
-                args = json.loads(args_raw) if isinstance(args_raw, str) else args_raw
-            except json.JSONDecodeError:
-                args = {"raw": args_raw}
+                args = json.loads(args_raw)
+            except json.JSONDecodeError as exc:
+                raise GatewayChatError("gateway_protocol_error", "tool call arguments are not valid JSON", retryable=False) from exc
+            if not isinstance(args, dict):
+                raise GatewayChatError("gateway_protocol_error", "tool call arguments must be an object", retryable=False)
             tool_calls.append(
                 {
-                    "id": item.get("id", ""),
-                    "name": fn.get("name", ""),
+                    "id": item["id"],
+                    "name": fn["name"],
                     "args": args,
                 }
             )
 
         content = message.get("content")
-        if not isinstance(content, str) or content.strip() in {"", "None", "null"}:
+        if content is None and tool_calls:
             content = ""
+        elif not isinstance(content, str):
+            raise GatewayChatError("gateway_protocol_error", "message content must be a string", retryable=False)
 
         reasoning = extract_reasoning_from_openai_message(message)
+        usage = raw.get("usage")
+        if usage is not None and not isinstance(usage, dict):
+            raise GatewayChatError("gateway_protocol_error", "completion usage must be an object", retryable=False)
 
         return {
             "content": content,
             "tool_calls": tool_calls,
-            "usage": raw.get("usage") or {},
+            "usage": usage or {},
             "reasoning_content": reasoning,
         }

@@ -5,6 +5,8 @@ from app.core.config import settings
 from app.core.gateway import gateway_client
 from app.core.logger import logger
 from app.domain.generation.enums import GenerationKind
+from app.exceptions.base import AppError
+from app.exceptions.codes import ErrorCode
 from app.schemas.generate import GenerateModelItem, GenerateModelsResponse
 from app.services.generation_capabilities import generation_capabilities
 
@@ -34,7 +36,7 @@ async def list_generate_models(kind: str) -> GenerateModelsResponse:
             items.append(
                 GenerateModelItem(
                     model_id=gateway_model.id,
-                    label=gateway_model.display_name or gateway_model.id,
+                    label=gateway_model.id,
                     kind=requested_kind,
                     supports_vision=gateway_model.supports_vision,
                     param_options=generation_capabilities.to_param_options(capabilities),
@@ -51,6 +53,9 @@ async def list_generate_models(kind: str) -> GenerateModelsResponse:
         )
     except Exception as exc:
         logger.error("generate.list_models.error", error=str(exc))
-        return GenerateModelsResponse(items=[])
+        raise AppError(
+            ErrorCode.GENERATION_MODEL_LIST_UNAVAILABLE,
+            "模型列表暂时不可用",
+        ) from exc
 
     return GenerateModelsResponse(**raw)

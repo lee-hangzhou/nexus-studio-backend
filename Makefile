@@ -89,7 +89,6 @@ type-check:
 	python -m mypy --follow-imports=skip \
 		app/domain \
 		app/contracts \
-		app/compat/agent_tools \
 		app/services/generation_capabilities.py \
 		app/services/generation_params.py \
 		app/services/generation_submit.py

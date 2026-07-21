@@ -72,10 +72,10 @@ async def _load_record(conversation_id: int) -> BrowserSessionRecord | None:
         return None
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
+    except json.JSONDecodeError as exc:
+        raise ValueError("browser session record is not valid JSON") from exc
     if not isinstance(data, dict):
-        return None
+        raise ValueError("browser session record must be an object")
     record = _record_from_dict(conversation_id, data)
     if record is not None:
         return record

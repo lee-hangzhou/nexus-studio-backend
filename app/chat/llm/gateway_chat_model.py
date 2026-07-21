@@ -1,6 +1,5 @@
 import asyncio
 from typing import Any, AsyncIterator, Dict, List, Optional, Sequence
-
 from langchain_core.callbacks import AsyncCallbackManagerForLLMRun, CallbackManagerForLLMRun
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
@@ -9,7 +8,6 @@ from langchain_core.tools import BaseTool
 from langchain_core.utils.function_calling import convert_to_openai_tool
 from pydantic import Field
 
-from app.chat.agent.tool_recovery import invalid_json_internal_call
 from app.chat.llm import get_adapter
 from app.core.gateway_errors import GatewayChatError
 from app.chat.llm.registry import ModelSpec
@@ -21,7 +19,6 @@ from app.chat.vision.refs import VisionBuildContext, build_vision_context
 from app.core.config import settings
 from app.core.gateway import gateway_client
 from app.core.logger import logger
-from app.domain.constants import GATEWAY_RESPONSE_DATA_KEY
 
 
 class GatewayChatModel(BaseChatModel):
@@ -144,7 +141,7 @@ class GatewayChatModel(BaseChatModel):
             )
         except GatewayChatError:
             raise
-        parsed = adapter.parse_response(_openai_chat_response_body(raw))
+        parsed = adapter.parse_response(raw)
         ai = build_ai_message(
             content=parsed.get("content") or "",
             tool_calls=[
@@ -242,27 +239,9 @@ class GatewayChatModel(BaseChatModel):
         assembled_think_content = "".join(
             p.text for p in assembled.token_pieces if p.lane == "think"
         )
-        invalid_recovery_calls = (
-            [
-                invalid_json_internal_call(
-                    call_id=item.call_id,
-                    tool_name=item.name,
-                    raw_length=len(item.raw_arguments),
-                )
-                for item in assembled.invalid_tool_calls
-            ]
-            if settings.CHAT_TOOL_SELF_HEAL_ENABLED
-            else []
-        )
-        # 流式工具参数 JSON 损坏时不能直接执行工具，但 Agent 仍需要一个
-        # 与原 call_id 配对的 ToolMessage。这里把它表示成内部合成工具调用，
-        # 让 LangGraph 继续走正常的工具反馈闭环。
         final_message = AIMessageChunk(
             content="",
-            tool_calls=[
-                *list(assembled.message.tool_calls or []),
-                *invalid_recovery_calls,
-            ],
+            tool_calls=list(assembled.message.tool_calls or []),
         )
         yield ChatGenerationChunk(
             message=final_message,
@@ -282,13 +261,3 @@ def _assembled_has_output(assembled: object) -> bool:
     tool_calls = list(getattr(assembled.message, "tool_calls", None) or [])
     invalid = list(getattr(assembled, "invalid_tool_calls", None) or [])
     return bool(content or think or tool_calls or invalid)
-
-
-def _openai_chat_response_body(response: dict[str, Any]) -> Any:
-    """兼容网关包裹响应和直接 OpenAI-compatible 响应。"""
-    if "choices" in response:
-        return response
-    data = response.get(GATEWAY_RESPONSE_DATA_KEY)
-    if isinstance(data, dict) and "choices" in data:
-        return data
-    return response

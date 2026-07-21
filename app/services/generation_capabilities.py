@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.core.gateway import gateway_client
 from app.core.logger import logger
 from app.domain.generation.enums import GenerationKind, ReferenceMode
-from app.domain.generation.models import GenerationModelCapabilities, MaterialLimits
+from app.domain.generation.models import GenerationModelCapabilities
 from app.exceptions.base import AppError
 from app.exceptions.codes import ErrorCode
 
@@ -26,20 +26,6 @@ class GenerationCapabilitiesRegistry:
             config.model_id: config.to_domain()
             for config in settings.GENERATION_MODEL_CAPABILITIES
         }
-
-    @staticmethod
-    def audio_gateway_fallback(model_id: str) -> GenerationModelCapabilities:
-        """TTS 模型无 .env 能力条目时，用网关 task_type=8 的最小能力占位。"""
-        return GenerationModelCapabilities(
-            model_id=model_id,
-            kind=GenerationKind.AUDIO,
-            ratios=(),
-            resolutions=(),
-            counts=(),
-            durations=(),
-            reference_modes=(),
-            material_limits=MaterialLimits(),
-        )
 
     def get(
         self,
@@ -61,13 +47,10 @@ class GenerationCapabilitiesRegistry:
         gateway_model: GatewayModelItem,
         kind: GenerationKind,
     ) -> GenerationModelCapabilities | None:
-        """列表接口：配置优先，audio 可对网关 TTS 模型 fallback。"""
-        capabilities = self.get(gateway_model.id, kind)
-        if capabilities is not None:
-            return capabilities
-        if kind == GenerationKind.AUDIO and gateway_model.generation_kind == GenerationKind.AUDIO:
-            return self.audio_gateway_fallback(gateway_model.id)
-        return None
+        """Resolve an explicitly configured capability entry for a gateway model."""
+        if gateway_model.generation_kind != kind:
+            return None
+        return self.get(gateway_model.id, kind)
 
     async def require(
         self,
@@ -80,8 +63,6 @@ class GenerationCapabilitiesRegistry:
 
         models = await gateway_client.list_generation_models()
         gateway_model = next((item for item in models if item.id == model_id), None)
-        if kind == GenerationKind.AUDIO and gateway_model is not None and gateway_model.generation_kind == GenerationKind.AUDIO:
-            return self.audio_gateway_fallback(model_id)
         logger.warning(
             "generation.capability.missing",
             model_id=model_id,

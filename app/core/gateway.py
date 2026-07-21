@@ -36,8 +36,6 @@ from app.domain.constants import (
     GATEWAY_HEADER_REQUEST_ID,
     GATEWAY_HEADER_USER_ID,
     GATEWAY_QUERY_REQUEST_ID_TEMPLATE,
-    GATEWAY_RESPONSE_DATA_KEY,
-    GATEWAY_RESPONSE_RESULT_KEY,
     GATEWAY_SYNC_REQUEST_ID_TEMPLATE,
     HTTP_CONTENT_TYPE_JSON,
 )
@@ -319,7 +317,20 @@ class GatewayClient:
             timeout=settings.GATEWAY_TIMEOUTS.generation_seconds,
         )
         response.raise_for_status()
-        return AssetCaptionResult.model_validate(extract_gateway_result(response.json()))
+        try:
+            return AssetCaptionResult.model_validate(response.json())
+        except ValidationError as exc:
+            logger.error(
+                "gateway.caption_asset.protocol_error",
+                endpoint=endpoint,
+                request_id=rid,
+                response_summary=safe_gateway_response_summary(response.json()),
+            )
+            raise AppError(
+                ErrorCode.GATEWAY_PROTOCOL_ERROR,
+                "模型网关返回了不符合 caption 协议的数据",
+                {"response_model": AssetCaptionResult.__name__},
+            ) from exc
 
     async def embed_asset(self, request: AssetEmbeddingRequest) -> AssetEmbeddingResult:
         """调用 OpenAI 兼容 Embeddings 接口生成多模态向量。"""
@@ -353,9 +364,11 @@ class GatewayClient:
                 {"response_model": model_type.__name__},
             ) from exc
 
-        code = getattr(parsed, "code", 0)
+        if not hasattr(parsed, "code"):
+            return parsed
+        code = parsed.code
         if code != 0:
-            message = getattr(parsed, "message", None) or "gateway returned non-zero code"
+            message = parsed.message or "gateway returned non-zero code"
             raise AppError(
                 ErrorCode.GATEWAY_PROTOCOL_ERROR,
                 message,
@@ -368,27 +381,10 @@ gateway_client = GatewayClient()
 
 
 def _raise_on_empty_chat_completion(payload: Dict[str, Any], *, request_id: str) -> None:
-    code = payload.get("code")
-    if code not in (None, 0, "0", 200, "200"):
-        message = payload.get("message") or payload.get("error") or payload
-        logger.error(
-            "gateway.openai_chat_completion.envelope_error",
-            request_id=request_id,
-            code=code,
-            message=str(message)[:500],
-        )
-        raise GatewayChatError(
-            "gateway_upstream_failed",
-            str(message),
-            retryable=False,
-        )
-    body = payload
-    if "choices" not in body:
-        data = body.get(GATEWAY_RESPONSE_DATA_KEY)
-        if isinstance(data, dict):
-            body = data
-    choices = body.get("choices") if isinstance(body, dict) else None
-    if not choices:
+    if not isinstance(payload, dict):
+        raise GatewayChatError("gateway_protocol_error", "gateway completion is not an object", retryable=False)
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or len(choices) == 0:
         logger.error(
             "gateway.openai_chat_completion.empty_choices",
             request_id=request_id,
@@ -397,12 +393,3 @@ def _raise_on_empty_chat_completion(payload: Dict[str, Any], *, request_id: str)
             "gateway_empty_stream",
             "gateway completion returned no choices",
         )
-
-
-def extract_gateway_result(response: Dict[str, Any]) -> Any:
-    """从模型网关响应信封中取出业务结果"""
-
-    envelope = response.get(GATEWAY_RESPONSE_DATA_KEY, response)
-    if isinstance(envelope, dict):
-        return envelope.get(GATEWAY_RESPONSE_RESULT_KEY, envelope)
-    return envelope
