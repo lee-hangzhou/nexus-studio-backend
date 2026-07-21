@@ -197,4 +197,4 @@ async def submit_generate_task(user_id: int, req: SubmitGenerateRequest) -> Gene
         task_id=task.id,
         union_task_id=union_task_id,
     )
-    return GenerateTaskSubmitResponse(task_id=task.id, status="pending")
+    return GenerateTaskSubmitResponse(task_id=task.id, status=task.status)

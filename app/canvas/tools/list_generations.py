@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from typing import cast
 from uuid import UUID
 
 from langchain_core.tools import StructuredTool
@@ -8,8 +9,8 @@ from pydantic import BaseModel, Field
 
 from app.canvas.errors import INVALID_NODE_ID
 from app.chat.tools.result import ToolResult
+from app.composition import generate_task_service
 from app.models.canvas_nodes import CanvasNodes
-from app.services.generation_status import get_generate_task_status
 
 
 class ListNodeGenerationsInput(BaseModel):
@@ -50,7 +51,7 @@ async def _list_generations(project_id: int, user_id: int, args: ListNodeGenerat
     for task_id in task_ids[: args.limit]:
         try:
             # 复用创作页任务状态服务, 权限与视图一致
-            view = await get_generate_task_status(task_id, user_id)
+            view = await generate_task_service.get_task_status(task_id, user_id)
             items.append(view.model_dump(mode="json"))
         except Exception:
             continue
@@ -63,7 +64,7 @@ def build_list_node_generations_tool(project_id: int, user_id: int) -> Structure
     async def _run(node_id: str | None = None, limit: int = 20) -> str:
         """工具入口, 查询节点关联生成任务"""
         args = ListNodeGenerationsInput(node_id=node_id, limit=limit)
-        return (await _list_generations(project_id, user_id, args)).to_tool_message()
+        return cast(str, (await _list_generations(project_id, user_id, args)).to_tool_message())
 
     return StructuredTool.from_function(
         coroutine=_run,

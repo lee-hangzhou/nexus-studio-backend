@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.core.database import db
 from app.domain.enums import GatewayTaskStatus
 from app.models.generate_task import GenerateTask
-from app.services.generate import generate_service
+from app.services.generation_assets import ensure_result_assets, task_result_asset_ids
 
 
 def parse_args() -> argparse.Namespace:
@@ -57,7 +57,8 @@ async def run(args: argparse.Namespace) -> None:
 
         updated = 0
         for task in tasks:
-            asset_ids = await generate_service._ensure_result_assets(task)
+            updated_task = await ensure_result_assets(task)
+            asset_ids = task_result_asset_ids(updated_task)
             if asset_ids:
                 updated += 1
                 print(f"task_id={task.id} asset_ids={asset_ids}")

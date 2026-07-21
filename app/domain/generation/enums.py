@@ -35,8 +35,11 @@ class GatewayModelTaskType(IntEnum):
     EMBEDDING = 9
 
 
-class GenerationTaskStatus(StrEnum):
-    PENDING = "pending"
-    RUNNING = "running"
-    SUCCESS = "success"
-    FAILED = "failed"
+class GenerationTaskStatus(IntEnum):
+    CREATED = 1
+    QUEUED = 2
+    WAITING = 3
+    RUNNING = 4
+    SUCCEEDED = 5
+    FAILED = 6
+    CANCELLED = 7

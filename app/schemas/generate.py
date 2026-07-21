@@ -1,13 +1,12 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 from app.contracts.gateway import GatewayGenerateCallback, GatewayResultItem
 from app.contracts.generation import GenerateParamOptions
 from app.domain.generation.enums import GenerationKind, GenerationTaskStatus, ReferenceMode
 
-# ── 提交 ──────────────────────────────────────────────────────────────────────
 
 class SubmitGenerateRequest(BaseModel):
     kind: GenerationKind
@@ -35,8 +34,6 @@ class GenerateMaterialUploadResponse(BaseModel):
     mime_type: str
     url: str
 
-
-# ── 任务状态 ───────────────────────────────────────────────────────────────────
 
 class GenerateTaskStatusRequest(BaseModel):
     task_id: int
@@ -83,11 +80,7 @@ class GenerateTasksStatusResponse(BaseModel):
     missing_task_ids: List[int] = Field(default_factory=list)
 
 
-# ── 历史列表（cursor 分页，轻量条目）──────────────────────────────────────────
-
-class GenerateHistoryItemView(BaseModel):
-    """历史侧栏列表：仅首图预览 URL，不含完整 result_urls / ref_materials。"""
-
+class GenerateTaskListItem(BaseModel):
     task_id: int
     kind: GenerationKind
     status: GenerationTaskStatus
@@ -110,23 +103,26 @@ class GenerateHistoryItemView(BaseModel):
     created_at: datetime
 
 
-class HistoryRequest(BaseModel):
-    kind: str = Field(default="all", pattern="^(all|image|video)$")
-    status: str = Field(default="all", pattern="^(all|in_progress|success|failed)$")
-    time_range: str = Field(default="all", pattern="^(all|today|week|month)$")
+class GenerateTaskCursor(BaseModel):
+    created_at: AwareDatetime
+    task_id: int = Field(gt=0)
+
+
+class GenerateTaskListRequest(BaseModel):
+    kind: GenerationKind | None = None
+    statuses: list[GenerationTaskStatus] = Field(default_factory=list)
+    created_after: AwareDatetime | None = None
     query: str = Field(default="")
     favorites_only: bool = False
     page_size: int = Field(default=20, ge=1, le=100)
-    cursor: Optional[str] = None
+    cursor: GenerateTaskCursor | None = None
 
 
-class HistoryResponse(BaseModel):
-    items: List[GenerateHistoryItemView]
-    next_cursor: Optional[str] = None
+class GenerateTaskListResponse(BaseModel):
+    items: List[GenerateTaskListItem]
+    next_cursor: GenerateTaskCursor | None = None
     has_more: bool = False
 
-
-# ── 取消 / 收藏 / 删除 ───────────────────────────────────────────────────────
 
 class TaskCancelRequest(BaseModel):
     task_id: int
@@ -153,5 +149,5 @@ class GenerateModelsResponse(BaseModel):
     items: List[GenerateModelItem]
 
 
-# 回调协议直接复用网关 DTO，camelCase 仅存在于 gateway contract alias。
+# 回调协议直接复用网关 DTO，camelCase 仅存在于 gateway contract alias
 GenerateCallbackPayload = GatewayGenerateCallback

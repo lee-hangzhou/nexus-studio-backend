@@ -32,6 +32,8 @@ from app.contracts.generation import GenerateParamOptions
 from app.contracts.stream import StreamFrame
 from app.schemas.generate import (
     GenerateModelItem,
+    GenerateTaskListRequest,
+    GenerateTaskListResponse,
     GenerateTaskView,
     SubmitGenerateRequest,
 )
@@ -49,6 +51,8 @@ CanvasContracts = Annotated[
 GenerationContracts = Annotated[
     SubmitGenerateRequest
     | GenerateTaskView
+    | GenerateTaskListRequest
+    | GenerateTaskListResponse
     | GenerateModelItem
     | GenerateParamOptions,
     Field(union_mode="left_to_right"),
