@@ -56,6 +56,15 @@ class OpenAIStreamAssembler:
         if not isinstance(payload, dict):
             raise GatewayChatError("gateway_protocol_error", "SSE data is not an object", retryable=False)
         choices = payload.get("choices")
+        if choices == []:
+            # OpenAI-compatible streams may include a usage-only frame.
+            if isinstance(payload.get("usage"), dict):
+                return [], []
+            raise GatewayChatError(
+                "gateway_protocol_error",
+                "SSE empty choices frame has no valid usage",
+                retryable=False,
+            )
         if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
             raise GatewayChatError("gateway_protocol_error", "SSE data has no valid choice", retryable=False)
         choice = choices[0]

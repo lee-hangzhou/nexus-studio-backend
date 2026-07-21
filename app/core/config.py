@@ -29,7 +29,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    PROJECT_NAME: str = "dream-drama"
+    PROJECT_NAME: str = "nexus-studio"
     VERSION: str = "0.1.0"
     API_V1_PREFIX: str = "/api/v1"
 

@@ -41,6 +41,36 @@ def test_malformed_sse_and_incomplete_tool_calls_stop_model_step() -> None:
         assembler.finish()
 
 
+def test_usage_only_sse_frame_accepts_additive_fields_without_interrupting_stream() -> None:
+    assembler = OpenAIStreamAssembler(thinking=ThinkingConfig())
+
+    assembler.feed_sse_data('{"choices":[{"delta":{"content":"hello"}}]}')
+    assert assembler.feed_sse_data(
+        '{"choices":[],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3},"future_field":true}'
+    ) == ([], [])
+    assembler.feed_sse_data('{"choices":[{"delta":{},"finish_reason":"stop"}]}')
+    assembler.feed_sse_data("[DONE]")
+
+    assembled = assembler.finish()
+    assert assembled.message.content == "hello"
+    assert assembled.finish_reason == "stop"
+
+
+@pytest.mark.parametrize(
+    "data",
+    (
+        '{"choices":[]}',
+        '{"choices":[],"usage":null}',
+        '{"choices":[],"usage":[]}',
+    ),
+)
+def test_empty_choices_sse_frame_requires_valid_usage(data: str) -> None:
+    assembler = OpenAIStreamAssembler(thinking=ThinkingConfig())
+
+    with pytest.raises(GatewayChatError):
+        assembler.feed_sse_data(data)
+
+
 def test_embedding_indexes_count_and_dimensions_are_enforced() -> None:
     duplicate_index = {
         "data": [

@@ -158,4 +158,4 @@ def log_exception(
 
 setup_logging()
 
-logger: structlog.BoundLogger = get_logger("dream_drama")
+logger: structlog.BoundLogger = get_logger("nexus_studio")

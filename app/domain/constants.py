@@ -21,8 +21,8 @@ GATEWAY_RESPONSE_DATA_KEY = "data"
 GATEWAY_RESPONSE_RESULT_KEY = "result"
 GATEWAY_RESPONSE_EMBEDDING_KEY = "embedding"
 
-GATEWAY_SYNC_REQUEST_ID_TEMPLATE = "dream-drama-sync-{request_uuid}"
-GATEWAY_QUERY_REQUEST_ID_TEMPLATE = "dream-drama-query-{task_id}-{request_uuid}"
+GATEWAY_SYNC_REQUEST_ID_TEMPLATE = "nexus-studio-sync-{request_uuid}"
+GATEWAY_QUERY_REQUEST_ID_TEMPLATE = "nexus-studio-query-{task_id}-{request_uuid}"
 
 CANVAS_CHECKPOINT_THREAD_PREFIX = "canvas"
 CANVAS_TURN_LOCK_KEY_TEMPLATE = "canvas:turn_lock:{project_id}"

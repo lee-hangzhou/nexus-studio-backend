@@ -1,7 +1,7 @@
-# Dream Drama Backend
+# Nexus Studio Backend
 
 FastAPI backend for Nexus Studio. The frontend lives in the independent
-`dream-drama-frontend` repository; this repository owns the API, database DDL,
+`nexus-studio-frontend` repository; this repository owns the API, database DDL,
 typed JSON Schemas, and production orchestration.
 
 ## Stack
