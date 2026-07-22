@@ -46,7 +46,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         request_body: Optional[str] = None
         query_params: Optional[dict[str, str]] = None
 
-        if self.log_request_body and not self._is_streaming_path(request.url.path):
+        if self.log_request_body and not self._should_skip_request_body(request.url.path):
             request_body = await self._get_request_body(request)
             request_body = self._redact_request_body(request.url.path, request_body)
         if self.log_query_params:
@@ -54,22 +54,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             query_params = params if params else None
 
         start_time = time.perf_counter()
-
-        try:
-            response = await call_next(request)
-        except Exception:
-            duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
-            logger.exception(
-                "request_failed",
-                method=request.method,
-                path=request.url.path,
-                duration_ms=duration_ms,
-                request_body=request_body,
-                query_params=query_params,
-                client_ip=self._get_client_ip(request),
-            )
-            raise
-
+        response = await call_next(request)
         duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
         log_kwargs: Dict[str, Union[str, int, float, dict, None]] = {
@@ -93,6 +78,15 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             logger.info("request_completed", **log_kwargs)
 
         return response
+
+    @classmethod
+    def _should_skip_request_body(cls, path: str) -> bool:
+        if cls._is_streaming_path(path):
+            return True
+        # generate / chat 提交体可能含长 prompt 与引用；access 日志只记路径
+        if path.startswith("/api/v1/generate/") or path.startswith("/api/v1/chat/"):
+            return True
+        return False
 
     @classmethod
     def _is_streaming_path(cls, path: str) -> bool:

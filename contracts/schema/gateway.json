@@ -3,7 +3,7 @@
     "GatewayContentPart": {
       "additionalProperties": false,
       "properties": {
-        "materialRefIndex": {
+        "material_ref_index": {
           "anyOf": [
             {
               "minimum": 1,
@@ -14,7 +14,7 @@
             }
           ],
           "default": null,
-          "title": "Materialrefindex"
+          "title": "Material Ref Index"
         },
         "text": {
           "anyOf": [
@@ -52,6 +52,18 @@
       "additionalProperties": false,
       "description": "对齐 union_lm api.TaskResponse（callback 直 POST，无外层信封）。",
       "properties": {
+        "errorCode": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Errorcode"
+        },
         "reason": {
           "anyOf": [
             {
@@ -109,9 +121,9 @@
     "GatewayGenerateMaterial": {
       "additionalProperties": false,
       "properties": {
-        "tosKey": {
+        "storage_key": {
           "minLength": 1,
-          "title": "Toskey",
+          "title": "Storage Key",
           "type": "string"
         },
         "type": {
@@ -120,7 +132,7 @@
       },
       "required": [
         "type",
-        "tosKey"
+        "storage_key"
       ],
       "title": "GatewayGenerateMaterial",
       "type": "object"
@@ -128,8 +140,8 @@
     "GatewayImageSubmitRequest": {
       "additionalProperties": false,
       "properties": {
-        "callbackUrl": {
-          "title": "Callbackurl",
+        "callback_url": {
+          "title": "Callback Url",
           "type": "string"
         },
         "content": {
@@ -146,9 +158,9 @@
           "title": "Materials",
           "type": "array"
         },
-        "maxImages": {
+        "max_images": {
           "minimum": 1,
-          "title": "Maximages",
+          "title": "Max Images",
           "type": "integer"
         },
         "model": {
@@ -183,8 +195,8 @@
       "required": [
         "model",
         "content",
-        "maxImages",
-        "callbackUrl"
+        "max_images",
+        "callback_url"
       ],
       "title": "GatewayImageSubmitRequest",
       "type": "object"
@@ -452,7 +464,7 @@
       "type": "object"
     },
     "GatewayTaskStatus": {
-      "description": "模型网关异步任务状态",
+      "description": "模型网关异步任务状态，与 union_lm 任务状态枚举对齐",
       "enum": [
         1,
         2,
@@ -469,6 +481,18 @@
       "additionalProperties": false,
       "description": "对齐 union_lm api.TaskResponse。",
       "properties": {
+        "errorCode": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Errorcode"
+        },
         "reason": {
           "anyOf": [
             {
@@ -587,8 +611,8 @@
     "GatewayVideoSubmitRequest": {
       "additionalProperties": false,
       "properties": {
-        "callbackUrl": {
-          "title": "Callbackurl",
+        "callback_url": {
+          "title": "Callback Url",
           "type": "string"
         },
         "content": {
@@ -625,7 +649,7 @@
           "default": null,
           "title": "Ratio"
         },
-        "referenceMode": {
+        "reference_mode": {
           "$ref": "#/$defs/ReferenceMode"
         },
         "resolution": {
@@ -644,8 +668,8 @@
       "required": [
         "model",
         "content",
-        "callbackUrl",
-        "referenceMode",
+        "callback_url",
+        "reference_mode",
         "duration"
       ],
       "title": "GatewayVideoSubmitRequest",

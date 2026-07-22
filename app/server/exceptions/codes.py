@@ -24,9 +24,76 @@ class ErrorCode(IntEnum):
     TASK_DELETED = 40404
     TASK_ALREADY_FINISHED = 40910
     TASK_CANCEL_FAILED = 40911
+    RATE_LIMITED = 42901
     INTERNAL_ERROR = 50001
     GATEWAY_SUBMIT_ERROR = 50002
     GATEWAY_PROTOCOL_ERROR = 50003
     GENERATION_STATUS_UNAVAILABLE = 50004
     GENERATION_QUEUE_UNAVAILABLE = 50005
     GENERATION_MODEL_LIST_UNAVAILABLE = 50006
+    GATEWAY_UPSTREAM_ERROR = 50201
+    GATEWAY_QUOTA_OR_RATE_LIMITED = 42902
+    SERVICE_UNAVAILABLE = 50301
+
+
+# 业务码 → HTTP 状态：显式表，禁止用 code // 100 推导
+HTTP_STATUS_BY_ERROR_CODE: dict[ErrorCode, int] = {
+    ErrorCode.INVALID_CREDENTIALS: 400,
+    ErrorCode.INVALID_TOKEN: 401,
+    ErrorCode.PERMISSION_DENIED: 403,
+    ErrorCode.USER_ALREADY_EXISTS: 400,
+    ErrorCode.USER_INACTIVE: 403,
+    ErrorCode.INVALID_PASSWORD_RESET_TOKEN: 400,
+    ErrorCode.REGISTER_CODE_RATE_LIMITED: 429,
+    ErrorCode.INVALID_VERIFICATION_CODE: 400,
+    ErrorCode.INVALID_PARAMS: 400,
+    ErrorCode.GENERATION_MODEL_CAPABILITY_UNAVAILABLE: 400,
+    ErrorCode.CONVERSATION_BUSY: 409,
+    ErrorCode.CANVAS_PROJECT_BUSY: 409,
+    ErrorCode.CANVAS_REVISION_CONFLICT: 409,
+    ErrorCode.CANVAS_DUPLICATE_TURN: 409,
+    ErrorCode.CANVAS_NODE_GENERATION_IN_PROGRESS: 409,
+    ErrorCode.CANVAS_SUBMIT_REF_MISMATCH: 400,
+    ErrorCode.RESOURCE_NOT_FOUND: 404,
+    ErrorCode.USER_NOT_FOUND: 404,
+    ErrorCode.TASK_NOT_FOUND: 404,
+    ErrorCode.TASK_DELETED: 404,
+    ErrorCode.TASK_ALREADY_FINISHED: 409,
+    ErrorCode.TASK_CANCEL_FAILED: 409,
+    ErrorCode.RATE_LIMITED: 429,
+    ErrorCode.GATEWAY_QUOTA_OR_RATE_LIMITED: 429,
+    ErrorCode.INTERNAL_ERROR: 500,
+    ErrorCode.GATEWAY_SUBMIT_ERROR: 502,
+    ErrorCode.GATEWAY_PROTOCOL_ERROR: 502,
+    ErrorCode.GENERATION_STATUS_UNAVAILABLE: 502,
+    ErrorCode.GENERATION_QUEUE_UNAVAILABLE: 502,
+    ErrorCode.GENERATION_MODEL_LIST_UNAVAILABLE: 502,
+    ErrorCode.GATEWAY_UPSTREAM_ERROR: 502,
+    ErrorCode.SERVICE_UNAVAILABLE: 503,
+}
+
+
+def http_status_for_error_code(code: int) -> int:
+    """Resolve HTTP status for a product ErrorCode; raw HTTP codes (<1000) pass through."""
+    if code < 1000:
+        return code
+    try:
+        return HTTP_STATUS_BY_ERROR_CODE[ErrorCode(code)]
+    except (ValueError, KeyError):
+        return 500
+
+
+# 鉴权等常用文案集中在此，避免字面量散落
+DEFAULT_ERROR_MESSAGES: dict[ErrorCode, str] = {
+    ErrorCode.INVALID_CREDENTIALS: "Invalid username or password",
+    ErrorCode.INVALID_TOKEN: "Invalid or expired token",
+    ErrorCode.PERMISSION_DENIED: "Permission denied",
+    ErrorCode.USER_ALREADY_EXISTS: "User already exists",
+    ErrorCode.USER_INACTIVE: "User account is inactive",
+    ErrorCode.INVALID_PASSWORD_RESET_TOKEN: "Invalid or expired password reset token",
+    ErrorCode.REGISTER_CODE_RATE_LIMITED: "Please wait before requesting another verification code",
+    ErrorCode.INVALID_VERIFICATION_CODE: "Invalid or expired verification code",
+    ErrorCode.USER_NOT_FOUND: "User not found",
+    ErrorCode.RESOURCE_NOT_FOUND: "Resource not found",
+    ErrorCode.INTERNAL_ERROR: "Internal server error",
+}

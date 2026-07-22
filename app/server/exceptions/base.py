@@ -1,6 +1,10 @@
 from typing import Any, Dict, Optional
 
-from app.server.exceptions.codes import ErrorCode
+from app.server.exceptions.codes import (
+    DEFAULT_ERROR_MESSAGES,
+    ErrorCode,
+    http_status_for_error_code,
+)
 
 
 class AppError(Exception):
@@ -11,39 +15,16 @@ class AppError(Exception):
         details: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.code = int(code)
-        self.message = message
+        if message:
+            self.message = message
+        else:
+            try:
+                self.message = DEFAULT_ERROR_MESSAGES.get(ErrorCode(self.code), "")
+            except ValueError:
+                self.message = ""
         self.details = details
         super().__init__(self.message)
 
     @property
     def status_code(self) -> int:
-        if self.code < 1000:
-            return self.code
-        return self.code // 100
-
-
-# 400xx - Client errors
-InvalidCredentials = AppError(ErrorCode.INVALID_CREDENTIALS, "Invalid username or password")
-InvalidToken = AppError(ErrorCode.INVALID_TOKEN, "Invalid or expired token")
-PermissionDenied = AppError(ErrorCode.PERMISSION_DENIED, "Permission denied")
-UserAlreadyExists = AppError(ErrorCode.USER_ALREADY_EXISTS, "User already exists")
-UserInactive = AppError(ErrorCode.USER_INACTIVE, "User account is inactive")
-InvalidPasswordResetToken = AppError(
-    ErrorCode.INVALID_PASSWORD_RESET_TOKEN,
-    "Invalid or expired password reset token",
-)
-RegisterCodeRateLimited = AppError(
-    ErrorCode.REGISTER_CODE_RATE_LIMITED,
-    "Please wait before requesting another verification code",
-)
-InvalidVerificationCode = AppError(
-    ErrorCode.INVALID_VERIFICATION_CODE,
-    "Invalid or expired verification code",
-)
-
-# 404xx - Not found
-NotFound = AppError(ErrorCode.RESOURCE_NOT_FOUND, "Resource not found")
-UserNotFound = AppError(ErrorCode.USER_NOT_FOUND, "User not found")
-
-# 500xx - Server errors
-InternalError = AppError(ErrorCode.INTERNAL_ERROR, "Internal server error")
+        return http_status_for_error_code(self.code)

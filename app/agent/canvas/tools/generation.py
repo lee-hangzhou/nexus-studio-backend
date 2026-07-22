@@ -20,6 +20,7 @@ from app.agent.runtime.ports import get_generation_port
 from app.server.canvas.domain.enums import CanvasNodeStatus
 from app.server.generation.domain.enums import GenerationKind
 from app.server.canvas.persistence.nodes import CanvasNodes
+from app.server.exceptions.base import AppError
 from app.server.generation.schemas import SubmitGenerateRequest
 
 
@@ -67,12 +68,13 @@ async def submit_node_generation_for_project(
         try:
             submitted = await get_generation_port().submit(user_id, req)
         except Exception as exc:
+            error_message = exc.message if isinstance(exc, AppError) else "generation failed"
             await canvas_service.update_node_generation(
                 project_id,
                 args.node_id,
                 task_id=None,
                 status=CanvasNodeStatus.FAILED,
-                error_message=str(exc),
+                error_message=error_message,
                 expected_revision=rev,
             )
             raise
@@ -111,8 +113,8 @@ async def submit_node_generation_for_project(
             ),
             None,
         )
-    except Exception as exc:
-        return ToolResult.fail(GENERATION_FAILED, detail=str(exc)), None
+    except Exception:
+        return ToolResult.fail(GENERATION_FAILED, detail="generation failed"), None
 
 
 def build_submit_node_generation_tool(project_id: int, user_id: int) -> StructuredTool:

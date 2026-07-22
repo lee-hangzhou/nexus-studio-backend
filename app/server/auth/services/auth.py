@@ -9,14 +9,8 @@ from app.server.infra.security import (
     get_password_hash,
     verify_password,
 )
-from app.server.exceptions.base import (
-    InvalidCredentials,
-    InvalidPasswordResetToken,
-    InvalidToken,
-    UserAlreadyExists,
-    UserInactive,
-    UserNotFound,
-)
+from app.server.exceptions.base import AppError
+from app.server.exceptions.codes import ErrorCode
 from app.server.auth.persistence.repository import UserRepository
 from app.server.auth.schemas import (
     ForgotPasswordRequest,
@@ -54,11 +48,11 @@ class AuthService:
 
         refresh_payload = decode_token(refresh_token)
         if not refresh_payload:
-            raise InvalidToken
+            raise AppError(ErrorCode.INVALID_TOKEN)
 
         jti = refresh_payload.get("jti")
         if not isinstance(jti, str) or not jti:
-            raise InvalidToken
+            raise AppError(ErrorCode.INVALID_TOKEN)
 
         await store_refresh_token(user_id, jti)
 
@@ -83,11 +77,11 @@ class AuthService:
 
         existing = await self.user_repo.get_by_username(data.username)
         if existing:
-            raise UserAlreadyExists
+            raise AppError(ErrorCode.USER_ALREADY_EXISTS)
 
         existing = await self.user_repo.get_by_email(data.email)
         if existing:
-            raise UserAlreadyExists
+            raise AppError(ErrorCode.USER_ALREADY_EXISTS)
 
         user = await self.user_repo.create_user(
             username=data.username,
@@ -99,36 +93,36 @@ class AuthService:
     async def login(self, email: str, password: str) -> LoginResponse:
         user = await self.user_repo.get_by_email(email)
         if not user or not verify_password(password, user.hashed_password):
-            raise InvalidCredentials
+            raise AppError(ErrorCode.INVALID_CREDENTIALS)
 
         if not user.is_active:
-            raise UserInactive
+            raise AppError(ErrorCode.USER_INACTIVE)
 
         return await self._issue_tokens(user.id)
 
     async def refresh_token(self, refresh_token: str) -> TokenResponse:
         payload = decode_token(refresh_token)
         if not payload or payload.get("type") != "refresh":
-            raise InvalidToken
+            raise AppError(ErrorCode.INVALID_TOKEN)
 
         user_id_raw = payload.get("sub")
         jti = payload.get("jti")
         if not user_id_raw or not isinstance(jti, str) or not jti:
-            raise InvalidToken
+            raise AppError(ErrorCode.INVALID_TOKEN)
 
         try:
             user_id = int(user_id_raw)
         except (TypeError, ValueError) as exc:
-            raise InvalidToken from exc
+            raise AppError(ErrorCode.INVALID_TOKEN) from exc
 
         user = await self.user_repo.get_by_id(user_id)
         if not user:
-            raise UserNotFound
+            raise AppError(ErrorCode.USER_NOT_FOUND)
         if not user.is_active:
-            raise UserInactive
+            raise AppError(ErrorCode.USER_INACTIVE)
 
         if not await is_refresh_token_active(jti, user_id):
-            raise InvalidToken
+            raise AppError(ErrorCode.INVALID_TOKEN)
 
         await revoke_refresh_token(user_id, jti)
         return await self._issue_tokens(user_id)
@@ -162,13 +156,13 @@ class AuthService:
     async def reset_password(self, data: ResetPasswordRequest) -> MessageResponse:
         user_id = await pop_password_reset_user_id(data.token)
         if user_id is None:
-            raise InvalidPasswordResetToken
+            raise AppError(ErrorCode.INVALID_PASSWORD_RESET_TOKEN)
 
         user = await self.user_repo.get_by_id(user_id)
         if not user:
-            raise UserNotFound
+            raise AppError(ErrorCode.USER_NOT_FOUND)
         if not user.is_active:
-            raise UserInactive
+            raise AppError(ErrorCode.USER_INACTIVE)
 
         await self.user_repo.update_password(user_id, get_password_hash(data.new_password))
         await revoke_all_refresh_tokens(user_id)
@@ -178,5 +172,5 @@ class AuthService:
     async def get_current_user(self, user_id: int) -> UserInfo:
         user = await self.user_repo.get_by_id(user_id)
         if not user:
-            raise UserNotFound
+            raise AppError(ErrorCode.USER_NOT_FOUND)
         return UserInfo.model_validate(user)

@@ -169,6 +169,7 @@ class GatewayTaskStatusData(GatewayResponseData):
     status: GatewayTaskStatus
     urls: list[GatewayResultItem] | None = None
     reason: str | None = None
+    error_code: StrictInt | None = Field(default=None, alias="errorCode")
     result: JsonValue | None = None
 
 
@@ -198,6 +199,7 @@ class GatewayGenerateCallback(GatewayResponseData):
     task_id: StrictInt = Field(alias="taskId", ge=1)
     status: GatewayTaskStatus
     reason: str | None = None
+    error_code: StrictInt | None = Field(default=None, alias="errorCode")
     urls: list[GatewayResultItem] | None = None
     result: JsonValue | None = None
 

@@ -18,7 +18,8 @@ from app.agent.chat.agent.events import (
     TurnCompletedEvent,
     TurnFailedEvent,
 )
-from app.server.infra.gateway_errors import GatewayChatError
+from app.server.exceptions.base import AppError
+from app.server.infra.gateway_errors import GatewayChatError, stream_error_class_for_app_error
 from app.agent.chat.llm.thinking import build_ai_message, reasoning_content_from_message
 from app.agent.chat.tools.result import ToolResult
 from app.agent.chat.turn.trace import log_stage
@@ -392,6 +393,21 @@ async def run_agent_turn_stream(
         )
     except asyncio.CancelledError:
         raise
+    except AppError as exc:
+        error_class = stream_error_class_for_app_error(exc)
+        log_exception(
+            "chat.agent.turn_failed",
+            exc=exc,
+            turn_id=turn_id,
+            step_index=step_index,
+            error_class=error_class,
+        )
+        yield TurnFailedEvent(
+            turn_id=turn_id,
+            step_index=step_index,
+            error=exc.message,
+            error_class=error_class,
+        )
     except GatewayChatError as exc:
         log_exception(
             "chat.agent.turn_failed",

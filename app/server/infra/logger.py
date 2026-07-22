@@ -148,10 +148,10 @@ def log_exception(
     exc: BaseException | None = None,
     **kwargs: Any,
 ) -> None:
-    """Log with stack trace; pass exc when outside an except block."""
+    """Log unexpected failure with a single structured stack field."""
     fields = {**kwargs, **exception_fields(exc)}
     if exc is not None:
-        logger.error(event, **fields, exc_info=exc)
+        logger.error(event, **fields)
     else:
         logger.exception(event, **fields)
 

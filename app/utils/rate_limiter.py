@@ -2,9 +2,11 @@ import asyncio
 import time
 from typing import Callable, Dict, Optional
 
-from fastapi import HTTPException, Request, Response, status
+from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.server.exceptions.base import AppError
+from app.server.exceptions.codes import ErrorCode
 from app.server.infra.logger import logger
 
 
@@ -109,16 +111,16 @@ class MemoryRateLimiter:
             logger.debug(f"Rate limiter cleanup: removed {len(expired_keys)} buckets")
 
     async def check(self, request: Request) -> None:
-        """Check if request is allowed. Raises HTTPException 429 if exceeded."""
+        """Check if request is allowed. Raises AppError if exceeded."""
         key = self.key_func(request)
         bucket = await self._get_bucket(key)
 
         if not await bucket.acquire():
             retry_after = int(bucket.retry_after) + 1
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Rate limit exceeded",
-                headers={"Retry-After": str(retry_after)},
+            raise AppError(
+                ErrorCode.RATE_LIMITED,
+                "Rate limit exceeded",
+                {"retry_after": retry_after},
             )
 
     async def __call__(self, request: Request) -> None:
@@ -158,7 +160,7 @@ class RedisRateLimiter:
         return "unknown"
 
     async def check(self, request: Request) -> None:
-        """Check if request is allowed. Raises HTTPException 429 if exceeded."""
+        """Check if request is allowed. Raises AppError if exceeded."""
         key = f"{self.key_prefix}:{self.key_func(request)}"
         now = time.time()
         window_start = now - self.window_seconds
@@ -180,25 +182,23 @@ class RedisRateLimiter:
                 else:
                     retry_after = self.window_seconds
 
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Rate limit exceeded",
-                    headers={
-                        "Retry-After": str(max(1, retry_after)),
-                        "X-RateLimit-Limit": str(self.requests_per_window),
-                        "X-RateLimit-Remaining": "0",
-                        "X-RateLimit-Reset": str(int(now + retry_after)),
+                raise AppError(
+                    ErrorCode.RATE_LIMITED,
+                    "Rate limit exceeded",
+                    {
+                        "retry_after": max(1, retry_after),
+                        "limit": self.requests_per_window,
                     },
                 )
 
-        except HTTPException:
+        except AppError:
             raise
         except (ConnectionError, TimeoutError, OSError) as e:
             logger.warning("redis_rate_limiter_error", error=str(e))
             if not self.fail_open:
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Rate limiting service unavailable",
+                raise AppError(
+                    ErrorCode.SERVICE_UNAVAILABLE,
+                    "Rate limiting service unavailable",
                 ) from e
 
     async def __call__(self, request: Request) -> None:

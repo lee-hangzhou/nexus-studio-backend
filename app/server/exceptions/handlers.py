@@ -3,8 +3,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.server.infra.logger import logger
 from app.server.exceptions.base import AppError
+from app.server.exceptions.codes import ErrorCode
+from app.server.exceptions.response import json_error_response
+from app.server.infra.logger import log_exception, logger
 
 
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
@@ -15,14 +17,15 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
         path=request.url.path,
         method=request.method,
     )
-
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "code": exc.code,
-            "data": exc.details,
-            "msg": exc.message,
-        },
+    headers: dict[str, str] | None = None
+    retry_after = (exc.details or {}).get("retry_after")
+    if retry_after is not None and exc.status_code == 429:
+        headers = {"Retry-After": str(retry_after)}
+    return json_error_response(
+        code=exc.code,
+        msg=exc.message,
+        data=exc.details,
+        headers=headers,
     )
 
 
@@ -34,44 +37,40 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
         path=request.url.path,
         method=request.method,
     )
-
-    return JSONResponse(
-        status_code=400,
-        content={
-            "code": 400,
-            "data": None,
-            "msg": "Validation error",
-        },
+    summary = [
+        {
+            "loc": list(item.get("loc", ())),
+            "msg": item.get("msg"),
+            "type": item.get("type"),
+        }
+        for item in errors
+    ]
+    return json_error_response(
+        code=int(ErrorCode.INVALID_PARAMS),
+        msg="Validation error",
+        data=summary,
     )
 
 
 async def http_error_handler(_request: Request, exc: StarletteHTTPException) -> JSONResponse:
-    return JSONResponse(
+    detail = exc.detail if isinstance(exc.detail, str) else "HTTP error"
+    return json_error_response(
+        code=exc.status_code,
+        msg=detail or "HTTP error",
         status_code=exc.status_code,
-        content={
-            "code": exc.status_code,
-            "data": None,
-            "msg": exc.detail or "HTTP error",
-        },
     )
 
 
 async def generic_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.exception(
+    log_exception(
         "unhandled_error",
-        error_type=type(exc).__name__,
-        error_message=str(exc),
+        exc=exc,
         path=request.url.path,
         method=request.method,
     )
-
-    return JSONResponse(
-        status_code=500,
-        content={
-            "code": 500,
-            "data": None,
-            "msg": "Internal server error",
-        },
+    return json_error_response(
+        code=int(ErrorCode.INTERNAL_ERROR),
+        msg="Internal server error",
     )
 
 

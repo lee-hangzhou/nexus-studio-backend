@@ -81,7 +81,7 @@ def normalize_stream_error_code(
 ) -> StreamErrorCode:
     if value is None:
         return fallback
-    if value in _GATEWAY_STREAM_ERROR_ALIASES:
+    if value in _GATEWAY_STREAM_ERROR_ALIASES or value.startswith("app_error_"):
         return StreamErrorCode.GATEWAY_UPSTREAM_FAILED
     try:
         return StreamErrorCode(value)

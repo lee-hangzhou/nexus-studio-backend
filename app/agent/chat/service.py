@@ -30,8 +30,6 @@ from app.server.chat.persistence.attachments import ChatAttachments
 from app.server.chat.persistence.conversations import ChatConversations
 from app.server.chat.persistence.messages import ChatMessages
 
-ConversationNotFound = AppError(ErrorCode.RESOURCE_NOT_FOUND, "conversation not found")
-
 
 def require_turn_model(model: str | None) -> str:
     key = str(model or "").strip()
@@ -372,7 +370,7 @@ class ChatService:
     async def _get_owned_conversation(self, user_id: int, conversation_id: int) -> ChatConversations:
         row = await ChatConversations.get_or_none(id=conversation_id, user_id=user_id)
         if row is None or row.status != int(ChatConversationStatus.ACTIVE):
-            raise ConversationNotFound
+            raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "conversation not found")
         return row
 
     def _to_message_view(self, row: ChatMessages, attachments: list[dict]) -> ChatMessageView:

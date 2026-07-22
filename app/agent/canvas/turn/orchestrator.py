@@ -36,9 +36,10 @@ from app.contracts.metadata import CanvasToolStepMetadata
 from app.agent.runtime.checkpointer import get_chat_checkpointer
 from app.agent.runtime.turn.tool_loop_guard import TurnToolLoopGuard
 from app.server.infra.config import settings
-from app.server.infra.logger import logger
+from app.server.infra.logger import bind_context, log_exception, logger
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
+from app.server.chat.domain.stream_enums import StreamErrorCode
 from app.server.canvas.persistence.nodes import CanvasNodes
 from app.server.canvas.persistence.project_meta import CanvasProjectMeta
 from app.server.projects.persistence.projects import Projects
@@ -225,6 +226,7 @@ async def stream_canvas_turn(
 ) -> AsyncIterator[str]:
     """执行一轮 Canvas Agent, SSE 输出 token, 工具, 画布, 生成事件"""
     turn_id = turn_id or uuid4().hex
+    bind_context(user_id=user_id, project_id=project_id, turn_id=turn_id)
     requested_model_key = model_key
     # 画布 Agent 固定生产模型, 忽略前端传入的 model_key
     model_key = CANVAS_AGENT_MODEL_KEY
@@ -512,12 +514,17 @@ async def stream_canvas_turn(
                 )
             )
         except Exception as exc:
-            logger.exception("canvas.turn.error", project_id=project_id, error=str(exc))
+            log_exception(
+                "canvas.turn.error",
+                exc=exc,
+                project_id=project_id,
+                turn_id=turn_id,
+            )
             await emit(
                 create_stream_frame(
                     type=StreamFrameType.ERROR,
-                    code="internal",
-                    message=str(exc),
+                    code=StreamErrorCode.INTERNAL.value,
+                    message="turn failed",
                     turn_id=turn_id,
                 )
             )

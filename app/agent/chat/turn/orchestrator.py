@@ -73,7 +73,7 @@ from app.contracts.metadata import (
 from app.agent.runtime.checkpointer import get_chat_checkpointer
 from app.agent.runtime.memory_store import get_memory_store
 from app.server.infra.config import settings
-from app.server.infra.logger import log_exception, logger
+from app.server.infra.logger import bind_context, log_exception, logger
 from app.server.chat.domain.stream_enums import StreamErrorCode, normalize_stream_error_code
 from app.server.chat.persistence.attachments import ChatAttachments
 from app.server.chat.persistence.conversations import ChatConversations
@@ -118,6 +118,11 @@ async def stream_turn(
     cancel_event: asyncio.Event,
     turn_id: str,
 ) -> AsyncIterator[str]:
+    bind_context(
+        user_id=user_id,
+        conversation_id=conversation_id,
+        turn_id=turn_id,
+    )
     spec = get_model_spec(model_key)
     out: asyncio.Queue[str | None] = asyncio.Queue()
     last_activity = time.monotonic()
@@ -923,7 +928,7 @@ async def stream_turn(
                 await emit(
                     create_stream_frame(
                         type=StreamFrameType.ERROR,
-                        code="internal",
+                        code=StreamErrorCode.INTERNAL.value,
                         message="turn failed",
                     )
                 )

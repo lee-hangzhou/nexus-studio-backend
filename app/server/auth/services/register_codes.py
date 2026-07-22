@@ -4,7 +4,8 @@ from typing import Any
 
 from app.server.infra.config import settings
 from app.server.infra.redis import redis_client
-from app.server.exceptions.base import InvalidVerificationCode, RegisterCodeRateLimited
+from app.server.exceptions.base import AppError
+from app.server.exceptions.codes import ErrorCode
 
 REGISTER_CODE_PREFIX = "auth:register_code:"
 COOLDOWN_PREFIX = "auth:register_code:cooldown:"
@@ -32,7 +33,7 @@ async def issue_register_code(email: str) -> str:
     normalized = normalize_email(email)
 
     if await redis_client.exists(_cooldown_key(normalized)):
-        raise RegisterCodeRateLimited
+        raise AppError(ErrorCode.REGISTER_CODE_RATE_LIMITED)
 
     code = generate_code()
     payload = json.dumps({"code": code, "attempts": 0})
@@ -47,18 +48,18 @@ async def verify_and_consume_register_code(email: str, code: str) -> None:
     key = _code_key(normalized)
     raw = await redis_client.get(key)
     if raw is None:
-        raise InvalidVerificationCode
+        raise AppError(ErrorCode.INVALID_VERIFICATION_CODE)
 
     try:
         stored: dict[str, Any] = json.loads(raw)
     except json.JSONDecodeError as exc:
         await redis_client.delete(key)
-        raise InvalidVerificationCode from exc
+        raise AppError(ErrorCode.INVALID_VERIFICATION_CODE) from exc
 
     attempts = int(stored.get("attempts", 0))
     if attempts >= MAX_VERIFY_ATTEMPTS:
         await redis_client.delete(key)
-        raise InvalidVerificationCode
+        raise AppError(ErrorCode.INVALID_VERIFICATION_CODE)
 
     if stored.get("code") != code.strip():
         stored["attempts"] = attempts + 1
@@ -67,6 +68,6 @@ async def verify_and_consume_register_code(email: str, code: str) -> None:
             await redis_client.set(key, json.dumps(stored), ex=ttl)
         else:
             await redis_client.delete(key)
-        raise InvalidVerificationCode
+        raise AppError(ErrorCode.INVALID_VERIFICATION_CODE)
 
     await redis_client.delete(key)

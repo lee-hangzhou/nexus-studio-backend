@@ -1,10 +1,17 @@
-"""Structured errors from the model gateway boundary."""
+"""Structured errors from the model gateway chat protocol boundary.
+
+Transport / HTTP failures from GatewayClient raise AppError.
+GatewayChatError remains for OpenAI-compatible stream/response assembly.
+"""
 
 from __future__ import annotations
 
+from app.server.exceptions.base import AppError
+from app.server.exceptions.codes import ErrorCode
+
 
 class GatewayChatError(Exception):
-    """Raised when the gateway returns no usable model output."""
+    """Raised when chat protocol parsing yields no usable model output."""
 
     def __init__(
         self,
@@ -21,18 +28,10 @@ class GatewayChatError(Exception):
         self.status_code = status_code
 
 
-def gateway_error_from_http_status(status_code: int, body: bytes | str) -> GatewayChatError:
-    preview = body.decode("utf-8", errors="replace") if isinstance(body, bytes) else body
-    preview = preview.strip()[:500]
-    if status_code in {502, 503, 504, 524}:
-        return GatewayChatError(
-            "gateway_upstream_timeout",
-            preview or f"gateway upstream HTTP {status_code}",
-            status_code=status_code,
-        )
-    return GatewayChatError(
-        "gateway_upstream_failed",
-        preview or f"gateway upstream HTTP {status_code}",
-        retryable=False,
-        status_code=status_code,
-    )
+def stream_error_class_for_app_error(exc: AppError) -> str:
+    """Map product AppError to legacy stream error_class recognized by SSE/orchestrator."""
+    if exc.code == int(ErrorCode.SERVICE_UNAVAILABLE):
+        return "gateway_upstream_timeout"
+    if exc.code == int(ErrorCode.GATEWAY_PROTOCOL_ERROR):
+        return "gateway_empty_stream"
+    return "gateway_upstream_failed"

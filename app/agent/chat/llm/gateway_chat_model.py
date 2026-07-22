@@ -9,7 +9,9 @@ from langchain_core.utils.function_calling import convert_to_openai_tool
 from pydantic import Field
 
 from app.agent.chat.llm import get_adapter
-from app.server.infra.gateway_errors import GatewayChatError
+from app.server.exceptions.base import AppError
+from app.server.exceptions.codes import ErrorCode
+from app.server.infra.gateway_errors import GatewayChatError, stream_error_class_for_app_error
 from app.agent.chat.llm.registry import ModelSpec
 from app.agent.chat.llm.stream_assembler import OpenAIStreamAssembler
 from app.agent.chat.llm.thinking import build_ai_message
@@ -19,6 +21,12 @@ from app.agent.chat.vision.refs import VisionBuildContext, build_vision_context
 from app.server.infra.config import settings
 from app.server.infra.gateway import gateway_client
 from app.server.infra.logger import logger
+
+_RETRYABLE_GATEWAY_APP_CODES = {
+    int(ErrorCode.SERVICE_UNAVAILABLE),
+    int(ErrorCode.GATEWAY_QUOTA_OR_RATE_LIMITED),
+    int(ErrorCode.GATEWAY_SUBMIT_ERROR),
+}
 
 
 class GatewayChatModel(BaseChatModel):
@@ -139,7 +147,7 @@ class GatewayChatModel(BaseChatModel):
                 payload,
                 timeout_sec=settings.CHAT_GATEWAY_TIMEOUT_SEC,
             )
-        except GatewayChatError:
+        except (AppError, GatewayChatError):
             raise
         parsed = adapter.parse_response(raw)
         ai = build_ai_message(
@@ -218,14 +226,23 @@ class GatewayChatModel(BaseChatModel):
                     )
                 assembled = candidate
                 break
-            except GatewayChatError as exc:
-                retryable = exc.retryable and not streamed_any and attempt < max_attempts
+            except (AppError, GatewayChatError) as exc:
+                if isinstance(exc, AppError):
+                    retryable = (
+                        exc.code in _RETRYABLE_GATEWAY_APP_CODES
+                        and not streamed_any
+                        and attempt < max_attempts
+                    )
+                    error_type = stream_error_class_for_app_error(exc)
+                else:
+                    retryable = exc.retryable and not streamed_any and attempt < max_attempts
+                    error_type = exc.error_type
                 logger.warning(
                     "gateway.stream.step_failed",
                     model=self.model_key,
                     attempt=attempt,
                     max_attempts=max_attempts,
-                    error_type=exc.error_type,
+                    error_type=error_type,
                     retrying=retryable,
                 )
                 if not retryable:

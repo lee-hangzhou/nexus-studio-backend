@@ -83,8 +83,9 @@ from app.server.generation.gateway.submit import (
 )
 from app.server.generation.schemas.callback import GenerationCallbackResult
 from app.server.infra.config import settings
-from app.server.infra.logger import logger
+from app.server.infra.logger import log_exception, logger
 from app.server.infra.object_storage import TosObjectStorage
+from app.server.infra.gateway_mapping import resolve_gateway_failure_message
 from app.server.ports.generation_gateway import GenerationGatewayPort
 from app.utils.cache import MultiLevelCache
 
@@ -158,9 +159,22 @@ class GenerationService:
 
         try:
             union_task_id = await self._submit_to_gateway(req, materials, voice_id=voice_id)
+        except AppError as exc:
+            logger.warning(
+                "generate.submit.gateway_rejected",
+                task_id=task.id,
+                error_code=exc.code,
+                error_message=exc.message,
+            )
+            await self._tasks.mark_failed_if_non_terminal(task.id, exc.message)
+            raise
         except Exception as exc:
-            logger.error("generate.submit.gateway_error", task_id=task.id, error=str(exc))
-            await self._tasks.mark_failed_if_non_terminal(task.id, str(exc))
+            log_exception(
+                "generate.submit.gateway_error",
+                exc=exc,
+                task_id=task.id,
+            )
+            await self._tasks.mark_failed_if_non_terminal(task.id, "upstream unavailable")
             raise AppError(
                 ErrorCode.GATEWAY_SUBMIT_ERROR,
                 "提交生成任务失败：上游服务暂不可用",
@@ -382,7 +396,8 @@ class GenerationService:
             )
             return GenerationCallbackResult(task=task, applied=False)
 
-        result = normalize_gateway_terminal(payload.status, payload.urls, payload.reason)
+        reason = resolve_gateway_failure_message(payload.error_code, payload.reason)
+        result = normalize_gateway_terminal(payload.status, payload.urls, reason)
         task, applied = await self.apply_result(task, result, callback_sent=True)
         if applied:
             logger.info("generate.callback.written", task_id=task.id, status=task.status)
@@ -634,7 +649,8 @@ class GenerationService:
 
         data = response.data
         try:
-            result = normalize_gateway_terminal(data.status, data.urls, data.reason)
+            reason = resolve_gateway_failure_message(data.error_code, data.reason)
+            result = normalize_gateway_terminal(data.status, data.urls, reason)
         except AppError as exc:
             logger.warning(
                 "generate.status_observe.invalid_terminal_payload",
