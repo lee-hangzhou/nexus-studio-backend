@@ -16,15 +16,6 @@ from app.models.canvas_nodes import CanvasNodes
 from app.models.canvas_project_meta import CanvasProjectMeta
 from app.models.generate_task import GenerateTask
 
-_NON_TERMINAL_TASK_STATUSES = frozenset(
-    {
-        GatewayTaskStatus.CREATED,
-        GatewayTaskStatus.QUEUED,
-        GatewayTaskStatus.WAITING,
-        GatewayTaskStatus.RUNNING,
-    }
-)
-
 
 def node_generation_in_progress_detail(*, task_id: int | None = None) -> str:
     """给模型与用户统一的占用说明文案。"""
@@ -58,7 +49,7 @@ async def _active_task_id_for_node(row: CanvasNodes) -> int | None:
     task = await GenerateTask.filter(id=row.task_id, deleted_at__isnull=True).first()
     if task is None:
         return None
-    if int(task.status) in _NON_TERMINAL_TASK_STATUSES:
+    if GatewayTaskStatus(task.status).is_non_terminal:
         return int(task.id)
     return None
 

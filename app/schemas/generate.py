@@ -68,7 +68,6 @@ class GenerateTaskView(BaseModel):
     result_asset_ids: List[int] = Field(default_factory=list)
     error_message: Optional[str] = None
     is_favorited: bool = False
-    queue_status: Optional[int] = None
     queue_position: Optional[int] = None
     queue_total: Optional[int] = None
     estimated_wait_seconds: Optional[int] = None
@@ -96,7 +95,6 @@ class GenerateTaskListItem(BaseModel):
     preview_media_type: Optional[int] = None
     error_message: Optional[str] = None
     is_favorited: bool = False
-    queue_status: Optional[int] = None
     queue_position: Optional[int] = None
     queue_total: Optional[int] = None
     estimated_wait_seconds: Optional[int] = None

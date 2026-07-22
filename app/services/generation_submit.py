@@ -13,7 +13,7 @@ from app.contracts.gateway import (
 from app.core.config import settings
 from app.core.gateway import gateway_client
 from app.core.logger import logger
-from app.domain.enums import GatewayTaskStatus
+from app.domain.enums import TERMINAL_GATEWAY_TASK_STATUSES, GatewayTaskStatus
 from app.domain.generation.enums import GenerationKind
 from app.domain.generation.models import GenerationModelCapabilities
 from app.exceptions.base import AppError
@@ -29,12 +29,6 @@ from app.services.generation_params import (
     validate_request_params,
 )
 from app.services.generation_voices import resolve_tts_voice_id
-
-TERMINAL_STATUSES: set[int] = {
-    GatewayTaskStatus.SUCCEEDED,
-    GatewayTaskStatus.FAILED,
-    GatewayTaskStatus.CANCELLED,
-}
 
 
 def _dedupe_gateway_materials(
@@ -183,7 +177,7 @@ async def submit_generate_task(user_id: int, req: SubmitGenerateRequest) -> Gene
         )
         await GenerateTask.filter(
             id=task.id,
-            status__not_in=list(TERMINAL_STATUSES),
+            status__not_in=[int(status) for status in TERMINAL_GATEWAY_TASK_STATUSES],
         ).update(status=GatewayTaskStatus.FAILED, error_message=str(exc))
         raise AppError(
             ErrorCode.GATEWAY_SUBMIT_ERROR,
@@ -191,10 +185,20 @@ async def submit_generate_task(user_id: int, req: SubmitGenerateRequest) -> Gene
             {"task_id": task.id},
         ) from exc
 
-    await GenerateTask.filter(id=task.id).update(union_task_id=union_task_id)
+    queued = await GenerateTask.filter(
+        id=task.id,
+        status=GatewayTaskStatus.CREATED,
+    ).update(
+        union_task_id=union_task_id,
+        status=GatewayTaskStatus.QUEUED,
+    )
+    if queued != 1:
+        await GenerateTask.filter(id=task.id).update(union_task_id=union_task_id)
+    task = await GenerateTask.get(id=task.id)
     logger.info(
         "generate.submit.ok",
         task_id=task.id,
         union_task_id=union_task_id,
+        status=int(task.status),
     )
     return GenerateTaskSubmitResponse(task_id=task.id, status=task.status)

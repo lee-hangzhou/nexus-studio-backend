@@ -5,32 +5,26 @@ from app.canvas.services.workflow_dispatch import dispatch_node_terminal
 from app.canvas.turn.generation_hub import canvas_generation_hub
 from app.contracts.canvas import CanvasPatchResponse, GenerationProgress
 from app.domain.canvas.enums import CanvasNodeStatus
-from app.domain.enums import GatewayTaskStatus
-from app.models.canvas_nodes import CanvasNodes
-from app.models.generate_task import GenerateTask
+from app.domain.enums import (
+    NON_TERMINAL_GATEWAY_TASK_STATUSES,
+    TERMINAL_GATEWAY_TASK_STATUSES,
+    GatewayTaskStatus,
+)
 from app.exceptions.base import AppError
 from app.exceptions.codes import ErrorCode
+from app.models.canvas_nodes import CanvasNodes
+from app.models.generate_task import GenerateTask
 from app.services.generation_assets import ensure_result_assets
-
-TERMINAL_TASK_STATUSES = {
-    GatewayTaskStatus.SUCCEEDED,
-    GatewayTaskStatus.FAILED,
-    GatewayTaskStatus.CANCELLED,
-}
 
 
 def _node_status_from_task(status: int) -> CanvasNodeStatus:
     """网关任务状态映射为画布节点状态"""
-    if status in {
-        GatewayTaskStatus.CREATED,
-        GatewayTaskStatus.QUEUED,
-        GatewayTaskStatus.WAITING,
-        GatewayTaskStatus.RUNNING,
-    }:
+    gateway_status = GatewayTaskStatus(status)
+    if gateway_status in NON_TERMINAL_GATEWAY_TASK_STATUSES:
         return CanvasNodeStatus.RUNNING
-    if status == GatewayTaskStatus.SUCCEEDED:
+    if gateway_status == GatewayTaskStatus.SUCCEEDED:
         return CanvasNodeStatus.SUCCESS
-    if status in {GatewayTaskStatus.FAILED, GatewayTaskStatus.CANCELLED}:
+    if gateway_status in {GatewayTaskStatus.FAILED, GatewayTaskStatus.CANCELLED}:
         return CanvasNodeStatus.FAILED
     raise AppError(
         ErrorCode.GENERATION_STATUS_UNAVAILABLE,
@@ -54,13 +48,21 @@ def canvas_node_needs_sync(node: CanvasNodes, task: GenerateTask) -> bool:
     return False
 
 
+async def project_from_task(task: GenerateTask) -> CanvasPatchResponse | None:
+    """由画布消费 generate_task 事实：投影节点并推送 SSE"""
+    status = GatewayTaskStatus(task.status)
+    if status in TERMINAL_GATEWAY_TASK_STATUSES:
+        return await reconcile_canvas_node_for_task(task)
+    return await sync_canvas_node_from_generate_task(task, publish=True)
+
+
 async def reconcile_canvas_node_for_task(
     task: GenerateTask,
     *,
     ensure_assets: bool = True,
 ) -> CanvasPatchResponse | None:
     """终态任务兜底 reconcile, 已同步成功时仍触发下游推进"""
-    if int(task.status) not in TERMINAL_TASK_STATUSES:
+    if GatewayTaskStatus(task.status) not in TERMINAL_GATEWAY_TASK_STATUSES:
         return None
     node = await CanvasNodes.filter(task_id=task.id, deleted_at__isnull=True).first()
     if node is None:

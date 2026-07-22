@@ -8,10 +8,8 @@ from app.services import generation_result
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("failure_stage", ["asset", "canvas"])
-async def test_generation_result_side_effect_failure_rolls_back_task(
+async def test_generation_result_asset_failure_rolls_back_task(
     monkeypatch: pytest.MonkeyPatch,
-    failure_stage: str,
 ) -> None:
     await Tortoise.init(
         db_url="sqlite://:memory:",
@@ -31,25 +29,7 @@ async def test_generation_result_side_effect_failure_rolls_back_task(
         async def fail_assets(current: GenerateTask) -> GenerateTask:
             raise RuntimeError("asset write failed")
 
-        async def keep_assets(current: GenerateTask) -> GenerateTask:
-            return current
-
-        async def fail_canvas(*args, **kwargs):
-            raise RuntimeError("canvas write failed")
-
-        async def no_canvas(*args, **kwargs):
-            return None
-
-        monkeypatch.setattr(
-            generation_result,
-            "ensure_result_assets",
-            fail_assets if failure_stage == "asset" else keep_assets,
-        )
-        monkeypatch.setattr(
-            generation_result,
-            "sync_canvas_for_task",
-            fail_canvas if failure_stage == "canvas" else no_canvas,
-        )
+        monkeypatch.setattr(generation_result, "ensure_result_assets", fail_assets)
         result = generation_result.normalize_generation_result(
             GatewayTaskStatus.SUCCEEDED,
             [GatewayResultItem(url="result/key", type=2, width=1, height=1)],
@@ -60,7 +40,6 @@ async def test_generation_result_side_effect_failure_rolls_back_task(
             await generation_result.apply_generation_result(
                 task,
                 result,
-                source="test",
                 callback_sent=True,
             )
 

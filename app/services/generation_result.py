@@ -5,21 +5,11 @@ from dataclasses import dataclass
 from tortoise.transactions import in_transaction
 
 from app.contracts.gateway import GatewayResultItem
-from app.domain.enums import GatewayTaskStatus
+from app.domain.enums import TERMINAL_GATEWAY_TASK_STATUSES, GatewayTaskStatus
 from app.exceptions.base import AppError
 from app.exceptions.codes import ErrorCode
 from app.models.generate_task import GenerateTask
 from app.services.generation_assets import ensure_result_assets
-from app.services.generation_canvas_bridge import publish_canvas_for_task, sync_canvas_for_task
-
-
-TERMINAL_GENERATION_STATUSES = frozenset(
-    {
-        GatewayTaskStatus.SUCCEEDED,
-        GatewayTaskStatus.FAILED,
-        GatewayTaskStatus.CANCELLED,
-    }
-)
 
 
 @dataclass(frozen=True)
@@ -70,17 +60,15 @@ async def apply_generation_result(
     task: GenerateTask,
     result: GenerationResult,
     *,
-    source: str,
     callback_sent: bool,
 ) -> tuple[GenerateTask, bool]:
+    """将网关观察或回调结果 CAS 写入 generate_task；不触达画布投影"""
     current = GatewayTaskStatus(task.status)
-    if current in TERMINAL_GENERATION_STATUSES:
+    if current.is_terminal:
         return task, False
-    if result.status not in TERMINAL_GENERATION_STATUSES and result.status < current:
+    if result.status not in TERMINAL_GATEWAY_TASK_STATUSES and result.status < current:
         return task, False
 
-    applied_task: GenerateTask
-    canvas_patch = None
     async with in_transaction():
         updated = await GenerateTask.filter(
             id=task.id,
@@ -92,6 +80,5 @@ async def apply_generation_result(
         applied_task = await GenerateTask.get(id=task.id)
         if result.status == GatewayTaskStatus.SUCCEEDED:
             applied_task = await ensure_result_assets(applied_task)
-        canvas_patch = await sync_canvas_for_task(applied_task, source=source, publish=False)
-    await publish_canvas_for_task(applied_task, canvas_patch)
+
     return applied_task, True

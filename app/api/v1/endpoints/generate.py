@@ -1,5 +1,6 @@
 from fastapi import APIRouter, File, Request, UploadFile
 
+from app.canvas.services.generation_sync import project_from_task
 from app.composition import generate_task_service
 from app.schemas.base import Response
 from app.schemas.generate import (
@@ -122,5 +123,6 @@ async def list_voices(model: str) -> Response[dict]:
 @router.post("/callback")
 async def receive_generate_callback(payload: GenerateCallbackPayload) -> Response[dict]:
     """接收 union_lm 网关回调（内网专用，已在 JWT 白名单中放行）"""
-    await generate_task_service.handle_callback(payload)
+    outcome = await generate_task_service.handle_callback(payload)
+    await project_from_task(outcome.task)
     return Response(data={"accepted": True})

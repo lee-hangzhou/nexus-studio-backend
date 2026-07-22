@@ -1,11 +1,13 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from fastapi import UploadFile
 
 from app.chat.attachments.service import ChatAttachmentService
-from app.contracts.gateway import GatewayQueueItem
 from app.core.logger import logger
-from app.domain.enums import GatewayTaskStatus
+from app.domain.enums import TERMINAL_GATEWAY_TASK_STATUSES, GatewayTaskStatus
 from app.exceptions.base import AppError
 from app.exceptions.codes import ErrorCode
 from app.models.assets import Assets
@@ -33,25 +35,27 @@ from app.services.generation_assets import (
     ensure_result_assets,
     task_result_asset_ids,
 )
-from app.services.generation_canvas_bridge import reconcile_canvas_for_task
 from app.services.generation_models import list_generate_models
+from app.services.generation_observation import (
+    GatewayObservationBatch,
+    GatewayQueueObservation,
+)
 from app.services.generation_params import validate_material_upload
 from app.services.generation_result import apply_generation_result, normalize_generation_result
 from app.services.generation_submit import submit_generate_task
 from app.services.generate_task_views import GenerateTaskViewAssembler
 
-# 终态集合：不可被任何路径覆盖
-TERMINAL: set[int] = {
-    GatewayTaskStatus.SUCCEEDED,
-    GatewayTaskStatus.FAILED,
-    GatewayTaskStatus.CANCELLED,
-}
-NON_TERMINAL: set[int] = {
-    GatewayTaskStatus.CREATED,
-    GatewayTaskStatus.QUEUED,
-    GatewayTaskStatus.WAITING,
-    GatewayTaskStatus.RUNNING,
-}
+
+@dataclass(frozen=True)
+class GenerationCallbackOutcome:
+    task: GenerateTask
+    applied: bool
+
+
+@dataclass(frozen=True)
+class ObservedGenerateTask:
+    task: GenerateTask
+    observation: GatewayQueueObservation | None
 
 
 class GenerateTaskService:
@@ -162,19 +166,48 @@ class GenerateTaskService:
         return await submit_generate_task(user_id, req)
 
     async def get_task_status(self, task_id: int, user_id: int) -> GenerateTaskView:
-        """从本地数据库读取单个任务并组装展示数据"""
-        result = await self.get_tasks_status([task_id], user_id)
-        if not result.items:
+        """观察单个任务并组装展示视图；非终态时对账网关"""
+        observed = await self.observe_task(task_id, user_id)
+        return await self.assemble_task_view(observed, user_id)
+
+    async def observe_task(self, task_id: int, user_id: int) -> ObservedGenerateTask:
+        """读取本地任务并对非终态做网关观察写回，返回实体与队列观察结果"""
+        tasks = await self._task_repository.get_by_ids_for_user([task_id], user_id)
+        if not tasks:
             raise AppError(ErrorCode.TASK_NOT_FOUND, "任务不存在")
-        return result.items[0]
+        observed_tasks, observations = await self._observe_non_terminal_tasks(tasks)
+        task = observed_tasks[0]
+        observation = None
+        if task.union_task_id is not None:
+            observation = observations.for_union_task(task.union_task_id)
+        return ObservedGenerateTask(task=task, observation=observation)
+
+    async def assemble_task_view(
+        self,
+        observed: ObservedGenerateTask,
+        user_id: int,
+    ) -> GenerateTaskView:
+        """将已观察任务组装为对外视图（引用素材、收藏、队列展示字段）"""
+        tasks = [observed.task]
+        reference_materials_by_task_id = await self._load_reference_materials_by_task_id(
+            tasks,
+            user_id,
+        )
+        favorited_asset_ids = await self._load_favorited_asset_ids(tasks, user_id)
+        return self._view_assembler.task_view(
+            observed.task,
+            observation=observed.observation,
+            ref_materials=reference_materials_by_task_id.get(observed.task.id, []),
+            favorited_asset_ids=favorited_asset_ids,
+        )
 
     async def get_tasks_status(
         self,
         task_ids: list[int],
         user_id: int,
     ) -> GenerateTasksStatusResponse:
-        """按请求顺序批量读取当前用户的本地任务并组装展示数据"""
-        requested_ids = list(set(task_ids))
+        """批量观察任务状态；非终态经网关对账后返回，终态只读本地"""
+        requested_ids = list(dict.fromkeys(task_ids))
         tasks = await self._task_repository.get_by_ids_for_user(
             requested_ids,
             user_id,
@@ -185,8 +218,7 @@ class GenerateTaskService:
             for task_id in requested_ids
             if task_id in task_by_id
         ]
-        gateway_task_ids = self._gateway_task_ids_for_queue(ordered_tasks)
-        queue_info_by_gateway_task_id = await self._fetch_queue_info(gateway_task_ids)
+        ordered_tasks, observations = await self._observe_non_terminal_tasks(ordered_tasks)
         reference_materials_by_task_id = await self._load_reference_materials_by_task_id(
             ordered_tasks,
             user_id,
@@ -197,13 +229,13 @@ class GenerateTaskService:
         )
         items: list[GenerateTaskView] = []
         for task in ordered_tasks:
-            queue_info = None
+            observation = None
             if task.union_task_id is not None:
-                queue_info = queue_info_by_gateway_task_id.get(task.union_task_id)
+                observation = observations.for_union_task(task.union_task_id)
             items.append(
                 self._view_assembler.task_view(
                     task,
-                    queue_info=queue_info,
+                    observation=observation,
                     ref_materials=reference_materials_by_task_id.get(task.id, []),
                     favorited_asset_ids=favorited_asset_ids,
                 )
@@ -216,38 +248,116 @@ class GenerateTaskService:
             ],
         )
 
-    @staticmethod
-    def _gateway_task_ids_for_queue(tasks: list[GenerateTask]) -> list[int]:
-        gateway_task_ids: list[int] = []
-        for task in tasks:
-            if task.status not in NON_TERMINAL:
-                continue
-            if task.union_task_id is None:
-                continue
-            gateway_task_ids.append(task.union_task_id)
-        return gateway_task_ids
-
-    async def _fetch_queue_info(
+    async def _observe_non_terminal_tasks(
         self,
-        gateway_task_ids: list[int],
-    ) -> dict[int, GatewayQueueItem]:
-        """批量读取用于展示的网关队列信息"""
-        unique_gateway_task_ids = list(set(gateway_task_ids))
-        if not unique_gateway_task_ids:
-            return {}
+        tasks: list[GenerateTask],
+    ) -> tuple[list[GenerateTask], GatewayObservationBatch]:
+        """对非终态任务做一次网关观察：不一致则 CAS 写回，并返回队列展示信息"""
+        # 仅观察仍可推进且已绑定网关任务的本地任务
+        union_task_ids = [
+            task.union_task_id
+            for task in tasks
+            if GatewayTaskStatus(task.status).is_non_terminal and task.union_task_id is not None
+        ]
+        observations = await self._fetch_observations(union_task_ids)
+        observed: list[GenerateTask] = []
+        for task in tasks:
+            observed.append(await self._observe_one_non_terminal_task(task, observations))
+        return observed, observations
 
-        try:
-            response = await self._gateway_client.get_tasks_queue(
-                unique_gateway_task_ids
+    async def _observe_one_non_terminal_task(
+        self,
+        task: GenerateTask,
+        observations: GatewayObservationBatch,
+    ) -> GenerateTask:
+        if GatewayTaskStatus(task.status).is_terminal or task.union_task_id is None:
+            return task
+        observation = observations.for_union_task(task.union_task_id)
+        if observation is None:
+            return task
+        if observation.status == GatewayTaskStatus(task.status):
+            return task
+        return await self._apply_gateway_status_observation(task, observation.status)
+
+    async def _apply_gateway_status_observation(
+        self,
+        task: GenerateTask,
+        gateway_status: GatewayTaskStatus,
+    ) -> GenerateTask:
+        if gateway_status.is_terminal:
+            updated_task, applied = await self._apply_gateway_terminal_observation(task)
+        else:
+            # 中间态推进：尚未收到终态回调
+            result = normalize_generation_result(gateway_status, None, None)
+            updated_task, applied = await apply_generation_result(
+                task,
+                result,
+                callback_sent=False,
             )
-            return {item.task_id: item for item in response.data.tasks}
+        if applied:
+            logger.info(
+                "generate.status_observe.written",
+                task_id=updated_task.id,
+                status=int(updated_task.status),
+            )
+        return updated_task
+
+    async def _apply_gateway_terminal_observation(
+        self,
+        task: GenerateTask,
+    ) -> tuple[GenerateTask, bool]:
+        if task.union_task_id is None:
+            return task, False
+        try:
+            response = await self._gateway_client.get_task(task.union_task_id)
         except Exception as exc:
             logger.warning(
-                "generate.queue_info.error",
-                gateway_task_ids=unique_gateway_task_ids,
+                "generate.status_observe.get_task_error",
+                task_id=task.id,
+                union_task_id=task.union_task_id,
                 error=str(exc),
             )
-            return {}
+            return task, False
+
+        data = response.data
+        try:
+            result = normalize_generation_result(data.status, data.urls, data.reason)
+        except AppError as exc:
+            logger.warning(
+                "generate.status_observe.invalid_terminal_payload",
+                task_id=task.id,
+                union_task_id=task.union_task_id,
+                gateway_status=int(data.status),
+                error=str(exc),
+            )
+            return task, False
+
+        # 观察路径已拿到终态完整载荷，标记为已应用，避免回调重复写入
+        return await apply_generation_result(
+            task,
+            result,
+            callback_sent=True,
+        )
+
+    async def _fetch_observations(
+        self,
+        union_task_ids: list[int],
+    ) -> GatewayObservationBatch:
+        """批量读取网关任务观察结果（状态 + 队列展示字段）"""
+        unique_ids = list(dict.fromkeys(union_task_ids))
+        if not unique_ids:
+            return GatewayObservationBatch.empty()
+
+        try:
+            response = await self._gateway_client.get_tasks_queue(unique_ids)
+            return GatewayObservationBatch.from_queue_items(response.data.tasks)
+        except Exception as exc:
+            logger.warning(
+                "generate.status_observe.queue_error",
+                gateway_task_ids=unique_ids,
+                error=str(exc),
+            )
+            return GatewayObservationBatch.empty()
 
     async def list_tasks(
         self,
@@ -296,10 +406,7 @@ class GenerateTaskService:
                 task_id=last.id,
             )
 
-        gateway_task_ids = self._gateway_task_ids_for_queue(listed_tasks)
-        queue_info_by_gateway_task_id = await self._fetch_queue_info(
-            gateway_task_ids
-        )
+        listed_tasks, observations = await self._observe_non_terminal_tasks(listed_tasks)
         favorited_asset_ids = await self._load_favorited_asset_ids(
             listed_tasks,
             user_id,
@@ -307,13 +414,13 @@ class GenerateTaskService:
 
         items: list[GenerateTaskListItem] = []
         for task in listed_tasks:
-            queue_info = None
+            observation = None
             if task.union_task_id is not None:
-                queue_info = queue_info_by_gateway_task_id.get(task.union_task_id)
+                observation = observations.for_union_task(task.union_task_id)
             items.append(
                 self._view_assembler.task_list_item(
                     task,
-                    queue_info=queue_info,
+                    observation=observation,
                     favorited_asset_ids=favorited_asset_ids,
                 )
             )
@@ -348,7 +455,8 @@ class GenerateTaskService:
                 ) from exc
 
         updated = await GenerateTask.filter(
-            id=task_id, status__not_in=list(TERMINAL)
+            id=task_id,
+            status__not_in=[int(status) for status in TERMINAL_GATEWAY_TASK_STATUSES],
         ).update(status=GatewayTaskStatus.CANCELLED)
 
         if not updated:
@@ -374,7 +482,11 @@ class GenerateTaskService:
         if task is None:
             raise AppError(ErrorCode.TASK_NOT_FOUND, "任务不存在")
 
-        if task.status in NON_TERMINAL and task.union_task_id and task.kind == "video":
+        if (
+            GatewayTaskStatus(task.status).is_non_terminal
+            and task.union_task_id
+            and task.kind == "video"
+        ):
             try:
                 await self._gateway_client.cancel_task(task.union_task_id, str(user_id))
             except Exception as exc:
@@ -392,31 +504,36 @@ class GenerateTaskService:
     async def list_models(self, kind: str) -> GenerateModelsResponse:
         return await list_generate_models(kind)
 
-    async def handle_callback(self, payload: GenerateCallbackPayload) -> None:
+    async def handle_callback(
+        self,
+        payload: GenerateCallbackPayload,
+    ) -> GenerationCallbackOutcome:
+        """写入 generate_task 回调结果；不投影画布"""
         task = await GenerateTask.get_or_none(union_task_id=payload.task_id)
         if task is None:
             raise AppError(ErrorCode.TASK_NOT_FOUND, "回调任务不存在")
         if task.deleted_at is not None:
             raise AppError(ErrorCode.TASK_DELETED, "回调任务已删除")
 
-        if task.callback_sent and task.status in TERMINAL:
+        if task.callback_sent and GatewayTaskStatus(task.status).is_terminal:
             logger.info(
                 "generate.callback.idempotent_skip",
                 task_id=task.id,
                 union_task_id=payload.task_id,
             )
-            await reconcile_canvas_for_task(task, source="callback_idempotent")
-            return
+            return GenerationCallbackOutcome(task=task, applied=False)
 
         result = normalize_generation_result(payload.status, payload.urls, payload.reason)
+        # 网关终态回调：写入结果并标记 callback_sent，保证幂等
         task, applied = await apply_generation_result(
             task,
             result,
-            source="callback",
             callback_sent=True,
         )
         if applied:
             logger.info("generate.callback.written", task_id=task.id, status=int(task.status))
-            return
+            return GenerationCallbackOutcome(task=task, applied=True)
+
         await GenerateTask.filter(id=task.id, deleted_at__isnull=True).update(callback_sent=True)
-        await reconcile_canvas_for_task(task, source="callback_already_terminal")
+        task = await GenerateTask.get(id=task.id)
+        return GenerationCallbackOutcome(task=task, applied=False)

@@ -1,6 +1,5 @@
 from app.assets.service import AssetService
 from app.chat.attachments.service import ChatAttachmentService
-from app.contracts.gateway import GatewayQueueItem
 from app.models.assets import Assets
 from app.models.chat_attachments import ChatAttachments
 from app.models.generate_task import GenerateTask
@@ -10,6 +9,7 @@ from app.schemas.generate import (
     GenerateTaskView,
 )
 from app.services.generation_assets import task_result_asset_ids, to_result_urls
+from app.services.generation_observation import GatewayQueueObservation
 
 
 class GenerateTaskViewAssembler:
@@ -25,7 +25,7 @@ class GenerateTaskViewAssembler:
         self,
         task: GenerateTask,
         *,
-        queue_info: GatewayQueueItem | None = None,
+        observation: GatewayQueueObservation | None = None,
         ref_materials: list[GenerateRefMaterial],
         favorited_asset_ids: set[int],
     ) -> GenerateTaskView:
@@ -51,18 +51,17 @@ class GenerateTaskViewAssembler:
             ),
             created_at=task.created_at,
         )
-        if queue_info is not None:
-            view.queue_status = queue_info.status
-            view.queue_position = queue_info.position
-            view.queue_total = queue_info.total
-            view.estimated_wait_seconds = queue_info.estimated_wait_seconds
+        if observation is not None:
+            view.queue_position = observation.position
+            view.queue_total = observation.total
+            view.estimated_wait_seconds = observation.estimated_wait_seconds
         return view
 
     def task_list_item(
         self,
         task: GenerateTask,
         *,
-        queue_info: GatewayQueueItem | None = None,
+        observation: GatewayQueueObservation | None = None,
         favorited_asset_ids: set[int],
     ) -> GenerateTaskListItem:
         result_urls = to_result_urls(task.result_keys) if task.result_keys else []
@@ -89,11 +88,10 @@ class GenerateTaskViewAssembler:
             ),
             created_at=task.created_at,
         )
-        if queue_info is not None:
-            view.queue_status = queue_info.status
-            view.queue_position = queue_info.position
-            view.queue_total = queue_info.total
-            view.estimated_wait_seconds = queue_info.estimated_wait_seconds
+        if observation is not None:
+            view.queue_position = observation.position
+            view.queue_total = observation.total
+            view.estimated_wait_seconds = observation.estimated_wait_seconds
         return view
 
     def reference_materials_by_task_id(

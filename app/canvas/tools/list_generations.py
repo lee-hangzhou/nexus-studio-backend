@@ -8,8 +8,12 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
 from app.canvas.errors import INVALID_NODE_ID
+from app.canvas.services.generation_sync import project_from_task
 from app.chat.tools.result import ToolResult
 from app.composition import generate_task_service
+from app.core.logger import logger
+from app.exceptions.base import AppError
+from app.exceptions.codes import ErrorCode
 from app.models.canvas_nodes import CanvasNodes
 
 
@@ -50,11 +54,26 @@ async def _list_generations(project_id: int, user_id: int, args: ListNodeGenerat
     items: list[dict] = []
     for task_id in task_ids[: args.limit]:
         try:
-            # 复用创作页任务状态服务, 权限与视图一致
-            view = await generate_task_service.get_task_status(task_id, user_id)
-            items.append(view.model_dump(mode="json"))
-        except Exception:
+            observed = await generate_task_service.observe_task(task_id, user_id)
+            view = await generate_task_service.assemble_task_view(observed, user_id)
+        except AppError as exc:
+            if exc.code == int(ErrorCode.TASK_NOT_FOUND):
+                continue
+            logger.warning(
+                "canvas.list_generations.observe_failed",
+                task_id=task_id,
+                error=str(exc),
+            )
             continue
+        try:
+            await project_from_task(observed.task)
+        except Exception as exc:
+            logger.warning(
+                "canvas.list_generations.project_failed",
+                task_id=task_id,
+                error=str(exc),
+            )
+        items.append(view.model_dump(mode="json"))
     return ToolResult.ok(json.dumps({"items": items}, ensure_ascii=False))
 
 

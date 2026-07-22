@@ -370,18 +370,6 @@
           "default": null,
           "title": "Queue Position"
         },
-        "queue_status": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Queue Status"
-        },
         "queue_total": {
           "anyOf": [
             {
@@ -620,18 +608,6 @@
           ],
           "default": null,
           "title": "Queue Position"
-        },
-        "queue_status": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Queue Status"
         },
         "queue_total": {
           "anyOf": [
