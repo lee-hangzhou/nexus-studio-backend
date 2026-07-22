@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from app.chat.tools.result import INVALID_ARGUMENTS, ToolResult, ToolResultProtocolError
+from app.agent.chat.tools.result import INVALID_ARGUMENTS, ToolResult, ToolResultProtocolError
 
 
 def test_malformed_tool_outputs_cannot_become_success() -> None:

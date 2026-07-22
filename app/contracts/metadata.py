@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain.chat.enums import RecoveryOutcome, TerminationReason, TurnStreamPhase
+from app.server.chat.domain.stream_enums import RecoveryOutcome, TerminationReason, TurnStreamPhase
 
 
 class MetadataContract(BaseModel):

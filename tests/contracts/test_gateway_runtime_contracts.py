@@ -1,10 +1,10 @@
 import pytest
 
-from app.chat.llm.openai_compat import OpenAICompatAdapter
-from app.chat.llm.stream_assembler import OpenAIStreamAssembler
-from app.chat.llm.thinking import ThinkingConfig
-from app.core.embeddings import GatewayEmbeddingError, GatewayEmbeddingsClient
-from app.core.gateway_errors import GatewayChatError
+from app.agent.chat.llm.openai_compat import OpenAICompatAdapter
+from app.agent.chat.llm.stream_assembler import OpenAIStreamAssembler
+from app.agent.chat.llm.thinking import ThinkingConfig
+from app.server.infra.embeddings import GatewayEmbeddingError, GatewayEmbeddingsClient
+from app.server.infra.gateway_errors import GatewayChatError
 
 
 def test_malformed_chat_responses_fail_at_gateway_boundary() -> None:

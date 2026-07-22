@@ -6,7 +6,7 @@ from collections import OrderedDict
 from collections.abc import Awaitable, Coroutine
 from typing import Any, Callable, Dict, Optional, Tuple, TypeVar
 
-from app.core.logger import logger
+from app.server.infra.logger import logger
 
 T = TypeVar("T")
 AsyncFunc = Callable[..., Coroutine[Any, Any, T]]

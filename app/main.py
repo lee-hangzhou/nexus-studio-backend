@@ -1,11 +1,12 @@
 import uvicorn
 from fastapi import FastAPI
 
-from app.api.v1.router import api_router
-from app.core.config import settings
-from app.core.lifespan import lifespan
-from app.exceptions.handlers import register_exception_handlers
-from app.middleware import (
+import app.composition  # noqa: F401
+from app.server.api.v1.router import api_router
+from app.server.infra.config import settings
+from app.server.infra.lifespan import lifespan
+from app.server.exceptions.handlers import register_exception_handlers
+from app.server.middleware import (
     JWTAuthMiddleware,
     RequestLoggingMiddleware,
     SecurityHeadersMiddleware,

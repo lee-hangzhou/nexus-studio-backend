@@ -16,9 +16,9 @@ from langchain.agents import create_agent
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from app.canvas.turn.checkpoint import repair_canvas_checkpoint_if_needed
-from app.core.checkpointer import create_checkpointer
-from app.core.config import settings
+from app.agent.canvas.turn.checkpoint import repair_canvas_checkpoint_if_needed
+from app.agent.runtime.checkpointer import create_checkpointer
+from app.server.infra.config import settings
 
 
 def _summarize_orphans(messages: list) -> int:

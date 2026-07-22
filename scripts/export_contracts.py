@@ -30,7 +30,7 @@ from app.contracts.gateway import (
 )
 from app.contracts.generation import GenerateParamOptions
 from app.contracts.stream import StreamFrame
-from app.schemas.generate import (
+from app.server.generation.schemas import (
     GenerateModelItem,
     GenerateTaskListRequest,
     GenerateTaskListResponse,

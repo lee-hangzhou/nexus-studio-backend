@@ -3,7 +3,7 @@ from typing import Dict, List, Optional, Set, Tuple
 from fastapi import HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.core.security import decode_token
+from app.server.infra.security import decode_token
 
 
 class AuthRequired:

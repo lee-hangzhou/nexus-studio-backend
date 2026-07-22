@@ -27,7 +27,7 @@ help:
 	@echo "  make db-reset       清空开发库 public schema 后按最终 schema 重建"
 	@echo "  make contracts      重新生成后端 JSON Schema"
 	@echo "  make contracts-check 检查生成 contract 是否漂移"
-	@echo "  make type-check     检查新领域、契约、Agent 兼容层和生成规则"
+	@echo "  make type-check     检查各域 domain、契约和生成规则"
 	@echo ""
 	@echo "生产部署:"
 	@echo "  make docker-backend-build   构建 backend 镜像"
@@ -46,7 +46,7 @@ install:
 
 install-dev:
 	pip install -r requirements.txt
-	pip install pytest pytest-cov pytest-asyncio black ruff mypy pre-commit
+	pip install pytest pytest-cov pytest-asyncio black ruff mypy pre-commit import-linter
 	pre-commit install
 
 dev:
@@ -54,11 +54,12 @@ dev:
 
 test:
 	python -m pytest -q \
-		app/chat/browser/tests/test_container_runtime.py \
+		app/agent/chat/browser/tests/test_container_runtime.py \
 		deploy/browser-session/test_driver_storage.py
 
 lint:
 	ruff check --select E9,F63,F7 app/ scripts/export_contracts.py
+	lint-imports
 
 format:
 	ruff check --fix --select E9,F63,F7 app/ scripts/export_contracts.py
@@ -87,11 +88,13 @@ contracts-check:
 
 type-check:
 	python -m mypy --follow-imports=skip \
-		app/domain \
+		app/server/generation/domain \
+		app/server/canvas/domain \
+		app/server/chat/domain \
 		app/contracts \
-		app/services/generation_capabilities.py \
-		app/services/generation_params.py \
-		app/services/generation_submit.py
+		app/server/generation/services/generation_capabilities.py \
+		app/server/generation/services/generation_params.py \
+		app/server/generation/services/generation_submit.py
 
 # ── 生产部署 ──────────────────────────────────────────────────────────────
 

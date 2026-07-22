@@ -5,7 +5,7 @@ from typing import Callable, Dict, Optional
 from fastapi import HTTPException, Request, Response, status
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.core.logger import logger
+from app.server.infra.logger import logger
 
 
 class TokenBucket:

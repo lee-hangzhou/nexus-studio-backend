@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 
 [tool.pytest.ini_options]
 testpaths = [
-    "app/chat/browser/tests",
+    "app/agent/chat/browser/tests",
     "deploy/browser-session",
 ]
 asyncio_mode = "auto"
@@ -25,7 +25,7 @@ omit = ["*/tests/*", "deploy/*/test_*.py"]
 
 [tool.ruff]
 line-length = 120
-extend-exclude = ["app/chat/skills"]
+extend-exclude = ["app/agent/chat/skills"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
@@ -51,4 +51,60 @@ warn_unused_ignores = true
 ignore_missing_imports = true
 check_untyped_defs = true
 plugins = ["pydantic.mypy"]
-exclude = "^app/chat/skills/.*/scripts/"
+exclude = "^app/agent/chat/skills/.*/scripts/"
+
+[tool.importlinter]
+root_package = "app"
+
+[[tool.importlinter.contracts]]
+name = "server must not depend on agent"
+type = "forbidden"
+source_modules = [
+    "app.server",
+]
+forbidden_modules = [
+    "app.agent",
+]
+ignore_imports = [
+    "app.server.api.** -> app.agent.**",
+    "app.server.infra.lifespan -> app.agent.**",
+]
+allow_indirect_imports = true
+unmatched_ignore_imports_alerting = "warn"
+
+[[tool.importlinter.contracts]]
+name = "agent must not import generation application services"
+type = "forbidden"
+source_modules = [
+    "app.agent",
+]
+forbidden_modules = [
+    "app.server.generation.services.generate_task",
+    "app.server.generation.services.generate_task_views",
+    "app.server.generation.services.generation_submit",
+    "app.server.generation.services.generation_result",
+    "app.server.generation.services.generation_observation",
+    "app.server.generation.services.generation_assets",
+    "app.server.generation.services.generation_models",
+    "app.server.generation.services.generation_params",
+    "app.server.generation.services.generation_voices",
+    "app.server.generation.services.generation_capabilities",
+]
+ignore_imports = [
+    "app.agent.canvas.workflow.params -> app.server.generation.services.generation_capabilities",
+]
+allow_indirect_imports = true
+unmatched_ignore_imports_alerting = "error"
+
+[[tool.importlinter.contracts]]
+name = "agent must not import persistence repositories"
+type = "forbidden"
+source_modules = [
+    "app.agent",
+]
+forbidden_modules = [
+    "app.server.generation.persistence.repository",
+    "app.server.assets.persistence.repository",
+    "app.server.chat.persistence.attachment_repository",
+    "app.server.auth.persistence.repository",
+]

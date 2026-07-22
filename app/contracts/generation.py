@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain.generation.enums import GenerationKind, ReferenceMode
-from app.domain.generation.models import GenerationModelCapabilities, MaterialLimits
+from app.server.generation.domain.enums import GenerationKind, ReferenceMode
+from app.server.generation.domain.models import GenerationModelCapabilities, MaterialLimits
 
 
 class GenerationContract(BaseModel):

@@ -15,7 +15,7 @@ from langchain.agents import create_agent
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
-from app.core.checkpointer import create_checkpointer
+from app.agent.runtime.checkpointer import create_checkpointer
 
 
 def _summarize(messages: list[BaseMessage]) -> dict[str, object]:

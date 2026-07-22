@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain.canvas.enums import (
+from app.server.canvas.domain.enums import (
     CanvasEdgeType,
     CanvasNodeKind,
     CanvasNodeStatus,

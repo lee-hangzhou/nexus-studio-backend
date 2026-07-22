@@ -1,7 +1,7 @@
 import pytest
 
-from app.chat.turn.gate_emit import interrupt_value_is_user_gate
-from app.services.generation_result import normalize_generation_result
+from app.agent.chat.turn.gate_emit import interrupt_value_is_user_gate
+from app.server.generation.services.generation_result import normalize_generation_result
 from app.contracts.gateway import GatewayGenerateCallback
 
 

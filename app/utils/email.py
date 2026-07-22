@@ -1,6 +1,6 @@
 from urllib.parse import urlencode
 
-from app.core.config import settings
+from app.server.infra.config import settings
 from app.integrations.aliyun_dm import send_template_mail
 
 

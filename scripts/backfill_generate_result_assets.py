@@ -15,10 +15,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.core.database import db
-from app.domain.enums import GatewayTaskStatus
-from app.models.generate_task import GenerateTask
-from app.services.generation_assets import ensure_result_assets, task_result_asset_ids
+from app.server.infra.database import db
+from app.server.generation.domain.gateway_status import GatewayTaskStatus
+from app.server.generation.persistence.generate_task import GenerateTask
+from app.server.generation.services.generation_assets import ensure_result_assets, task_result_asset_ids
 
 
 def parse_args() -> argparse.Namespace:

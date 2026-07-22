@@ -1,8 +1,8 @@
 import asyncio
 from typing import Any
 
-from app.core.config import settings
-from app.core.logger import logger
+from app.server.infra.config import settings
+from app.server.infra.logger import logger
 
 
 def is_dm_configured() -> bool:

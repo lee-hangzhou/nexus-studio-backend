@@ -2,9 +2,9 @@ import pytest
 from tortoise import Tortoise
 
 from app.contracts.gateway import GatewayResultItem
-from app.domain.enums import GatewayTaskStatus
-from app.models.generate_task import GenerateTask
-from app.services import generation_result
+from app.server.generation.domain.gateway_status import GatewayTaskStatus
+from app.server.generation.persistence.generate_task import GenerateTask
+from app.server.generation.services import generation_result
 
 
 @pytest.mark.asyncio
@@ -13,7 +13,7 @@ async def test_generation_result_asset_failure_rolls_back_task(
 ) -> None:
     await Tortoise.init(
         db_url="sqlite://:memory:",
-        modules={"models": ["app.models.generate_task"]},
+        modules={"models": ["app.server.generation.persistence.generate_task"]},
     )
     await Tortoise.generate_schemas()
     try:

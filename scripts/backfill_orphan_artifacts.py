@@ -7,14 +7,15 @@ import asyncio
 
 from tortoise import Tortoise
 
-from app.core.database import db
-from app.domain.chat_enums import AttachmentSource
-from app.models.chat_attachments import ChatAttachments
-from app.models.chat_messages import ChatMessages
+from app.server.infra.database import db
+from app.server.persistence import TORTOISE_ORM_MODEL_MODULES
+from app.server.chat.domain.enums import AttachmentSource
+from app.server.chat.persistence.attachments import ChatAttachments
+from app.server.chat.persistence.messages import ChatMessages
 
 
 async def _run() -> None:
-    await Tortoise.init(db_url=db.build_url(), modules={"models": ["app.models"]})
+    await Tortoise.init(db_url=db.build_url(), modules={"models": list(TORTOISE_ORM_MODEL_MODULES)})
 
     orphans = await ChatAttachments.filter(
         message_id__isnull=True,

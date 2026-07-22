@@ -4,14 +4,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.api.v1.endpoints import generate as generate_endpoint
+from app.server.api.v1.endpoints import generate as generate_endpoint
 from app.contracts.gateway import GatewayQueueResponse, GatewayTaskStatusResponse
-from app.domain.enums import GatewayTaskStatus
-from app.domain.generation.enums import GenerationTaskStatus
-from app.schemas.generate import GenerateCallbackPayload
-from app.services.generate_task import GenerateTaskService, GenerationCallbackOutcome
-from app.services.generate_task_views import GenerateTaskViewAssembler
-from app.services.generation_result import GenerationResult
+from app.server.generation.domain.gateway_status import GatewayTaskStatus
+from app.server.generation.domain.enums import GenerationTaskStatus
+from app.server.generation.schemas import GenerateCallbackPayload
+from app.server.generation.services.generate_task import GenerateTaskService, GenerationCallbackOutcome
+from app.server.generation.services.generate_task_views import GenerateTaskViewAssembler
+from app.server.generation.services.generation_result import GenerationResult
 
 
 def _task(
@@ -145,7 +145,7 @@ async def test_status_observe_cas_updates_when_gateway_status_differs(
         return task, True
 
     monkeypatch.setattr(
-        "app.services.generate_task.apply_generation_result",
+        "app.server.generation.services.generate_task.apply_generation_result",
         fake_apply,
     )
     service = _service(
@@ -198,7 +198,7 @@ async def test_status_observe_does_not_write_when_gateway_matches_local(
     gateway_client.get_tasks_queue = AsyncMock(return_value=queue_response)
     apply_mock = AsyncMock()
     monkeypatch.setattr(
-        "app.services.generate_task.apply_generation_result",
+        "app.server.generation.services.generate_task.apply_generation_result",
         apply_mock,
     )
     service = _service(tasks=[running], gateway_client=gateway_client)
@@ -261,7 +261,7 @@ async def test_status_observe_terminal_fetches_task_payload(
         return task, True
 
     monkeypatch.setattr(
-        "app.services.generate_task.apply_generation_result",
+        "app.server.generation.services.generate_task.apply_generation_result",
         fake_apply,
     )
     service = _service(tasks=[queued], gateway_client=gateway_client)

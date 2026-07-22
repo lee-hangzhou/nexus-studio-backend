@@ -5,14 +5,14 @@
 主业务依赖方向固定为：
 
 ```text
-app/domain
+server 各域 domain
   <- app/contracts
-  <- app/services、app/canvas、app/chat
-  <- app/api、工具和外部集成
+  <- server 各域应用 / agent（经 ports）
+  <- server.api、外部集成
 ```
 
-`app/domain` 不得依赖 FastAPI、Tortoise、LangChain、网关客户端或业务 service。
-模型异常输出兼容逻辑只能位于 `app/compat/agent_tools`，正常业务路径不得依赖文本启发式。
+各域 `domain` 不得依赖 FastAPI、Tortoise、LangChain、网关客户端或业务 service。
+禁止用关键词、正则或文本启发式路由用户意图；Tool / Turn 边界使用结构化类型，不得新增字符串协议。
 
 ## 契约生成
 
@@ -67,6 +67,6 @@ Node.js，也不访问前端工作区。当前 Ruff 阻断语法和无效控制�
 make type-check
 ```
 
-当前 mypy 阻断新建立的领域模型、Pydantic contract、Agent 工具兼容层和生成能力规则。
+当前 mypy 阻断各域 domain、Pydantic contract 和生成能力规则。
 使用 `--follow-imports=skip`，避免旧 ORM、FastAPI middleware 和第三方框架类型债务污染新边界。
 扩大检查范围时必须先清零对应模块错误，不通过全局 `ignore_errors` 制造虚假的全项目通过。

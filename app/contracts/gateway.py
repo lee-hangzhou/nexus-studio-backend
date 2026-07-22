@@ -4,8 +4,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictBool, StrictFloat, StrictInt, StrictStr
 
-from app.domain.enums import GatewayTaskStatus
-from app.domain.generation.enums import (
+from app.server.generation.domain.gateway_status import GatewayTaskStatus
+from app.server.generation.domain.enums import (
     GatewayContentType,
     GatewayModelTaskType,
     GenerationKind,

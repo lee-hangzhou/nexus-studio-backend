@@ -5,7 +5,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from app.contracts.canvas import CanvasPatchResponse, GenerationProgress
-from app.domain.chat.enums import StreamErrorCode, StreamFrameType, TokenChannel
+from app.server.chat.domain.stream_enums import StreamErrorCode, StreamFrameType, TokenChannel
 
 
 class StreamContract(BaseModel):

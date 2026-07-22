@@ -58,6 +58,7 @@ logs/
 
 .mypy_cache/
 .ruff_cache/
+.import_linter_cache/
 
 # Local AI development context; may contain private host topology.
 /AGENTS.md

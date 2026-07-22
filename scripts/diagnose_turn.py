@@ -9,12 +9,13 @@ import json
 
 from tortoise import Tortoise
 
-from app.core.database import db
+from app.server.infra.database import db
+from app.server.persistence import TORTOISE_ORM_MODEL_MODULES
 
 
 async def _run(turn_id: str) -> None:
-    await Tortoise.init(db_url=db.build_url(), modules={"models": ["app.models"]})
-    from app.models.chat_messages import ChatMessages
+    await Tortoise.init(db_url=db.build_url(), modules={"models": list(TORTOISE_ORM_MODEL_MODULES)})
+    from app.server.chat.persistence.messages import ChatMessages
 
     rows = await ChatMessages.filter(metadata__contains={"turn_id": turn_id}).order_by("created_at")
     timeline = []
