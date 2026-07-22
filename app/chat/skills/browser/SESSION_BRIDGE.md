@@ -40,5 +40,3 @@
 - `domain mismatch` → 说明期望域名，请用户在正确站点导入。
 - token 过期 → 重新 gate。
 - 导入后仍无登录态 → inspect + `browser_capture_state`，必要时换 gate 类型。
-
-Dev 参考：`dev_fixtures/browser_gate_fixtures/bridge_stub.sh`。

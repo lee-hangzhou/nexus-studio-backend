@@ -16,8 +16,6 @@
 *.log
 logs/
 db/backups/
-assets/
 contracts/
-dev_fixtures/
 docs/
 deploy/
