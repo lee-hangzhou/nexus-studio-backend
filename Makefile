@@ -92,9 +92,7 @@ type-check:
 		app/server/canvas/domain \
 		app/server/chat/domain \
 		app/contracts \
-		app/server/generation/services/generation_capabilities.py \
-		app/server/generation/services/generation_params.py \
-		app/server/generation/services/generation_submit.py
+		app/server/generation/services/service.py
 
 # ── 生产部署 ──────────────────────────────────────────────────────────────
 

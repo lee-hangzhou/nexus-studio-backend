@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from app.agent.chat.tools.result import TOOL_LOOP_EXHAUSTED, ToolResult
 from app.agent.runtime.ports import get_generation_port
 from app.agent.runtime.turn.tool_loop_guard import TurnToolLoopGuard
+from app.server.generation.domain.enums import GenerationKind
 
 
 class ListGenerateModelsInput(BaseModel):
@@ -31,7 +32,7 @@ def build_list_generate_models_tool(
             blocked = loop_guard.pre_check("list_generate_models", args=args)
             if blocked is not None:
                 return ToolResult.fail(TOOL_LOOP_EXHAUSTED, detail=blocked.detail()).to_tool_message()
-        result = await get_generation_port().list_models(kind)
+        result = await get_generation_port().list_models(GenerationKind(kind))
         payload = result.model_dump(mode="json") if isinstance(result, BaseModel) else result
         tool_result = ToolResult.ok(json.dumps(payload, ensure_ascii=False))
         if loop_guard is not None:

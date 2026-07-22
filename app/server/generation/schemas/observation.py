@@ -5,6 +5,7 @@ from typing import Mapping
 
 from app.contracts.gateway import GatewayQueueItem
 from app.server.generation.domain.gateway_status import GatewayTaskStatus
+from app.server.generation.persistence.generate_task import GenerateTask
 
 
 @dataclass(frozen=True)
@@ -45,3 +46,9 @@ class GatewayObservationBatch:
 
     def for_union_task(self, union_task_id: int) -> GatewayQueueObservation | None:
         return self._by_union_task_id.get(union_task_id)
+
+
+@dataclass(frozen=True)
+class ObservedGenerateTask:
+    task: GenerateTask
+    observation: GatewayQueueObservation | None

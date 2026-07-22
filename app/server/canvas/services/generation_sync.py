@@ -10,7 +10,6 @@ from app.server.generation.domain.gateway_status import (
 )
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
-from app.server.generation.services.generation_assets import ensure_result_assets
 from app.server.canvas.persistence.nodes import CanvasNodes
 from app.server.generation.persistence.generate_task import GenerateTask
 
@@ -68,7 +67,9 @@ async def reconcile_canvas_node_for_task(
         return None
     if ensure_assets and status == GatewayTaskStatus.SUCCEEDED:
         if not (isinstance(task.result_asset_ids, list) and task.result_asset_ids):
-            task = await ensure_result_assets(task)
+            from app.server.generation.binding import get_generation_service
+
+            task = await get_generation_service().ensure_result_assets(task)
     if not canvas_node_needs_sync(node, task):
         return None
     return await sync_canvas_node_from_generate_task(task)

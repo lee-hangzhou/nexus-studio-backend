@@ -2,9 +2,11 @@ from app.agent.chat.service import ChatService
 from app.agent.runtime.ports import configure_ports
 from app.server.assets.services.service import asset_service
 from app.server.chat.services.attachments.service import chat_attachment_service
-from app.server.generation.services.generate_task import GenerateTaskService
-from app.server.generation.services.generate_task_views import GenerateTaskViewAssembler
+from app.server.generation.binding import bind_generation_service
+from app.server.generation.services import GenerationService
+from app.server.infra.cache import app_cache
 from app.server.infra.gateway import gateway_client
+from app.server.infra.object_storage import object_storage
 from app.server.ports.adapters import (
     AssetsPortAdapter,
     CanvasPortAdapter,
@@ -17,19 +19,19 @@ from app.server.chat.persistence.attachment_repository import ChatAttachmentRepo
 from app.server.generation.persistence.repository import GenerateTaskRepository
 
 chat_service = ChatService()
-generate_task_service = GenerateTaskService(
+generation_service = GenerationService(
     task_repository=GenerateTaskRepository(),
     asset_repository=AssetRepository(),
     attachment_repository=ChatAttachmentRepository(),
     gateway_client=gateway_client,
     attachment_service=chat_attachment_service,
-    view_assembler=GenerateTaskViewAssembler(
-        asset_service=asset_service,
-        attachment_service=chat_attachment_service,
-    ),
+    asset_service=asset_service,
+    object_storage=object_storage,
+    model_cache=app_cache,
 )
+bind_generation_service(generation_service)
 
-generation_port: GenerationPort = GenerationPortAdapter(generate_task_service)
+generation_port: GenerationPort = GenerationPortAdapter(generation_service)
 canvas_port: CanvasPort = CanvasPortAdapter()
 chat_port: ChatPort = ChatPortAdapter(ChatAttachmentRepository())
 assets_port: AssetsPort = AssetsPortAdapter(asset_service, AssetRepository())
@@ -46,6 +48,6 @@ __all__ = [
     "canvas_port",
     "chat_port",
     "chat_service",
-    "generate_task_service",
     "generation_port",
+    "generation_service",
 ]

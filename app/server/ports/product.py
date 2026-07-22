@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from fastapi import UploadFile
-
 from app.contracts.canvas import CanvasNodeView, CanvasPatchResponse
 from app.server.canvas.domain.enums import CanvasNodeStatus
-from app.server.generation.services.generation_observation import GatewayQueueObservation
+from app.server.generation.domain.enums import GenerationKind
+from app.server.generation.domain.models import GenerationModelCapabilities
+from app.server.generation.schemas.observation import GatewayQueueObservation
 from app.server.generation.persistence.generate_task import GenerateTask
 from app.server.generation.schemas import (
     GenerateMaterialUploadResponse,
@@ -38,7 +38,7 @@ class GenerationPort(Protocol):
 
     async def assemble_task_view(self, observed: ObservedGenerationDTO, user_id: int) -> GenerateTaskView: ...
 
-    async def list_models(self, kind: str) -> GenerateModelsResponse: ...
+    async def list_models(self, kind: GenerationKind) -> GenerateModelsResponse: ...
 
     async def resolve_tts_voice_id(
         self,
@@ -48,7 +48,26 @@ class GenerationPort(Protocol):
         fallback_voice_id: str | None = None,
     ) -> str: ...
 
-    async def upload_material(self, user_id: int, file: UploadFile) -> GenerateMaterialUploadResponse: ...
+    def get_model_capabilities(
+        self,
+        model_id: str,
+        kind: GenerationKind | None = None,
+    ) -> GenerationModelCapabilities | None: ...
+
+    async def require_model_capabilities(
+        self,
+        model_id: str,
+        kind: GenerationKind,
+    ) -> GenerationModelCapabilities: ...
+
+    async def upload_material(
+        self,
+        user_id: int,
+        *,
+        filename: str,
+        mime_type: str,
+        raw_bytes: bytes,
+    ) -> GenerateMaterialUploadResponse: ...
 
 
 @runtime_checkable

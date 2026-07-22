@@ -2,16 +2,15 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import UploadFile
-
 from app.contracts.canvas import CanvasNodeView, CanvasPatchResponse
 from app.server.assets.services.service import AssetService
 from app.server.canvas.services import generation_sync
 from app.server.canvas.services.canvas_service import canvas_service
 from app.server.canvas.domain.enums import CanvasNodeStatus
-from app.server.generation.services.generate_task import GenerateTaskService, ObservedGenerateTask
-from app.server.generation.services.generation_models import list_generate_models
-from app.server.generation.services.generation_voices import resolve_tts_voice_id
+from app.server.generation.domain.enums import GenerationKind
+from app.server.generation.domain.models import GenerationModelCapabilities
+from app.server.generation.services import GenerationService
+from app.server.generation.schemas.observation import ObservedGenerateTask
 from app.server.canvas.persistence.nodes import CanvasNodes
 from app.server.generation.persistence.generate_task import GenerateTask
 from app.server.ports.product import (
@@ -34,7 +33,7 @@ from app.server.generation.schemas import (
 
 
 class GenerationPortAdapter(GenerationPort, object):
-    def __init__(self, service: GenerateTaskService) -> None:
+    def __init__(self, service: GenerationService) -> None:
         self._service = service
 
     async def submit(self, user_id: int, req: SubmitGenerateRequest) -> GenerateTaskSubmitResponse:
@@ -48,8 +47,8 @@ class GenerationPortAdapter(GenerationPort, object):
         wrapped = ObservedGenerateTask(task=observed.task, observation=observed.observation)
         return await self._service.assemble_task_view(wrapped, user_id)
 
-    async def list_models(self, kind: str) -> GenerateModelsResponse:
-        return await list_generate_models(kind)
+    async def list_models(self, kind: GenerationKind) -> GenerateModelsResponse:
+        return await self._service.list_models(kind)
 
     async def resolve_tts_voice_id(
         self,
@@ -58,14 +57,40 @@ class GenerationPortAdapter(GenerationPort, object):
         voice_id: str | None = None,
         fallback_voice_id: str | None = None,
     ) -> str:
-        return await resolve_tts_voice_id(
+        return await self._service.resolve_tts_voice_id(
             model_id,
             voice_id=voice_id,
             fallback_voice_id=fallback_voice_id,
         )
 
-    async def upload_material(self, user_id: int, file: UploadFile) -> GenerateMaterialUploadResponse:
-        return await self._service.upload_material(user_id, file)
+    def get_model_capabilities(
+        self,
+        model_id: str,
+        kind: GenerationKind | None = None,
+    ) -> GenerationModelCapabilities | None:
+        return self._service.get_model_capabilities(model_id, kind)
+
+    async def require_model_capabilities(
+        self,
+        model_id: str,
+        kind: GenerationKind,
+    ) -> GenerationModelCapabilities:
+        return await self._service.require_model_capabilities(model_id, kind)
+
+    async def upload_material(
+        self,
+        user_id: int,
+        *,
+        filename: str,
+        mime_type: str,
+        raw_bytes: bytes,
+    ) -> GenerateMaterialUploadResponse:
+        return await self._service.upload_material(
+            user_id,
+            filename=filename,
+            mime_type=mime_type,
+            raw_bytes=raw_bytes,
+        )
 
 
 class CanvasPortAdapter(CanvasPort, object):

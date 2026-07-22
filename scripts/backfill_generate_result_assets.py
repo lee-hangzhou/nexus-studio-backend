@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.server.infra.database import db
 from app.server.generation.domain.gateway_status import GatewayTaskStatus
 from app.server.generation.persistence.generate_task import GenerateTask
-from app.server.generation.services.generation_assets import ensure_result_assets, task_result_asset_ids
+from app.composition import generation_service
 
 
 def parse_args() -> argparse.Namespace:
@@ -57,8 +57,12 @@ async def run(args: argparse.Namespace) -> None:
 
         updated = 0
         for task in tasks:
-            updated_task = await ensure_result_assets(task)
-            asset_ids = task_result_asset_ids(updated_task)
+            updated_task = await generation_service.ensure_result_assets(task)
+            asset_ids = (
+                updated_task.result_asset_ids
+                if isinstance(updated_task.result_asset_ids, list)
+                else []
+            )
             if asset_ids:
                 updated += 1
                 print(f"task_id={task.id} asset_ids={asset_ids}")

@@ -1,10 +1,12 @@
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Any
 
 from tortoise.expressions import Q
 
 from app.server.generation.domain.enums import GenerationKind, GenerationTaskStatus
+from app.server.generation.domain.gateway_status import TERMINAL_GATEWAY_TASK_STATUSES, GatewayTaskStatus
 from app.server.generation.persistence.generate_task import GenerateTask
 from app.server.persistence.repository_base import BaseRepository
 
@@ -39,10 +41,20 @@ class GenerateTaskRepository(BaseRepository[GenerateTask]):
             deleted_at__isnull=True,
         ).all()
 
-    async def list_by_query(
-        self,
-        query: GenerateTaskQuery,
-    ) -> list[GenerateTask]:
+    async def get_active_for_user(self, task_id: int, user_id: int) -> GenerateTask | None:
+        return await self.model.get_or_none(
+            id=task_id,
+            user_id=user_id,
+            deleted_at__isnull=True,
+        )
+
+    async def get_by_union_task_id(self, union_task_id: int) -> GenerateTask | None:
+        return await self.model.get_or_none(union_task_id=union_task_id)
+
+    async def get_by_id_required(self, task_id: int) -> GenerateTask:
+        return await self.model.get(id=task_id)
+
+    async def list_by_query(self, query: GenerateTaskQuery) -> list[GenerateTask]:
         if query.task_ids is not None and not query.task_ids:
             return []
 
@@ -70,3 +82,54 @@ class GenerateTaskRepository(BaseRepository[GenerateTask]):
             )
 
         return await rows.order_by("-created_at", "-id").limit(query.limit)
+
+    async def mark_failed_if_non_terminal(self, task_id: int, error_message: str) -> None:
+        await self.model.filter(
+            id=task_id,
+            status__not_in=[int(status) for status in TERMINAL_GATEWAY_TASK_STATUSES],
+        ).update(status=GatewayTaskStatus.FAILED, error_message=error_message)
+
+    async def bind_union_task_queued(self, task_id: int, union_task_id: int) -> bool:
+        updated = await self.model.filter(
+            id=task_id,
+            status=GatewayTaskStatus.CREATED,
+        ).update(
+            union_task_id=union_task_id,
+            status=GatewayTaskStatus.QUEUED,
+        )
+        if updated == 1:
+            return True
+        await self.model.filter(id=task_id).update(union_task_id=union_task_id)
+        return False
+
+    async def cancel_if_non_terminal(self, task_id: int) -> bool:
+        updated = await self.model.filter(
+            id=task_id,
+            status__not_in=[int(status) for status in TERMINAL_GATEWAY_TASK_STATUSES],
+        ).update(status=GatewayTaskStatus.CANCELLED)
+        return updated == 1
+
+    async def soft_delete(self, task_id: int) -> None:
+        await self.model.filter(id=task_id, deleted_at__isnull=True).update(
+            deleted_at=datetime.now(timezone.utc),
+        )
+
+    async def mark_callback_sent(self, task_id: int) -> None:
+        await self.model.filter(id=task_id, deleted_at__isnull=True).update(callback_sent=True)
+
+    async def set_result_asset_ids(self, task_id: int, asset_ids: list[int]) -> GenerateTask:
+        await self.model.filter(id=task_id).update(result_asset_ids=asset_ids)
+        return await self.get_by_id_required(task_id)
+
+    async def update_if_status(
+        self,
+        task_id: int,
+        *,
+        expected_status: GatewayTaskStatus,
+        fields: Mapping[str, Any],
+    ) -> int:
+        return await self.model.filter(
+            id=task_id,
+            status=int(expected_status),
+            deleted_at__isnull=True,
+        ).update(**fields)

@@ -41,3 +41,18 @@ class AssetRepository(BaseRepository[Assets]):
             favorite=True,
             deleted_at__isnull=True,
         ).all()
+
+    async def set_favorite_for_user(
+        self,
+        user_id: int,
+        asset_ids: Collection[int],
+        *,
+        favorited: bool,
+    ) -> None:
+        if not asset_ids:
+            return
+        await self.model.filter(
+            user_id=user_id,
+            id__in=asset_ids,
+            deleted_at__isnull=True,
+        ).update(favorite=favorited)

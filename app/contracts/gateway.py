@@ -77,20 +77,24 @@ class GatewayModelsResponse(BaseModel):
 
 class GatewayGenerateMaterial(GatewayContract):
     type: MaterialType
-    storage_key: str = Field(alias="tosKey", min_length=1)
+    storage_key: str = Field(serialization_alias="tosKey", min_length=1)
 
 
 class GatewayContentPart(GatewayContract):
     type: GatewayContentType
     text: str | None = None
-    material_ref_index: int | None = Field(default=None, alias="materialRefIndex", ge=1)
+    material_ref_index: int | None = Field(
+        default=None,
+        serialization_alias="materialRefIndex",
+        ge=1,
+    )
 
 
 class GatewayImageSubmitRequest(GatewayContract):
     model: str
     content: list[GatewayContentPart]
-    max_images: int = Field(alias="maxImages", ge=1)
-    callback_url: str = Field(alias="callbackUrl")
+    max_images: int = Field(serialization_alias="maxImages", ge=1)
+    callback_url: str = Field(serialization_alias="callbackUrl")
     materials: list[GatewayGenerateMaterial] = Field(default_factory=list)
     ratio: str | None = None
     resolution: str | None = None
@@ -99,8 +103,8 @@ class GatewayImageSubmitRequest(GatewayContract):
 class GatewayVideoSubmitRequest(GatewayContract):
     model: str
     content: list[GatewayContentPart]
-    callback_url: str = Field(alias="callbackUrl")
-    reference_mode: ReferenceMode = Field(alias="referenceMode")
+    callback_url: str = Field(serialization_alias="callbackUrl")
+    reference_mode: ReferenceMode = Field(serialization_alias="referenceMode")
     duration: int
     materials: list[GatewayGenerateMaterial] = Field(default_factory=list)
     ratio: str | None = None
@@ -109,7 +113,7 @@ class GatewayVideoSubmitRequest(GatewayContract):
 
 class GatewayTTSAudioOutput(GatewayContract):
     format: str | None = None
-    sample_rate: int | None = Field(default=None, alias="sampleRate")
+    sample_rate: int | None = Field(default=None, serialization_alias="sampleRate")
     bitrate: int | None = None
     channel: int | None = None
 
@@ -117,8 +121,8 @@ class GatewayTTSAudioOutput(GatewayContract):
 class GatewayTTSSubmitRequest(GatewayContract):
     model: str
     text: str = Field(min_length=1)
-    voice_id: str = Field(alias="voiceId", min_length=1)
-    callback_url: str = Field(alias="callbackUrl")
+    voice_id: str = Field(serialization_alias="voiceId", min_length=1)
+    callback_url: str = Field(serialization_alias="callbackUrl")
     speed: float | None = None
     volume: float | None = None
     pitch: int | None = None

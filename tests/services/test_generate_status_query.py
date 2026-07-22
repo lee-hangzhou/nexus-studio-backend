@@ -9,9 +9,9 @@ from app.contracts.gateway import GatewayQueueResponse, GatewayTaskStatusRespons
 from app.server.generation.domain.gateway_status import GatewayTaskStatus
 from app.server.generation.domain.enums import GenerationTaskStatus
 from app.server.generation.schemas import GenerateCallbackPayload
-from app.server.generation.services.generate_task import GenerateTaskService, GenerationCallbackOutcome
-from app.server.generation.services.generate_task_views import GenerateTaskViewAssembler
-from app.server.generation.services.generation_result import GenerationResult
+from app.server.generation.domain.terminal import GenerationTerminal
+from app.server.generation.schemas.callback import GenerationCallbackResult
+from app.server.generation.services import GenerationService
 
 
 def _task(
@@ -48,7 +48,7 @@ def _service(
     gateway_client: MagicMock,
     attachments: list[SimpleNamespace] | None = None,
     favorited: list[SimpleNamespace] | None = None,
-) -> GenerateTaskService:
+) -> GenerationService:
     task_repository = MagicMock()
     task_repository.get_by_ids_for_user = AsyncMock(return_value=tasks)
     attachment_repository = MagicMock()
@@ -62,16 +62,15 @@ def _service(
     )
     attachment_service = MagicMock()
     attachment_service.build_preview_url.return_value = "/preview/reference.png"
-    return GenerateTaskService(
+    return GenerationService(
         task_repository=task_repository,
         asset_repository=asset_repository,
         attachment_repository=attachment_repository,
         gateway_client=gateway_client,
         attachment_service=attachment_service,
-        view_assembler=GenerateTaskViewAssembler(
-            asset_service=MagicMock(),
-            attachment_service=attachment_service,
-        ),
+        asset_service=MagicMock(),
+        object_storage=MagicMock(),
+        model_cache=MagicMock(),
     )
 
 
@@ -138,14 +137,14 @@ async def test_status_observe_cas_updates_when_gateway_status_differs(
     gateway_client.get_tasks_queue = AsyncMock(return_value=queue_response)
     gateway_client.get_task = AsyncMock()
 
-    async def fake_apply(task, result, *, callback_sent):
+    async def fake_apply(self, task, result, *, callback_sent):
         assert callback_sent is False
         assert result.status == GatewayTaskStatus.RUNNING
         task.status = result.status
         return task, True
 
     monkeypatch.setattr(
-        "app.server.generation.services.generate_task.apply_generation_result",
+        "app.server.generation.services.service.GenerationService.apply_result",
         fake_apply,
     )
     service = _service(
@@ -198,7 +197,7 @@ async def test_status_observe_does_not_write_when_gateway_matches_local(
     gateway_client.get_tasks_queue = AsyncMock(return_value=queue_response)
     apply_mock = AsyncMock()
     monkeypatch.setattr(
-        "app.server.generation.services.generate_task.apply_generation_result",
+        "app.server.generation.services.service.GenerationService.apply_result",
         apply_mock,
     )
     service = _service(tasks=[running], gateway_client=gateway_client)
@@ -252,7 +251,7 @@ async def test_status_observe_terminal_fetches_task_payload(
     gateway_client.get_tasks_queue = AsyncMock(return_value=queue_response)
     gateway_client.get_task = AsyncMock(return_value=task_response)
 
-    async def fake_apply(task, result: GenerationResult, *, callback_sent):
+    async def fake_apply(self, task, result: GenerationTerminal, *, callback_sent):
         assert callback_sent is True
         assert result.status == GatewayTaskStatus.SUCCEEDED
         assert result.result_keys is not None
@@ -261,7 +260,7 @@ async def test_status_observe_terminal_fetches_task_payload(
         return task, True
 
     monkeypatch.setattr(
-        "app.server.generation.services.generate_task.apply_generation_result",
+        "app.server.generation.services.service.GenerationService.apply_result",
         fake_apply,
     )
     service = _service(tasks=[queued], gateway_client=gateway_client)
@@ -278,10 +277,10 @@ async def test_callback_endpoint_projects_canvas_after_write(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     task = _task(task_id=9, gateway_task_id=909, status=GatewayTaskStatus.SUCCEEDED)
-    outcome = GenerationCallbackOutcome(task=task, applied=True)
+    outcome = GenerationCallbackResult(task=task, applied=True)
     handle = AsyncMock(return_value=outcome)
     project = AsyncMock(return_value=None)
-    monkeypatch.setattr(generate_endpoint, "generate_task_service", SimpleNamespace(handle_callback=handle))
+    monkeypatch.setattr(generate_endpoint, "generation_service", SimpleNamespace(handle_callback=handle))
     monkeypatch.setattr(generate_endpoint, "project_from_task", project)
 
     payload = GenerateCallbackPayload.model_validate(

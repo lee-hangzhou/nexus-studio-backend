@@ -79,19 +79,7 @@ source_modules = [
     "app.agent",
 ]
 forbidden_modules = [
-    "app.server.generation.services.generate_task",
-    "app.server.generation.services.generate_task_views",
-    "app.server.generation.services.generation_submit",
-    "app.server.generation.services.generation_result",
-    "app.server.generation.services.generation_observation",
-    "app.server.generation.services.generation_assets",
-    "app.server.generation.services.generation_models",
-    "app.server.generation.services.generation_params",
-    "app.server.generation.services.generation_voices",
-    "app.server.generation.services.generation_capabilities",
-]
-ignore_imports = [
-    "app.agent.canvas.workflow.params -> app.server.generation.services.generation_capabilities",
+    "app.server.generation.services",
 ]
 allow_indirect_imports = true
 unmatched_ignore_imports_alerting = "error"
