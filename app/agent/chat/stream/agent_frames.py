@@ -47,7 +47,7 @@ def frames_from_agent_event(event, *, turn_id: str) -> list[StreamFrame]:
                 preview=(
                     sanitize_tool_step_preview(
                         event.tool_name,
-                        event.tool_result[:2000],
+                        event.tool_result,
                         ok=not event.tool_error,
                     )
                 ),

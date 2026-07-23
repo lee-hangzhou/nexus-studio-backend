@@ -48,6 +48,7 @@ class CanvasResumeRequest(BaseModel):
     tool_call_id: str
     action: Literal["confirm", "reject"]
     client_turn_id: str | None = None
+    model_key: str | None = None
 
 
 class CanvasReconnectRequest(BaseModel):

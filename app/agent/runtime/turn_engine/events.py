@@ -88,6 +88,8 @@ class ToolStarted:
 
 @dataclass(frozen=True)
 class ToolFinished:
+    """tool_result is always a ToolResult envelope (`{"tool_result": ...}` JSON string)."""
+
     kind: ClassVar[TurnEventKind] = TurnEventKind.TOOL_FINISHED
     dispatch: ClassVar[TurnDispatch] = TurnDispatch.BROADCAST
     turn_id: str

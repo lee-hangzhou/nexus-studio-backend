@@ -81,7 +81,7 @@ class SseTurnSubscriber:
         if isinstance(event, ToolFinished):
             preview = self._preview(
                 event.tool_name,
-                event.tool_result[:2000],
+                event.tool_result,
                 not event.tool_error,
             )
             await emit(

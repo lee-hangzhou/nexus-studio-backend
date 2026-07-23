@@ -14,8 +14,9 @@ from app.agent.canvas.turn.persistence import (
     persist_canvas_tool_step,
     persist_canvas_user_message,
 )
+from app.agent.chat.tools.ui_preview import sanitize_tool_step_preview
 from app.agent.runtime.stream.frames import StreamFrameType, create_stream_frame
-from app.agent.runtime.tools.result import ToolResult
+from app.agent.runtime.tools.result import ToolResult, ToolResultProtocolError
 from app.agent.runtime.turn_engine.events import (
     ToolFinished,
     TurnCompleted,
@@ -28,26 +29,29 @@ from app.agent.runtime.turn_engine.subscribers import TurnEmit
 from app.contracts.metadata import CanvasToolStepMetadata
 from app.server.projects.persistence.projects import Projects
 
+_PATCH_TOOLS = frozenset({"apply_canvas_patch", "submit_node_generation"})
 
-def _parse_tool_payload(raw: str) -> dict[str, Any] | None:
-    parsed = ToolResult.parse_tool_message(raw)
+
+def _tool_output_payload(event: ToolFinished) -> dict[str, Any] | None:
+    """Decode successful ToolResult.output JSON for canvas SSE side effects."""
+    try:
+        parsed = ToolResult.parse_tool_message(event.tool_result or "")
+    except ToolResultProtocolError:
+        return None
     if not parsed.success:
         return None
     try:
-        return json.loads(parsed.output or "{}")
+        data = json.loads(parsed.output or "{}")
     except json.JSONDecodeError:
         return None
+    return data if isinstance(data, dict) else None
 
 
 async def _emit_canvas_patch_from_tool(event: ToolFinished, emit: TurnEmit) -> None:
     name = event.tool_name or ""
-    if name not in ("apply_canvas_patch", "submit_node_generation"):
+    if name not in _PATCH_TOOLS:
         return
-    raw = event.tool_result or ""
-    parsed = ToolResult.parse_tool_message(raw)
-    if not parsed.success:
-        return
-    data = _parse_tool_payload(raw)
+    data = _tool_output_payload(event)
     if not data:
         return
     if name == "submit_node_generation":
@@ -126,6 +130,11 @@ class CanvasPersistenceSubscriber:
             return
 
         if isinstance(event, ToolFinished) and self._enable_tools:
+            preview = sanitize_tool_step_preview(
+                event.tool_name,
+                event.tool_result,
+                ok=not event.tool_error,
+            )
             await persist_canvas_tool_step(
                 project_id=self._project_id,
                 user_id=self._user_id,
@@ -134,7 +143,7 @@ class CanvasPersistenceSubscriber:
                     call_id=event.call_id,
                     name=event.tool_name,
                     ok=not event.tool_error,
-                    preview=event.tool_result[:500],
+                    preview=preview,
                     error_type=event.error_class,
                 ),
             )

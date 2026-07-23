@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from app.agent.chat.agent.events import AgentEvent, AgentEventType
 from app.agent.chat.tools.lc_tools import ChatToolContext
+from app.agent.chat.tools.result import ToolResult, ToolResultProtocolError
 from app.agent.chat.tools.ui_preview import sanitize_tool_step_preview
 from app.agent.chat.turn.guards import TurnGuards
 from app.agent.chat.turn.observation import TurnObservationContext
@@ -143,7 +144,10 @@ class TurnAgentEventRecorder:
 
     async def _record_tool_finished(self, event: AgentEvent) -> None:
         call_id = event.call_id.strip()
-        tool_preview = event.tool_result[:2000]
+        try:
+            tool_preview = ToolResult.display_from_message(event.tool_result, limit=2000)
+        except ToolResultProtocolError:
+            tool_preview = event.tool_result[:2000]
         self.observation.usage_collector.note_tool_finish(
             step_index=event.step_index,
             call_id=call_id,
@@ -187,7 +191,7 @@ class TurnAgentEventRecorder:
                 error_type=event.error_class,
                 result_preview=sanitize_tool_step_preview(
                     event.tool_name,
-                    event.tool_result[:2000],
+                    event.tool_result,
                     ok=not event.tool_error,
                 ),
             )

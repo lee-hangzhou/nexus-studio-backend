@@ -22,7 +22,7 @@ from app.server.exceptions.base import AppError
 from app.server.infra.gateway_errors import GatewayChatError
 from app.agent.runtime.agent.gateway_fail import stream_error_class_for_app_error
 from app.agent.runtime.llm.thinking import build_ai_message, reasoning_content_from_message
-from app.agent.runtime.tools.result import ToolResult
+from app.agent.runtime.tools.result import INTERNAL, ToolResult
 from app.agent.runtime.turn.trace import log_stage
 from app.server.infra.logger import log_exception
 from app.agent.runtime.turn.tool_loop_guard import ONCE_PER_TURN_TOOL_NAMES
@@ -347,7 +347,7 @@ async def run_agent_turn_stream(
                     call_id=call_id,
                     tool_name=tool_name,
                     tool_args=call_args,
-                    tool_result=parsed.display_text,
+                    tool_result=content,
                     tool_error=tool_error,
                     error_class=error_class,
                 )
@@ -365,19 +365,20 @@ async def run_agent_turn_stream(
                     raise GatewayChatError("gateway_protocol_error", "tool error event has no matching start", retryable=False)
                 error = data.get("error")
                 error_text = str(error) if error else "tool execution failed"
+                envelope = ToolResult.fail(INTERNAL, detail=error_text).to_tool_message()
                 log_stage(
                     "tool.end",
                     call_id=call_id,
                     tool_name=tool_name,
                     error_type="internal",
-                    result_chars=len(error_text),
+                    result_chars=len(envelope),
                 )
                 yield ToolFinishedEvent(
                     turn_id=turn_id,
                     step_index=step_index,
                     call_id=call_id,
                     tool_name=tool_name,
-                    tool_result=error_text,
+                    tool_result=envelope,
                     tool_args=call_args,
                     tool_error=True,
                     error_class="internal",

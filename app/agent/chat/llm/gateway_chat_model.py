@@ -4,6 +4,7 @@ from langchain_core.callbacks import AsyncCallbackManagerForLLMRun, CallbackMana
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
+from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 from langchain_core.utils.function_calling import convert_to_openai_tool
 from pydantic import Field
@@ -70,12 +71,14 @@ class GatewayChatModel(BaseChatModel):
         self,
         tools: Sequence[Dict[str, Any] | type | BaseTool],
         **kwargs: Any,
-    ) -> "GatewayChatModel":
-        """返回一个绑定了清洗后 OpenAI 风格工具的模型副本。
+    ) -> Runnable[Any, AIMessage]:
+        """按 LangChain 契约绑定工具，返回带 ``.bound`` 的 RunnableBinding。
 
-        LangChain 创建 Agent 时会调用这里。网关需要 OpenAI function tool
-        形状的 schema，但本地工具可能是 LangChain ``BaseTool``、Pydantic
-        类型或已序列化的 dict。这里统一转换并清洗，避免把运行时内部字段暴露给模型。
+        网关需要 OpenAI function tool 形状的 schema；本地工具可能是
+        ``BaseTool``、Pydantic 类型或已序列化 dict，这里统一转换并清洗。
+
+        必须返回 ``self.bind(...)`` 而不是 ``model_copy``：trustcall/langmem
+        在 ``enable_deletes`` 且已有记忆时会访问 ``bound.bound.bind_tools``。
         """
         serialized: List[Dict[str, Any]] = []
         for tool in tools:
@@ -103,7 +106,14 @@ class GatewayChatModel(BaseChatModel):
                     required=required,
                     properties=list((params.get("properties") or {}).keys()),
                 )
-        return self.model_copy(update={"bound_tools": sanitized})
+        bind_kwargs: Dict[str, Any] = {"tools": sanitized}
+        tool_choice = kwargs.get("tool_choice")
+        if tool_choice is not None:
+            bind_kwargs["tool_choice"] = tool_choice
+        for key in ("parallel_tool_calls", "strict"):
+            if key in kwargs:
+                bind_kwargs[key] = kwargs[key]
+        return self.bind(**bind_kwargs)
 
     def _generate(
         self,

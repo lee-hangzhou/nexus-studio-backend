@@ -259,6 +259,7 @@ async def canvas_turn_resume(
                     action=body.action,
                     cancel_event=cancel_event,
                     lock_held=True,
+                    model_key=body.model_key or "",
                 ),
             )
         )

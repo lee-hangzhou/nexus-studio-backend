@@ -46,7 +46,6 @@ def schedule_canvas_memory_extract(
                 namespace=PROJECT_MEMORY_NAMESPACE,
                 schemas=[CanvasMemory],
                 enable_inserts=True,
-                enable_updates=True,
                 enable_deletes=True,
             )
             config = {

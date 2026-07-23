@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage
 
 from app.agent.runtime.agent.events import ToolFinishedEvent, TurnCompletedEvent
 from app.agent.runtime.agent.gateway_fail import terminated_by_for_error_class
+from app.agent.runtime.tools.result import BROWSER_BLOCKED, ToolResult
 from app.agent.runtime.turn.enums import GuardAction, TurnTerminatedBy
 from app.agent.runtime.turn.guards import TurnGuards
 from app.agent.runtime.turn_engine.constants import TERMINATION_ERROR_MESSAGES
@@ -98,7 +99,7 @@ async def test_handlers_stop_on_max_tools() -> None:
         call_id="c1",
         tool_name="tool",
         tool_args={},
-        tool_result="ok",
+        tool_result=ToolResult.ok("ok").to_tool_message(),
         tool_error=False,
         error_class=None,
     )
@@ -134,7 +135,7 @@ async def test_handlers_browser_blocked_completes() -> None:
         call_id="c1",
         tool_name="browser_navigate",
         tool_args={},
-        tool_result="blocked",
+        tool_result=ToolResult.fail(BROWSER_BLOCKED, detail="blocked").to_tool_message(),
         tool_error=True,
         error_class="browser_blocked",
     )

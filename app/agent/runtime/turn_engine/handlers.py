@@ -20,6 +20,7 @@ from app.agent.runtime.agent.events import (
     TurnFailedEvent,
 )
 from app.agent.runtime.agent.gateway_fail import terminated_by_for_error_class
+from app.agent.runtime.tools.result import INVALID_ARGUMENTS, ToolResult
 from app.agent.runtime.turn.enums import GuardAction, TurnTerminatedBy
 from app.agent.runtime.turn.guards import TurnGuards
 from app.agent.runtime.turn_engine.constants import INVALID_TOOL_RAW_PREVIEW_LEN, TERMINATION_ERROR_MESSAGES
@@ -116,10 +117,11 @@ def broadcast_invalid_tool_call(
     step_index: int,
     broadcast: TurnBroadcast,
 ) -> None:
-    preview = (
+    detail = (
         f"参数解析失败: {inv.parse_error}\n"
         f"raw: {inv.raw_arguments[:INVALID_TOOL_RAW_PREVIEW_LEN]}"
     )
+    envelope = ToolResult.fail(INVALID_ARGUMENTS, detail=detail).to_tool_message()
     broadcast(
         ToolStarted(
             turn_id=turn_id,
@@ -136,8 +138,9 @@ def broadcast_invalid_tool_call(
             step_index=step_index,
             call_id=inv.call_id,
             tool_name=inv.name,
-            tool_result=preview,
+            tool_result=envelope,
             tool_error=True,
+            error_class=INVALID_ARGUMENTS,
             synthetic=True,
         ),
     )

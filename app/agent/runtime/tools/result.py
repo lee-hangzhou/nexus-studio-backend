@@ -163,8 +163,20 @@ class ToolResult(BaseModel):
             parts.append(f"error_type={self.error_type}")
         return "\n".join(parts) if parts else f"error_type={self.error_type}"
 
+    def preview_text(self, *, limit: int = 2000) -> str:
+        return self.display_text[:limit]
+
+    @classmethod
+    def display_from_message(cls, content: str, *, limit: int | None = None) -> str:
+        """Parse a tool-message envelope and return display text (optionally truncated)."""
+        text = cls.parse_tool_message(content).display_text
+        return text if limit is None else text[:limit]
+
 
 def summarize_tool_result(tool_name: str, result: str, *, ok: bool, limit: int = 2000) -> str:
-    """Default SSE/tool preview — surfaces may inject richer sanitizers."""
+    """Default SSE/tool preview. `result` must be a ToolResult envelope string."""
     del tool_name, ok
-    return (result or "")[:limit]
+    try:
+        return ToolResult.parse_tool_message(result).preview_text(limit=limit)
+    except ToolResultProtocolError:
+        return (result or "")[:limit]

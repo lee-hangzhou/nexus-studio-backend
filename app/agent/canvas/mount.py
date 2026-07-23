@@ -23,13 +23,12 @@ from app.agent.canvas.turn.subscribers import (
 )
 from app.agent.chat.llm.gateway_chat_model import GatewayChatModel
 from app.agent.chat.llm.registry import get_model_spec
+from app.agent.chat.tools.ui_preview import sanitize_tool_step_preview
 from app.agent.runtime.checkpointer import get_chat_checkpointer
 from app.agent.runtime.mounts.spec import AgentMountSpec
 from app.agent.runtime.turn.tool_loop_guard import TurnToolLoopGuard
 from app.agent.runtime.turn_engine.terminal_policy import SseTerminalPolicy
 from app.server.infra.config import settings
-
-CANVAS_AGENT_MODEL_KEY = "gpt-5.5"
 
 
 @dataclass
@@ -39,6 +38,7 @@ class CanvasMountContext:
     turn_id: str
     cancel_event: asyncio.Event
     checkpointer: BaseCheckpointSaver
+    model_key: str = ""
     content: str = ""
     client_turn_id: str | None = None
     mode: str = "auto"
@@ -51,6 +51,11 @@ class CanvasMountContext:
     @property
     def project_id(self) -> int:
         return int(self.conversation_id)
+
+    @property
+    def resolved_model_key(self) -> str:
+        key = (self.model_key or "").strip()
+        return key or settings.CHAT_DEFAULT_MODEL
 
 
 def _thread_id(ctx: CanvasMountContext) -> str:
@@ -66,9 +71,10 @@ async def _prepare_turn(ctx: CanvasMountContext) -> CanvasMountContext:
 async def _build_agent(ctx: CanvasMountContext) -> CompiledStateGraph:
     if ctx.agent is not None:
         return ctx.agent
-    spec = get_model_spec(CANVAS_AGENT_MODEL_KEY)
+    model_key = ctx.resolved_model_key
+    spec = get_model_spec(model_key)
     llm = GatewayChatModel(
-        model_key=CANVAS_AGENT_MODEL_KEY,
+        model_key=model_key,
         spec=spec,
         cancel_event=ctx.cancel_event,
     )
@@ -161,6 +167,10 @@ def _cleanup_repair(ctx: CanvasMountContext):
     return _start_repair(ctx)
 
 
+def _preview(_ctx: CanvasMountContext):
+    return lambda name, result, ok: sanitize_tool_step_preview(name, result, ok=ok)
+
+
 CANVAS_MOUNT = AgentMountSpec(
     name="canvas",
     prepare_turn=_prepare_turn,
@@ -172,6 +182,7 @@ CANVAS_MOUNT = AgentMountSpec(
     build_terminal_policy=_terminal_policy,
     resolve_heartbeat_interval_sec=_heartbeat,
     build_recovery_hook=_recovery,
+    build_preview_tool_result=_preview,
     resolve_input_messages=_input_messages,
     resolve_on_turn_start_repair=_start_repair,
     resolve_on_turn_cleanup_repair=_cleanup_repair,

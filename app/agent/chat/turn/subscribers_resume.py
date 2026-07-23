@@ -13,7 +13,7 @@ from app.agent.chat.gate import turn_auth as turn_auth_store
 from app.agent.chat.gate.pending import clear_gate_pending, get_gate_pending
 from app.agent.chat.tools.browser_names import REQUEST_USER_GATE
 from app.agent.chat.tools.lc_tools import ChatToolContext
-from app.agent.chat.tools.result import BROWSER_ERROR, LOGIN_FAILED
+from app.agent.chat.tools.result import BROWSER_ERROR, LOGIN_FAILED, ToolResult, ToolResultProtocolError
 from app.agent.chat.turn.event_recorder import TurnAgentEventRecorder
 from app.agent.chat.turn.gate_emit import emit_user_gates
 from app.agent.chat.turn.gate_suspend import persist_gate_suspend_tool_results
@@ -157,9 +157,13 @@ class ChatResumeSubscriber:
                     event.tool_name == REQUEST_USER_GATE
                     and event.error_class in _GATE_RESUME_FATAL_ERRORS
                 ):
+                    try:
+                        message = ToolResult.display_from_message(event.tool_result or "")
+                    except ToolResultProtocolError:
+                        message = (event.tool_result or "").strip()
                     self.gate_resume_failed = {
                         "error_class": event.error_class or "",
-                        "message": (event.tool_result or "").strip(),
+                        "message": message,
                     }
             return
 

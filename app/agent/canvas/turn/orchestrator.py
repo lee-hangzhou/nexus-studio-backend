@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from langgraph.types import Command
 
-from app.agent.canvas.mount import CANVAS_AGENT_MODEL_KEY, CANVAS_MOUNT, CanvasMountContext
+from app.agent.canvas.mount import CANVAS_MOUNT, CanvasMountContext
 from app.agent.canvas.turn.lock import project_turn_lock
 from app.agent.chat.stream.encoder import encode_sse_frame
 from app.agent.chat.stream.frames import StreamFrameType, create_stream_frame
@@ -35,33 +35,32 @@ async def stream_canvas_turn(
 ) -> AsyncIterator[str]:
     turn_id = turn_id or uuid4().hex
     bind_context(user_id=user_id, project_id=project_id, turn_id=turn_id)
-    requested_model_key = model_key
     acquired = False
     try:
         if not lock_held:
             await project_turn_lock.acquire(project_id, turn_id)
             acquired = True
 
-        logger.info(
-            "canvas.turn.start",
-            project_id=project_id,
-            turn_id=turn_id,
-            mode=mode,
-            model_key=CANVAS_AGENT_MODEL_KEY,
-            requested_model_key=requested_model_key,
-            enable_tools=enable_tools,
-        )
         ctx = CanvasMountContext(
             user_id=user_id,
             conversation_id=project_id,
             turn_id=turn_id,
             cancel_event=cancel_event,
             checkpointer=get_chat_checkpointer(),
+            model_key=model_key,
             content=content,
             client_turn_id=client_turn_id,
             mode=mode,
             enable_tools=enable_tools,
             is_resume=False,
+        )
+        logger.info(
+            "canvas.turn.start",
+            project_id=project_id,
+            turn_id=turn_id,
+            mode=mode,
+            model_key=ctx.resolved_model_key,
+            enable_tools=enable_tools,
         )
         async for chunk in stream_agent_turn(CANVAS_MOUNT, ctx):
             yield chunk
@@ -108,6 +107,7 @@ async def stream_canvas_resume(
     action: str,
     cancel_event: asyncio.Event,
     lock_held: bool = False,
+    model_key: str = "",
 ) -> AsyncIterator[str]:
     del tool_call_id
     acquired = False
@@ -127,6 +127,7 @@ async def stream_canvas_resume(
             turn_id=turn_id,
             cancel_event=cancel_event,
             checkpointer=get_chat_checkpointer(),
+            model_key=model_key,
             mode="manual",
             enable_tools=True,
             is_resume=True,

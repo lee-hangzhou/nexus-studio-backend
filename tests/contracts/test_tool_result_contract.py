@@ -27,3 +27,29 @@ def test_structured_failure_remains_failure_after_round_trip() -> None:
     assert parsed.success is False
     assert parsed.error_type == INVALID_ARGUMENTS
     assert parsed.error_detail == "missing required field"
+
+
+def test_display_from_message_and_summarize_use_envelope() -> None:
+    from app.agent.runtime.tools.result import summarize_tool_result
+
+    envelope = ToolResult.ok('{"revision": 3, "nodes": []}').to_tool_message()
+    assert ToolResult.display_from_message(envelope, limit=20) == '{"revision": 3, "nod'
+    assert summarize_tool_result("apply_canvas_patch", envelope, ok=True).startswith('{"revision"')
+
+
+def test_sanitize_preview_accepts_envelope() -> None:
+    from app.agent.chat.tools.ui_preview import sanitize_tool_step_preview
+
+    envelope = ToolResult.ok('[{"id":"m1"}]').to_tool_message()
+    assert sanitize_tool_step_preview("recall_user_memory", envelope, ok=True) == "已找到 1 条相关记忆"
+
+
+def test_sanitize_preview_hides_canvas_payload() -> None:
+    from app.agent.chat.tools.ui_preview import sanitize_tool_step_preview
+
+    payload = '{"revision": 8, "matched": 2, "nodes": [{"id": "a"}, {"id": "b"}]}'
+    envelope = ToolResult.ok(payload).to_tool_message()
+    assert sanitize_tool_step_preview("query_canvas_nodes", envelope, ok=True) == "已读取 2 个节点"
+    assert sanitize_tool_step_preview("apply_canvas_patch", envelope, ok=True) == "已更新画布"
+    assert sanitize_tool_step_preview("submit_node_generation", envelope, ok=True) == "已提交生成任务"
+    assert sanitize_tool_step_preview("read_file", envelope, ok=True) == "已完成"

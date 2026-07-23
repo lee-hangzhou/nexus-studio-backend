@@ -54,6 +54,8 @@ class ToolStartedEvent:
 
 @dataclass(frozen=True)
 class ToolFinishedEvent:
+    """tool_result is always a ToolResult envelope (`{"tool_result": ...}` JSON string)."""
+
     type: ClassVar[AgentEventType] = AgentEventType.TOOL_FINISHED
     turn_id: str
     step_index: int

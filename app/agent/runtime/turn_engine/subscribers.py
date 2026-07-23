@@ -53,7 +53,7 @@ class TurnEventBus:
                         logger.exception(
                             "turn.subscriber.previous_failed",
                             subscriber=subscriber.__class__.__name__,
-                            event=event.kind.value,
+                            event_kind=event.kind.value,
                             turn_id=event.turn_id,
                             error=str(exc),
                         )
@@ -102,7 +102,7 @@ class TurnEventBus:
             logger.exception(
                 "turn.subscriber.broadcast_failed",
                 subscriber=subscriber.__class__.__name__,
-                event=event.kind.value,
+                event_kind=event.kind.value,
                 turn_id=event.turn_id,
                 error=str(exc),
             )
@@ -122,7 +122,7 @@ class TurnEventBus:
                 logger.exception(
                     "turn.subscriber.previous_broadcast_failed",
                     subscriber=subscriber.__class__.__name__,
-                    event=event.kind.value,
+                    event_kind=event.kind.value,
                     turn_id=event.turn_id,
                     error=str(exc),
                 )
