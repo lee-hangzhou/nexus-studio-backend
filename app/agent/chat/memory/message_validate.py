@@ -45,6 +45,7 @@ def repair_unresolved_tool_calls(
     *,
     reason: str = TURN_INTERRUPTED,
     detail: str = "Tool call did not complete before the turn ended.",
+    source: str = "checkpoint",
 ) -> list[BaseMessage]:
     """为未配对的 assistant tool_calls 补 synthetic ToolMessage, 避免下一轮请求网关报错"""
     out: list[BaseMessage] = []
@@ -67,6 +68,7 @@ def repair_unresolved_tool_calls(
                 tool_call_id=call_id,
                 tool_name=name,
                 error_type=reason,
+                source=source,
             )
         pending = []
 

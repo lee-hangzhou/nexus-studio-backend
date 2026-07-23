@@ -370,6 +370,22 @@ class TurnEventHandlers:
             if hook_result is not None:
                 if hook_result == TurnTerminatedBy.CANCELLED:
                     return HandlerResult(action="return", terminated_by=TurnTerminatedBy.CANCELLED)
+                if hook_result == TurnTerminatedBy.INTERRUPTED:
+                    # Explicit interrupt: broadcast TurnCompleted so Chat persistence can emit
+                    # USER_GATE and set force_interrupted. Do not fail() — not a gateway error.
+                    completed = TurnCompleted(
+                        turn_id=self.turn_id,
+                        messages=messages,
+                        answer_text="".join(self.state.answer_parts),
+                        tool_calls_count=self.state.tool_calls_count,
+                    )
+                    await self.barrier(completed)
+                    self.broadcast(completed)
+                    self.state.terminated_by = TurnTerminatedBy.INTERRUPTED
+                    return HandlerResult(
+                        action="return",
+                        terminated_by=TurnTerminatedBy.INTERRUPTED,
+                    )
                 await self.fail(
                     turn_id=self.turn_id,
                     error=_termination_message(hook_result),

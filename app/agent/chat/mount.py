@@ -22,7 +22,10 @@ from app.agent.chat.prompt.composer import PromptComposer
 from app.agent.chat.prompt.types import AttachmentBrief, TurnPromptContext
 from app.agent.chat.tools.lc_tools import ChatToolContext, build_langchain_tools
 from app.agent.chat.tools.ui_preview import sanitize_tool_step_preview
-from app.agent.chat.turn.checkpoint import capture_turn_checkpoint_messages
+from app.agent.chat.turn.checkpoint import (
+    capture_turn_checkpoint_messages,
+    repair_chat_checkpoint_if_needed,
+)
 from app.agent.chat.turn.context import build_turn_context
 from app.agent.chat.turn.event_recorder import TurnAgentEventRecorder
 from app.agent.chat.turn.guards import TurnGuards
@@ -266,6 +269,7 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
         tool_audit=tool_audit,
         user_id=ctx.user_id,
         conversation_id=ctx.conversation_id,
+        agent=agent,
     )
     ctx.recovery_hook = recovery_hook
     ctx.session = ChatTurnSession(
@@ -339,6 +343,24 @@ def _heartbeat(_ctx: ChatMountContext) -> int:
     return int(settings.CHAT_HEARTBEAT_INTERVAL_SEC)
 
 
+def _start_repair(ctx: ChatMountContext):
+    async def repair(agent, runnable_config, **kwargs):
+        reason = kwargs.get("reason")
+        await repair_chat_checkpoint_if_needed(
+            agent,
+            runnable_config,
+            conversation_id=ctx.conversation_id,
+            turn_id=ctx.turn_id,
+            reason="stale_unresolved" if reason == "turn_start" else (reason or "stale_unresolved"),
+        )
+
+    return repair
+
+
+def _cleanup_repair(ctx: ChatMountContext):
+    return _start_repair(ctx)
+
+
 CHAT_MOUNT = AgentMountSpec(
     name="chat",
     prepare_turn=_prepare_turn,
@@ -352,5 +374,7 @@ CHAT_MOUNT = AgentMountSpec(
     build_recovery_hook=_recovery,
     build_preview_tool_result=_preview,
     resolve_input_messages=_input_messages,
+    resolve_on_turn_start_repair=_start_repair,
+    resolve_on_turn_cleanup_repair=_cleanup_repair,
     resolve_client_turn_id=lambda ctx: ctx.client_turn_id,
 )

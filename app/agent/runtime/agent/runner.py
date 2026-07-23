@@ -18,14 +18,15 @@ from app.agent.runtime.agent.events import (
     TurnCompletedEvent,
     TurnFailedEvent,
 )
-from app.server.exceptions.base import AppError
-from app.server.infra.gateway_errors import GatewayChatError
 from app.agent.runtime.agent.gateway_fail import stream_error_class_for_app_error
+from app.agent.runtime.agent.tool_call_registry import ToolCallRegistry
 from app.agent.runtime.llm.thinking import build_ai_message, reasoning_content_from_message
 from app.agent.runtime.tools.result import INTERNAL, ToolResult
-from app.agent.runtime.turn.trace import log_stage
-from app.server.infra.logger import log_exception
 from app.agent.runtime.turn.tool_loop_guard import ONCE_PER_TURN_TOOL_NAMES
+from app.agent.runtime.turn.trace import log_stage
+from app.server.exceptions.base import AppError
+from app.server.infra.gateway_errors import GatewayChatError
+from app.server.infra.logger import log_exception
 
 
 def _is_graph_interrupt(error: object) -> bool:
@@ -166,8 +167,11 @@ async def run_agent_turn_stream(
     step_index = 0
     stream_input = _normalize_agent_input(turn_input)
     answer_tokens_emitted = False
-    pending_tool_calls: list[tuple[str, str]] = []
-    tool_call_args: dict[str, dict[str, Any]] = {}
+    registry = ToolCallRegistry()
+    # Interrupt resume: first event is on_tool_start without a fresh model step in this stream.
+    if isinstance(stream_input, Command):
+        state = await agent.aget_state(config)
+        registry.seed_from_messages(list(state.values.get("messages") or []))
     try:
         async for event in agent.astream_events(stream_input, config=config, version="v2"):
             kind = event.get("event")
@@ -283,36 +287,37 @@ async def run_agent_turn_stream(
                         invalid_tool_calls=invalid_items,
                     )
                     if ai_message.tool_calls:
-                        pending_tool_calls = [
-                            (call["id"], call["name"])
-                            for call in ai_message.tool_calls
-                        ]
+                        registry.register_from_model_step(
+                            [dict(call) for call in ai_message.tool_calls]
+                        )
                         step_index += 1
 
             elif kind == "on_tool_start":
                 tool_input = data.get("input") or {}
                 call_id = str(metadata.get("tool_call_id") or data.get("id") or "")
                 tool_name = str(metadata.get("name") or event.get("name") or "")
-                if not call_id:
-                    for index, (pending_id, pending_name) in enumerate(pending_tool_calls):
-                        if pending_name == tool_name:
-                            call_id = pending_id
-                            pending_tool_calls.pop(index)
-                            break
-                if not call_id or not tool_name or not isinstance(tool_input, dict):
+                if not isinstance(tool_input, dict):
                     raise GatewayChatError(
                         "gateway_protocol_error",
                         "tool start event violates contract",
                         retryable=False,
                     )
-                tool_call_args[call_id] = dict(tool_input)
-                log_stage("tool.start", call_id=call_id, tool_name=tool_name)
+                started = registry.on_start(
+                    call_id=call_id,
+                    tool_name=tool_name,
+                    args=dict(tool_input),
+                )
+                log_stage(
+                    "tool.start",
+                    call_id=started.call_id,
+                    tool_name=started.tool_name,
+                )
                 yield ToolStartedEvent(
                     turn_id=turn_id,
                     step_index=step_index,
-                    call_id=call_id,
-                    tool_name=tool_name,
-                    tool_args=dict(tool_input),
+                    call_id=started.call_id,
+                    tool_name=started.tool_name,
+                    tool_args=dict(started.args),
                 )
 
             elif kind == "on_tool_end":
@@ -323,63 +328,51 @@ async def run_agent_turn_stream(
                     call_id = output.tool_call_id or ""
                 if not call_id:
                     call_id = str(metadata.get("tool_call_id") or "")
-                if not call_id:
-                    raise GatewayChatError("gateway_protocol_error", "tool end event is missing call_id", retryable=False)
-                parsed = ToolResult.parse_tool_message(content)
-                tool_error = not parsed.success
-                error_class = parsed.error_type
-                call_args = tool_call_args.pop(call_id, None)
-                if call_args is None:
-                    raise GatewayChatError("gateway_protocol_error", "tool end event has no matching start", retryable=False)
                 tool_name = str(metadata.get("name") or event.get("name") or "")
-                if not tool_name:
-                    raise GatewayChatError("gateway_protocol_error", "tool end event is missing tool name", retryable=False)
+                finished = registry.on_end(call_id=call_id, tool_name=tool_name)
+                parsed = ToolResult.parse_tool_message(content)
                 log_stage(
                     "tool.end",
-                    call_id=call_id,
-                    tool_name=tool_name,
+                    call_id=finished.call_id,
+                    tool_name=finished.tool_name,
                     error_type=parsed.error_type,
                     result_chars=len(content),
                 )
                 yield ToolFinishedEvent(
                     turn_id=turn_id,
                     step_index=step_index,
-                    call_id=call_id,
-                    tool_name=tool_name,
-                    tool_args=call_args,
+                    call_id=finished.call_id,
+                    tool_name=finished.tool_name,
+                    tool_args=dict(finished.args),
                     tool_result=content,
-                    tool_error=tool_error,
-                    error_class=error_class,
+                    tool_error=not parsed.success,
+                    error_class=parsed.error_type,
                 )
 
             elif kind == "on_tool_error":
                 error = data.get("error")
+                # GraphInterrupt suspends the tool; leave registry open for Command(resume) seed.
                 if _is_graph_interrupt(error):
                     continue
                 call_id = str(metadata.get("tool_call_id") or "")
                 tool_name = str(metadata.get("name") or event.get("name") or "")
-                if not call_id or not tool_name:
-                    raise GatewayChatError("gateway_protocol_error", "tool error event violates contract", retryable=False)
-                call_args = tool_call_args.pop(call_id, None)
-                if call_args is None:
-                    raise GatewayChatError("gateway_protocol_error", "tool error event has no matching start", retryable=False)
-                error = data.get("error")
+                finished = registry.on_error(call_id=call_id, tool_name=tool_name)
                 error_text = str(error) if error else "tool execution failed"
                 envelope = ToolResult.fail(INTERNAL, detail=error_text).to_tool_message()
                 log_stage(
                     "tool.end",
-                    call_id=call_id,
-                    tool_name=tool_name,
+                    call_id=finished.call_id,
+                    tool_name=finished.tool_name,
                     error_type="internal",
                     result_chars=len(envelope),
                 )
                 yield ToolFinishedEvent(
                     turn_id=turn_id,
                     step_index=step_index,
-                    call_id=call_id,
-                    tool_name=tool_name,
+                    call_id=finished.call_id,
+                    tool_name=finished.tool_name,
                     tool_result=envelope,
-                    tool_args=call_args,
+                    tool_args=dict(finished.args),
                     tool_error=True,
                     error_class="internal",
                 )

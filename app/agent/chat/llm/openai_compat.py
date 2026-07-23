@@ -135,7 +135,10 @@ class OpenAICompatAdapter(ModelAdapter):
     ) -> Dict[str, Any]:
         cleaned = list(messages)
         if has_unresolved_tool_calls(cleaned):
-            cleaned = repair_unresolved_tool_calls(cleaned)
+            cleaned = repair_unresolved_tool_calls(
+                cleaned,
+                source="outbound_last_resort",
+            )
         cleaned = sanitize_tool_pairs(cleaned)
         validate_langchain_tool_sequence(cleaned)
         ctx = vision_ctx or EMPTY_VISION_CONTEXT

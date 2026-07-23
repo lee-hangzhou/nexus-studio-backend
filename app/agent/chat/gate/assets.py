@@ -64,7 +64,12 @@ async def _atomic_write_png(path: Path, write_fn) -> Path:
     return path
 
 
-async def preflight_qr_locator(*, conversation_id: int, image_selector: str) -> None:
+async def preflight_qr_locator(
+    *,
+    conversation_id: int,
+    workspace: Path,
+    image_selector: str,
+) -> None:
     min_size = settings.CHAT_QR_MIN_BBOX_SIZE
     bbox = await browser_runtime.locator_bounding_box(
         conversation_id,
@@ -111,7 +116,11 @@ async def capture_gate_image(
     out = gate_asset_path(workspace, gate_id)
 
     if asset_kind == "qr":
-        await preflight_qr_locator(conversation_id=conversation_id, image_selector=image_selector)
+        await preflight_qr_locator(
+            conversation_id=conversation_id,
+            workspace=workspace,
+            image_selector=image_selector,
+        )
 
     async def _write(tmp: Path) -> None:
         if browser_runtime.use_inprocess_runtime():

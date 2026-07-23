@@ -1,13 +1,14 @@
-"""Chat turn checkpoint snapshot/restore on user cancel."""
+"""Chat turn checkpoint snapshot/restore and unresolved-tool hygiene."""
 
 from __future__ import annotations
 
 from langchain_core.messages import BaseMessage, RemoveMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
 from langgraph.graph.state import CompiledStateGraph
-from langchain_core.runnables import RunnableConfig
 
 from app.agent.canvas.turn.checkpoint import repair_canvas_checkpoint_if_needed
+from app.agent.chat.turn.gate_emit import has_pending_user_gate
 from app.server.infra.logger import logger
 
 
@@ -41,6 +42,30 @@ async def restore_turn_checkpoint(
     )
 
 
+async def repair_chat_checkpoint_if_needed(
+    agent: CompiledStateGraph,
+    config: RunnableConfig,
+    *,
+    conversation_id: int,
+    turn_id: str,
+    reason: str = "stale_unresolved",
+) -> bool:
+    """Write synthetic ToolMessages for stale unresolved calls.
+
+    Skip when a UserGate interrupt is pending so resume can complete that tool.
+    Engine already skips start repair on is_resume and skips cleanup on INTERRUPTED.
+    """
+    if await has_pending_user_gate(agent, config):
+        return False
+    return await repair_canvas_checkpoint_if_needed(
+        agent,
+        config,
+        project_id=conversation_id,
+        turn_id=turn_id,
+        reason=reason,
+    )
+
+
 async def repair_turn_checkpoint_on_cancel(
     agent: CompiledStateGraph,
     config: RunnableConfig,
@@ -60,10 +85,10 @@ async def repair_turn_checkpoint_on_cancel(
             reason=reason,
         )
         return True
-    return await repair_canvas_checkpoint_if_needed(
+    return await repair_chat_checkpoint_if_needed(
         agent,
         config,
-        project_id=conversation_id,
+        conversation_id=conversation_id,
         turn_id=turn_id,
         reason=reason,
     )

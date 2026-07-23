@@ -181,6 +181,46 @@ async def test_handlers_cancel_from_recovery_skips_fail() -> None:
 
 
 @pytest.mark.asyncio
+async def test_handlers_before_complete_interrupted_broadcasts_completed_not_fail() -> None:
+    config = MagicMock()
+    config.guards = TurnGuards(
+        max_model_steps=10,
+        max_tool_calls=50,
+        wall_clock_sec=60,
+        tool_repeat_guard=3,
+    )
+    state = RunState()
+    fail = AsyncMock()
+    barrier = AsyncMock()
+    broadcasted: list = []
+
+    class _Hook:
+        async def after_model_step(self, event, *, state):
+            return None
+
+        async def before_complete(self, event, *, state):
+            return TurnTerminatedBy.INTERRUPTED
+
+    handlers = TurnEventHandlers(
+        turn_id="t1",
+        config=config,
+        state=state,
+        broadcast=broadcasted.append,
+        barrier=barrier,
+        fail=fail,
+        recovery_hook=_Hook(),
+    )
+    result = await handlers._handle_turn_completed(
+        TurnCompletedEvent(turn_id="t1", step_index=0, messages=[AIMessage(content="")])
+    )
+    assert result.terminated_by is TurnTerminatedBy.INTERRUPTED
+    assert state.terminated_by is TurnTerminatedBy.INTERRUPTED
+    fail.assert_not_awaited()
+    barrier.assert_awaited()
+    assert len(broadcasted) == 1
+
+
+@pytest.mark.asyncio
 async def test_handlers_force_interrupted_skips_completed() -> None:
     config = MagicMock()
     config.guards = TurnGuards(

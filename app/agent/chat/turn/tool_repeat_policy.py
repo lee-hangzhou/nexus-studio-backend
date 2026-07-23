@@ -18,7 +18,7 @@ REPEAT_GUARD_ERROR_TYPES: frozenset[str] = frozenset(
 )
 
 
-def is_repeat_guard_eligible(*, tool_name: str, error_class: str | None) -> bool:
+def is_repeat_guard_eligible(tool_name: str, error_class: str | None) -> bool:
     if tool_name in BROWSER_TOOL_NAMES:
         return False
     if error_class is None:

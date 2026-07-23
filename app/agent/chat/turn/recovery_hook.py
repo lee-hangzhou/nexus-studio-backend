@@ -16,6 +16,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from app.agent.chat.turn.empty_recovery import recover_empty_answer
 from app.agent.chat.turn.event_recorder import TurnAgentEventRecorder
+from app.agent.chat.turn.gate_emit import has_pending_user_gate
 from app.agent.chat.turn.guards import TurnGuards
 from app.agent.chat.turn.persistence import TurnPersistence, finalize_assistant
 from app.agent.chat.turn.trace import log_stage
@@ -52,6 +53,7 @@ class ChatRecoveryHook:
     tool_audit: list
     user_id: int
     conversation_id: int
+    agent: CompiledStateGraph | None = None
     publish_answer_token: PublishAnswerToken | None = None
     recovery_used: bool = False
     recovery_exhausted: bool = False
@@ -76,8 +78,12 @@ class ChatRecoveryHook:
         last = self.recorder.last_model_message
         if last is not None and not last.tool_calls and str(last.content or "").strip():
             return None
+        # Invariant: UserGate interrupt may fire before tool.end, so tool_steps can be empty.
+        # Must return INTERRUPTED before empty_recovery / GATEWAY_UPSTREAM_FAILED.
+        # Gate SSE is emitted on TurnCompleted → Chat persistence (force_interrupted).
+        if self.agent is not None and await has_pending_user_gate(self.agent, self.config):
+            return TurnTerminatedBy.INTERRUPTED
         if self.recorder.tool_steps:
-            # Empty final answer after tools — legacy chat treated as gateway failure.
             return TurnTerminatedBy.GATEWAY_UPSTREAM_FAILED
         messages = list(event.messages)
         ok = await self._attempt_recovery(messages, reason="empty_response", state=state)
