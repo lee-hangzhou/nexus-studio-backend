@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, UUID4
 
 
 class ChatModelItem(BaseModel):
@@ -51,6 +51,7 @@ class MessageListRequest(BaseModel):
 
 
 class MessageStreamRequest(BaseModel):
+    request_id: UUID4
     conversation_id: int
     content: str = Field(min_length=1)
     model: str = Field(min_length=1)
@@ -89,12 +90,18 @@ class TurnCancelRequest(BaseModel):
 
 
 class TurnResumeRequest(BaseModel):
+    request_id: UUID4
     conversation_id: int
     turn_id: str = Field(min_length=1)
     gate_id: str = Field(min_length=1)
     model: str = Field(min_length=1)
     action: str = Field(pattern="^(submit|cancel)$")
     fields: Dict[str, Any] | None = None
+
+
+class StreamReconnectRequest(BaseModel):
+    request_id: UUID4
+    conversation_id: int
 
 
 class GateAssetRefreshRequest(BaseModel):

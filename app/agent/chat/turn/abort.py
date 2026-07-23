@@ -13,9 +13,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
-from app.agent.chat.agent.events import AgentEventType
 from app.agent.chat.agent.factory import build_chat_agent
-from app.agent.chat.agent.runner import run_agent_turn_stream
 from app.agent.chat.gate import assets as gate_assets
 from app.agent.chat.gate import meta as gate_meta_store
 from app.agent.chat.gate import turn_auth as turn_auth_store
@@ -25,7 +23,6 @@ from app.agent.chat.llm.registry import get_model_spec
 from app.agent.chat.memory.store import chat_runnable_config
 from app.agent.chat.mcp.client import load_mcp_tools
 from app.agent.chat.tools.lc_tools import ChatToolContext, build_langchain_tools
-from app.agent.chat.tools.result import GATE_CANCELLED
 from app.agent.chat.turn.cancel_signal import turn_cancel_signal
 from app.agent.chat.turn.checkpoint import (
     capture_turn_checkpoint_messages,
@@ -35,14 +32,21 @@ from app.agent.chat.turn.checkpoint import (
 from app.agent.chat.turn.lifecycle import clear_turn_active
 from app.agent.chat.turn.lock import conversation_turn_lock
 from app.agent.chat.turn.persistence import TurnPersistence
+from app.agent.chat.turn.subscribers import ChatAbortGateSubscriber
 from app.agent.chat.turn.trace import log_stage
 from app.agent.chat.workspace import conversation_workspace
 from app.agent.chat.workspace.session import ensure_workspace_session
 from app.agent.runtime.checkpointer import get_chat_checkpointer
-from app.server.infra.logger import logger
 from app.agent.runtime.memory_store import get_memory_store
+from app.agent.runtime.turn.guards import TurnGuards
 from app.agent.runtime.turn.tool_loop_guard import TurnToolLoopGuard
+from app.agent.runtime.turn_engine.prepared import PreparedTurn
+from app.agent.runtime.turn_engine.entry import stream_prepared_turn
+from app.agent.runtime.turn_engine.terminal_policy import SseTerminalPolicy
 from app.server.chat.persistence.conversations import ChatConversations
+from app.server.chat.services.constants import CHAT_CHECKPOINT_THREAD_PREFIX
+from app.server.infra.config import settings
+from app.server.infra.logger import logger
 
 _GATE_CANCEL_TOOL = "request_user_gate"
 _GATE_RESOLVE_TIMEOUT_SEC = 60
@@ -179,22 +183,39 @@ async def resolve_gate_interrupt(
         gate_id=gate_id,
     )
 
-    stream = run_agent_turn_stream(
-        agent,
-        Command(resume=resume_payload),
-        turn_id=turn_id,
-        config=config,
-        tools_by_name={tool.name: tool for tool in tools},
+    cancel_event = asyncio.Event()
+    abort_sub = ChatAbortGateSubscriber(cancel_event=cancel_event)
+    guards = TurnGuards(
+        max_model_steps=settings.CHAT_MAX_ITERATIONS,
+        max_tool_calls=settings.CHAT_MAX_TOOL_CALLS,
+        wall_clock_sec=settings.CHAT_TURN_WALL_CLOCK_SEC,
+        tool_repeat_guard=settings.CHAT_TOOL_REPEAT_GUARD,
     )
+    thread_id = f"{CHAT_CHECKPOINT_THREAD_PREFIX}-{conversation_id}"
     gate_cancel_seen = False
     try:
         async with asyncio.timeout(_GATE_RESOLVE_TIMEOUT_SEC):
-            async for event in stream:
-                if event.type != AgentEventType.TOOL_FINISHED:
-                    continue
-                if event.error_class == GATE_CANCELLED or event.tool_name == _GATE_CANCEL_TOOL:
-                    gate_cancel_seen = True
-                    break
+            prepared = PreparedTurn(
+                agent=agent,
+                turn_id=turn_id,
+                conversation_id=conversation_id,
+                user_id=user_id,
+                resume_command=Command(resume=resume_payload),
+                runnable_config=config,
+                thread_id=thread_id,
+                guards=guards,
+                cancel_event=cancel_event,
+                subscribers=[abort_sub],
+                heartbeat_interval_sec=int(settings.CHAT_HEARTBEAT_INTERVAL_SEC),
+                is_resume=True,
+                terminal_policy=SseTerminalPolicy(
+                    emit_done_on_completed=False,
+                    emit_done_after_failure=False,
+                ),
+            )
+            async for _chunk in stream_prepared_turn(prepared):
+                pass
+            gate_cancel_seen = abort_sub.gate_cancel_seen
     except TimeoutError:
         logger.warning(
             "chat.turn.abort.resolve_gate_timeout",
@@ -202,8 +223,7 @@ async def resolve_gate_interrupt(
             turn_id=turn_id,
             gate_id=gate_id,
         )
-    finally:
-        await stream.aclose()
+        cancel_event.set()
 
     current_messages = await capture_turn_checkpoint_messages(agent, config)
     trimmed = trim_gate_interrupt_messages(current_messages)

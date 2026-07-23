@@ -11,7 +11,8 @@ from pydantic import Field
 from app.agent.chat.llm import get_adapter
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
-from app.server.infra.gateway_errors import GatewayChatError, stream_error_class_for_app_error
+from app.server.infra.gateway_errors import GatewayChatError
+from app.agent.runtime.agent.gateway_fail import stream_error_class_for_app_error
 from app.agent.chat.llm.registry import ModelSpec
 from app.agent.chat.llm.stream_assembler import OpenAIStreamAssembler
 from app.agent.chat.llm.thinking import build_ai_message

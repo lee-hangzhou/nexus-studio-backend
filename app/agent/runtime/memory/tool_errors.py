@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
 
-from app.agent.chat.tools.result import MEMORY_UNAVAILABLE, ToolResult
+from app.agent.runtime.tools.result import MEMORY_UNAVAILABLE, ToolResult
 from app.server.infra.config import settings
 from app.server.infra.embeddings import GatewayEmbeddingError
 from app.server.infra.logger import logger

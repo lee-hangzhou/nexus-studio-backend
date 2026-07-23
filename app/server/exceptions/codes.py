@@ -18,6 +18,8 @@ class ErrorCode(IntEnum):
     CANVAS_DUPLICATE_TURN = 40904
     CANVAS_NODE_GENERATION_IN_PROGRESS = 40905
     CANVAS_SUBMIT_REF_MISMATCH = 40906
+    STREAM_REQUEST_CONFLICT = 40920
+    STREAM_REPLAY_EXPIRED = 41001
     RESOURCE_NOT_FOUND = 40401
     USER_NOT_FOUND = 40402
     TASK_NOT_FOUND = 40403
@@ -54,6 +56,8 @@ HTTP_STATUS_BY_ERROR_CODE: dict[ErrorCode, int] = {
     ErrorCode.CANVAS_DUPLICATE_TURN: 409,
     ErrorCode.CANVAS_NODE_GENERATION_IN_PROGRESS: 409,
     ErrorCode.CANVAS_SUBMIT_REF_MISMATCH: 400,
+    ErrorCode.STREAM_REQUEST_CONFLICT: 409,
+    ErrorCode.STREAM_REPLAY_EXPIRED: 410,
     ErrorCode.RESOURCE_NOT_FOUND: 404,
     ErrorCode.USER_NOT_FOUND: 404,
     ErrorCode.TASK_NOT_FOUND: 404,
@@ -95,5 +99,7 @@ DEFAULT_ERROR_MESSAGES: dict[ErrorCode, str] = {
     ErrorCode.INVALID_VERIFICATION_CODE: "Invalid or expired verification code",
     ErrorCode.USER_NOT_FOUND: "User not found",
     ErrorCode.RESOURCE_NOT_FOUND: "Resource not found",
+    ErrorCode.STREAM_REQUEST_CONFLICT: "Stream requestId is already used by another request",
+    ErrorCode.STREAM_REPLAY_EXPIRED: "Stream replay has expired",
     ErrorCode.INTERNAL_ERROR: "Internal server error",
 }

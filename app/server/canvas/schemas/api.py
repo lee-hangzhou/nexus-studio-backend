@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, UUID4
 
 from app.server.canvas.schemas.node_execute import NodeExecuteKind
 from app.contracts.canvas import (
@@ -31,6 +31,7 @@ class CanvasTurnRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    request_id: UUID4
     content: str = Field(min_length=1)
     model_key: str | None = None
     client_turn_id: str | None = None
@@ -43,9 +44,18 @@ class CanvasResumeRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    request_id: UUID4
     tool_call_id: str
     action: Literal["confirm", "reject"]
     client_turn_id: str | None = None
+
+
+class CanvasReconnectRequest(BaseModel):
+    """重连一次已存在的可重放流。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: UUID4
 
 
 class CanvasMessageView(BaseModel):
@@ -87,6 +97,7 @@ __all__ = [
     "CanvasPatchRequest",
     "CanvasPatchResponse",
     "CanvasPosition",
+    "CanvasReconnectRequest",
     "CanvasResumeRequest",
     "CanvasSnapshot",
     "CanvasTurnRequest",

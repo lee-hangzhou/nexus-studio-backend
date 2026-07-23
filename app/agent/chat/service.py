@@ -120,18 +120,17 @@ class ChatService:
         self._hydrate_attachment_urls(response.items)
         return response
 
-    async def begin_turn(
+    async def require_owned(self, user_id: int, conversation_id: int) -> ChatConversations:
+        return await self._get_owned_conversation(user_id, conversation_id)
+
+    async def prepare_turn(
         self,
         *,
         user_id: int,
         conversation_id: int,
         model: Optional[str],
-    ) -> tuple[ChatConversations, str, str]:
-        """校验归属并抢占会话锁。
-
-        必须在返回流式响应之前调用：锁冲突（CONVERSATION_BUSY）在此处以普通异常抛出，
-        可被全局异常处理器转成 409 JSON，而不是在 SSE 响应已开始后才报错。
-        """
+    ) -> tuple[ChatConversations, str]:
+        """校验归属与 gate；不抢锁（claim 创建执行时再抢）。"""
         conversation = await self._get_owned_conversation(user_id, conversation_id)
         pending = await get_gate_pending(conversation_id)
         if pending:
@@ -144,18 +143,37 @@ class ChatService:
                 )
             await clear_stale_gate_ephemeral(conversation_id, user_id=user_id)
         model_key = require_turn_model(model)
+        return conversation, model_key
+
+    async def begin_turn(
+        self,
+        *,
+        user_id: int,
+        conversation_id: int,
+        model: Optional[str],
+    ) -> tuple[ChatConversations, str, str]:
+        """校验归属并抢占会话锁。
+
+        必须在返回流式响应之前调用：锁冲突（CONVERSATION_BUSY）在此处以普通异常抛出，
+        可被全局异常处理器转成 409 JSON，而不是在 SSE 响应已开始后才报错。
+        """
+        conversation, model_key = await self.prepare_turn(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            model=model,
+        )
         turn_id = str(uuid4())
         await conversation_turn_lock.acquire(conversation_id, turn_id)
         return conversation, model_key, turn_id
 
-    async def begin_resume_turn(
+    async def prepare_resume_turn(
         self,
         *,
         user_id: int,
         conversation_id: int,
         turn_id: str,
         model: str | None,
-    ) -> tuple[ChatConversations, str, str]:
+    ) -> tuple[ChatConversations, str]:
         conversation = await self._get_owned_conversation(user_id, conversation_id)
         pending = await get_gate_pending(conversation_id)
         if not pending or pending.get("turn_id") != turn_id:
@@ -170,6 +188,22 @@ class ChatService:
                 ErrorCode.INVALID_PARAMS,
                 f"model mismatch for turn resume: expected {pending_model}",
             )
+        return conversation, model_key
+
+    async def begin_resume_turn(
+        self,
+        *,
+        user_id: int,
+        conversation_id: int,
+        turn_id: str,
+        model: str | None,
+    ) -> tuple[ChatConversations, str, str]:
+        conversation, model_key = await self.prepare_resume_turn(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            turn_id=turn_id,
+            model=model,
+        )
         await conversation_turn_lock.acquire(conversation_id, turn_id)
         return conversation, model_key, turn_id
 

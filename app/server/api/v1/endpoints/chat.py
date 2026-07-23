@@ -1,21 +1,36 @@
 import asyncio
+from collections.abc import AsyncIterator
+from uuid import uuid4
 
 from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 from fastapi.responses import Response as FastAPIResponse, StreamingResponse
 
-from app.server.chat.services.attachments.service import chat_attachment_service
-from app.server.chat.services.attachments.status import attachment_source
-from app.server.chat.services.capabilities import validate_upload_size, validate_upload_type
 from app.agent.chat.browser.state_capture import read_browser_state_asset_bytes
-from app.agent.chat.gate import pending as gate_pending_store
 from app.agent.chat.gate import meta as gate_meta_store
+from app.agent.chat.gate import pending as gate_pending_store
 from app.agent.chat.gate.assets import read_gate_asset_file, refresh_gate_asset
 from app.agent.chat.gate.qr_verify import GateCaptureError
+from app.agent.chat.turn.lock import conversation_turn_lock
+from app.agent.chat.turn.replay_execution import run_chat_replay_execution
 from app.agent.chat.workspace import conversation_workspace
+from app.agent.runtime.stream.replay import (
+    ReplayMeta,
+    ReplayRequestKind,
+    build_request_fingerprint,
+    execution_supervisor,
+    replay_store,
+    stream_replay,
+    validate_replay_cursor,
+)
+from app.composition import chat_service
+from app.server.api.schemas import Response
+from app.server.chat.persistence.attachments import ChatAttachments
 from app.server.chat.schemas import (
     AttachmentIdRequest,
     AttachmentPreviewResponse,
     AttachmentView,
+    BridgeCreateRequest,
+    BridgeImportRequest,
     ChatMessageView,
     ChatModelItem,
     ConversationAttachmentActionRequest,
@@ -26,24 +41,49 @@ from app.server.chat.schemas import (
     ConversationListResponse,
     ConversationUpdateRequest,
     ConversationView,
+    GateAssetRefreshRequest,
+    GateCancelRequest,
+    GateStateRequest,
     MessageListRequest,
     MessageListResponse,
     MessageStreamRequest,
+    StreamReconnectRequest,
     TurnCancelRequest,
     TurnResumeRequest,
-    GateStateRequest,
-    GateCancelRequest,
-    GateAssetRefreshRequest,
-    BridgeCreateRequest,
-    BridgeImportRequest,
 )
-from app.composition import chat_service
+from app.server.chat.services.attachments.service import chat_attachment_service
+from app.server.chat.services.attachments.status import attachment_source
+from app.server.chat.services.capabilities import validate_upload_size, validate_upload_type
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
-from app.server.chat.persistence.attachments import ChatAttachments
-from app.server.api.schemas import Response
 
 router = APIRouter()
+
+
+def _chat_stream_response(meta: ReplayMeta, request: Request) -> StreamingResponse:
+    last_event_id = request.headers.get("Last-Event-ID")
+    validate_replay_cursor(meta, last_event_id)
+
+    async def gen() -> AsyncIterator[str]:
+        async for chunk in stream_replay(
+            replay_store,
+            meta,
+            last_event_id=last_event_id,
+            execution_lock_key=f"chat:turn_lock:{meta.session_id}",
+            execution_lock_owner=meta.turn_id,
+        ):
+            yield chunk
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "X-Stream-Request-ID": meta.request_id,
+            "X-Turn-ID": meta.turn_id,
+        },
+    )
 
 
 @router.post("/model/list")
@@ -97,41 +137,66 @@ async def list_messages(request: Request, body: MessageListRequest) -> Response[
 @router.post("/message/stream")
 async def stream_message(request: Request, body: MessageStreamRequest) -> StreamingResponse:
     user_id: int = request.state.user_id
-    cancel_event = asyncio.Event()
-
-    # 在返回流式响应之前抢锁：会话忙时（CONVERSATION_BUSY）会在此抛出，
-    # 由全局异常处理器返回 409 JSON，而不是在 SSE 已开始后崩成 500。
-    conversation, model_key, turn_id = await chat_service.begin_turn(
+    conversation, model_key = await chat_service.prepare_turn(
         user_id=user_id,
         conversation_id=body.conversation_id,
         model=body.model,
     )
-
-    async def event_generator():
-        async for chunk in chat_service.stream_turn(
-            conversation=conversation,
-            model_key=model_key,
-            turn_id=turn_id,
+    request_id = str(body.request_id)
+    proposed_turn_id = str(uuid4())
+    claim = await replay_store.claim(
+        request_id=request_id,
+        user_id=user_id,
+        session_id=body.conversation_id,
+        turn_id=proposed_turn_id,
+        kind=ReplayRequestKind.TURN,
+        fingerprint=build_request_fingerprint(
+            kind=ReplayRequestKind.TURN,
             user_id=user_id,
-            conversation_id=body.conversation_id,
-            content=body.content,
-            attachment_ids=body.attachment_ids,
-            enable_tools=body.enable_tools,
-            client_turn_id=body.client_turn_id,
-            cancel_event=cancel_event,
-        ):
-            if await request.is_disconnected():
-                cancel_event.set()
-            yield chunk
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
+            session_id=body.conversation_id,
+            body=body,
+        ),
     )
+    try:
+        validate_replay_cursor(claim.meta, request.headers.get("Last-Event-ID"))
+    except AppError:
+        if claim.created:
+            await replay_store.discard_starting(request_id)
+        raise
+
+    if claim.created:
+        cancel_event = asyncio.Event()
+        try:
+            await conversation_turn_lock.acquire(
+                body.conversation_id,
+                proposed_turn_id,
+                cancel_event=cancel_event,
+            )
+        except Exception:
+            await replay_store.discard_starting(request_id)
+            raise
+        execution_supervisor.start(
+            run_chat_replay_execution(
+                request_id=request_id,
+                conversation_id=body.conversation_id,
+                turn_id=proposed_turn_id,
+                cancel_event=cancel_event,
+                stream_factory=lambda: chat_service.stream_turn(
+                    conversation=conversation,
+                    model_key=model_key,
+                    turn_id=proposed_turn_id,
+                    user_id=user_id,
+                    conversation_id=body.conversation_id,
+                    content=body.content,
+                    attachment_ids=body.attachment_ids,
+                    enable_tools=body.enable_tools,
+                    client_turn_id=body.client_turn_id,
+                    cancel_event=cancel_event,
+                ),
+            )
+        )
+
+    return _chat_stream_response(claim.meta, request)
 
 
 @router.post("/turn/cancel")
@@ -144,8 +209,7 @@ async def cancel_turn(request: Request, body: TurnCancelRequest) -> Response[dic
 @router.post("/turn/resume")
 async def resume_turn(request: Request, body: TurnResumeRequest) -> StreamingResponse:
     user_id: int = request.state.user_id
-    cancel_event = asyncio.Event()
-    conversation, model_key, turn_id = await chat_service.begin_resume_turn(
+    conversation, model_key = await chat_service.prepare_resume_turn(
         user_id=user_id,
         conversation_id=body.conversation_id,
         turn_id=body.turn_id,
@@ -154,33 +218,71 @@ async def resume_turn(request: Request, body: TurnResumeRequest) -> StreamingRes
     if body.action == "submit":
         await gate_pending_store.update_gate_pending_status(body.conversation_id, "resuming")
 
-    async def event_generator():
-        try:
-            async for chunk in chat_service.stream_resume(
-                conversation=conversation,
-                model_key=model_key,
-                turn_id=turn_id,
-                user_id=user_id,
-                conversation_id=body.conversation_id,
-                gate_id=body.gate_id,
-                action=body.action,
-                fields=body.fields,
-                cancel_event=cancel_event,
-            ):
-                if await request.is_disconnected():
-                    cancel_event.set()
-                yield chunk
-        finally:
-            pass
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
+    request_id = str(body.request_id)
+    claim = await replay_store.claim(
+        request_id=request_id,
+        user_id=user_id,
+        session_id=body.conversation_id,
+        turn_id=body.turn_id,
+        kind=ReplayRequestKind.RESUME,
+        fingerprint=build_request_fingerprint(
+            kind=ReplayRequestKind.RESUME,
+            user_id=user_id,
+            session_id=body.conversation_id,
+            body=body,
+        ),
     )
+    try:
+        validate_replay_cursor(claim.meta, request.headers.get("Last-Event-ID"))
+    except AppError:
+        if claim.created:
+            await replay_store.discard_starting(request_id)
+        raise
+
+    if claim.created:
+        cancel_event = asyncio.Event()
+        try:
+            await conversation_turn_lock.acquire(
+                body.conversation_id,
+                body.turn_id,
+                cancel_event=cancel_event,
+            )
+        except Exception:
+            await replay_store.discard_starting(request_id)
+            raise
+        execution_supervisor.start(
+            run_chat_replay_execution(
+                request_id=request_id,
+                conversation_id=body.conversation_id,
+                turn_id=body.turn_id,
+                cancel_event=cancel_event,
+                stream_factory=lambda: chat_service.stream_resume(
+                    conversation=conversation,
+                    model_key=model_key,
+                    turn_id=body.turn_id,
+                    user_id=user_id,
+                    conversation_id=body.conversation_id,
+                    gate_id=body.gate_id,
+                    action=body.action,
+                    fields=body.fields,
+                    cancel_event=cancel_event,
+                ),
+            )
+        )
+
+    return _chat_stream_response(claim.meta, request)
+
+
+@router.post("/turn/reconnect")
+async def reconnect_turn(request: Request, body: StreamReconnectRequest) -> StreamingResponse:
+    user_id: int = request.state.user_id
+    await chat_service.require_owned(user_id, body.conversation_id)
+    meta = await replay_store.require_owned_meta(
+        str(body.request_id),
+        user_id=user_id,
+        session_id=body.conversation_id,
+    )
+    return _chat_stream_response(meta, request)
 
 
 @router.post("/gate/state")

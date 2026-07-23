@@ -1,31 +1,76 @@
 import asyncio
+from collections.abc import AsyncIterator
 from uuid import uuid4
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
 from app.agent.canvas.node_execution.manual_generate import run_manual_node_generate
+from app.agent.canvas.turn.lock import project_turn_lock
+from app.agent.canvas.turn.orchestrator import stream_canvas_resume, stream_canvas_turn
+from app.agent.canvas.turn.persistence import canvas_turn_already_completed
+from app.agent.canvas.turn.replay_execution import run_canvas_replay_execution
+from app.agent.runtime.stream.replay import (
+    ReplayMeta,
+    ReplayRequestKind,
+    build_request_fingerprint,
+    execution_supervisor,
+    replay_store,
+    stream_replay,
+    validate_replay_cursor,
+)
+from app.server.api.schemas import Response
+from app.server.canvas.domain.constants import CANVAS_TURN_LOCK_KEY_TEMPLATE
+from app.server.canvas.persistence.messages import CanvasMessages
 from app.server.canvas.schemas.api import (
     CanvasMessagesListRequest,
     CanvasMessageView,
     CanvasNodeGenerateResponse,
     CanvasPatchRequest,
+    CanvasReconnectRequest,
     CanvasResumeRequest,
     CanvasSnapshot,
     CanvasTurnRequest,
 )
-from app.server.canvas.services.canvas_service import CanvasRevisionConflictError, canvas_service
 from app.server.canvas.schemas.node_execute import SubmitNodeExecuteInput
-from app.agent.canvas.turn.lock import project_turn_lock
-from app.agent.canvas.turn.orchestrator import stream_canvas_resume, stream_canvas_turn
-from app.agent.canvas.turn.persistence import canvas_turn_already_completed
+from app.server.canvas.services.canvas_service import CanvasRevisionConflictError, canvas_service
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
-from app.server.canvas.persistence.messages import CanvasMessages
+from app.server.infra.config import settings
+from app.server.infra.logger import logger
 from app.server.projects.services.service import project_service
-from app.server.api.schemas import Response
 
 router = APIRouter()
+
+
+def _canvas_turn_lock_key(project_id: int) -> str:
+    return CANVAS_TURN_LOCK_KEY_TEMPLATE.format(project_id=project_id)
+
+
+def _stream_response(meta: ReplayMeta, request: Request) -> StreamingResponse:
+    last_event_id = request.headers.get("Last-Event-ID")
+    validate_replay_cursor(meta, last_event_id)
+
+    async def gen() -> AsyncIterator[str]:
+        async for chunk in stream_replay(
+            replay_store,
+            meta,
+            last_event_id=last_event_id,
+            execution_lock_key=_canvas_turn_lock_key(meta.session_id),
+            execution_lock_owner=meta.turn_id,
+        ):
+            yield chunk
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "X-Stream-Request-ID": meta.request_id,
+            "X-Turn-ID": meta.turn_id,
+        },
+    )
 
 
 @router.get("/{project_id}")
@@ -84,48 +129,78 @@ async def list_canvas_messages(
 
 @router.post("/{project_id}/turn")
 async def canvas_turn_stream(project_id: int, request: Request, body: CanvasTurnRequest) -> StreamingResponse:
-    """启动一轮 Canvas Agent 对话, SSE 持续返回事件"""
+    """创建或重新订阅一次 Canvas Agent 执行（断点续传 / Last-Event-ID）。"""
     user_id: int = request.state.user_id
     await project_service.require_owned(user_id, project_id)
     if body.client_turn_id and await canvas_turn_already_completed(project_id, body.client_turn_id):
-        # client_turn_id 防前端重试导致同一轮输入重复执行
         raise AppError(
             ErrorCode.CANVAS_DUPLICATE_TURN,
             "canvas turn already completed",
             details={"client_turn_id": body.client_turn_id},
         )
 
-    turn_id = uuid4().hex
-    await project_turn_lock.acquire(project_id, turn_id)
-    cancel_event = asyncio.Event()
-
-    async def gen():
-        """包装 orchestrator SSE 流, 感知浏览器断开"""
-        try:
-            async for chunk in stream_canvas_turn(
-                project_id=project_id,
-                user_id=user_id,
-                content=body.content,
-                model_key=body.model_key or "",
-                client_turn_id=body.client_turn_id,
-                mode=body.mode,
-                enable_tools=body.enable_tools,
-                cancel_event=cancel_event,
-                turn_id=turn_id,
-                lock_held=True,
-            ):
-                if await request.is_disconnected():
-                    cancel_event.set()
-                    break
-                yield chunk
-        finally:
-            await project_turn_lock.release(project_id, turn_id)
-
-    return StreamingResponse(
-        gen(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    request_id = str(body.request_id)
+    proposed_turn_id = uuid4().hex
+    claim = await replay_store.claim(
+        request_id=request_id,
+        user_id=user_id,
+        session_id=project_id,
+        turn_id=proposed_turn_id,
+        kind=ReplayRequestKind.TURN,
+        fingerprint=build_request_fingerprint(
+            kind=ReplayRequestKind.TURN,
+            user_id=user_id,
+            session_id=project_id,
+            body=body,
+        ),
     )
+    try:
+        validate_replay_cursor(claim.meta, request.headers.get("Last-Event-ID"))
+    except AppError:
+        if claim.created:
+            await replay_store.discard_starting(request_id)
+        raise
+
+    if claim.created:
+        cancel_event = asyncio.Event()
+        try:
+            await project_turn_lock.acquire(
+                project_id,
+                proposed_turn_id,
+                cancel_event=cancel_event,
+            )
+        except Exception:
+            await replay_store.discard_starting(request_id)
+            raise
+        execution_supervisor.start(
+            run_canvas_replay_execution(
+                request_id=request_id,
+                project_id=project_id,
+                turn_id=proposed_turn_id,
+                cancel_event=cancel_event,
+                stream_factory=lambda: stream_canvas_turn(
+                    project_id=project_id,
+                    user_id=user_id,
+                    content=body.content,
+                    model_key=body.model_key or "",
+                    client_turn_id=body.client_turn_id,
+                    mode=body.mode,
+                    enable_tools=body.enable_tools,
+                    cancel_event=cancel_event,
+                    turn_id=proposed_turn_id,
+                    lock_held=True,
+                ),
+            )
+        )
+
+    logger.info(
+        "canvas.turn.replay_claim",
+        request_id=request_id,
+        turn_id=claim.meta.turn_id,
+        created=claim.created,
+        kind=ReplayRequestKind.TURN.value,
+    )
+    return _stream_response(claim.meta, request)
 
 
 @router.post("/{project_id}/turn/resume")
@@ -134,44 +209,106 @@ async def canvas_turn_resume(
     request: Request,
     body: CanvasResumeRequest,
 ) -> StreamingResponse:
-    """恢复手动模式下等待确认的工具调用"""
+    """创建或重新订阅一次 HITL 恢复执行。"""
     user_id: int = request.state.user_id
     await project_service.require_owned(user_id, project_id)
     turn_id = body.client_turn_id or uuid4().hex
-    await project_turn_lock.acquire(project_id, turn_id)
-    cancel_event = asyncio.Event()
-
-    async def gen():
-        """继续输出恢复后的 Agent 事件流"""
-        try:
-            async for chunk in stream_canvas_resume(
-                project_id=project_id,
-                user_id=user_id,
-                turn_id=turn_id,
-                tool_call_id=body.tool_call_id,
-                action=body.action,
-                cancel_event=cancel_event,
-                lock_held=True,
-            ):
-                if await request.is_disconnected():
-                    cancel_event.set()
-                    break
-                yield chunk
-        finally:
-            await project_turn_lock.release(project_id, turn_id)
-
-    return StreamingResponse(
-        gen(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    request_id = str(body.request_id)
+    claim = await replay_store.claim(
+        request_id=request_id,
+        user_id=user_id,
+        session_id=project_id,
+        turn_id=turn_id,
+        kind=ReplayRequestKind.RESUME,
+        fingerprint=build_request_fingerprint(
+            kind=ReplayRequestKind.RESUME,
+            user_id=user_id,
+            session_id=project_id,
+            body=body,
+        ),
     )
+    try:
+        validate_replay_cursor(claim.meta, request.headers.get("Last-Event-ID"))
+    except AppError:
+        if claim.created:
+            await replay_store.discard_starting(request_id)
+        raise
+
+    if claim.created:
+        cancel_event = asyncio.Event()
+        try:
+            await project_turn_lock.acquire(
+                project_id,
+                turn_id,
+                cancel_event=cancel_event,
+            )
+        except Exception:
+            await replay_store.discard_starting(request_id)
+            raise
+        execution_supervisor.start(
+            run_canvas_replay_execution(
+                request_id=request_id,
+                project_id=project_id,
+                turn_id=turn_id,
+                cancel_event=cancel_event,
+                stream_factory=lambda: stream_canvas_resume(
+                    project_id=project_id,
+                    user_id=user_id,
+                    turn_id=turn_id,
+                    tool_call_id=body.tool_call_id,
+                    action=body.action,
+                    cancel_event=cancel_event,
+                    lock_held=True,
+                ),
+            )
+        )
+
+    logger.info(
+        "canvas.turn.replay_claim",
+        request_id=request_id,
+        turn_id=claim.meta.turn_id,
+        created=claim.created,
+        kind=ReplayRequestKind.RESUME.value,
+    )
+    return _stream_response(claim.meta, request)
+
+
+@router.post("/{project_id}/turn/reconnect")
+async def canvas_turn_reconnect(
+    project_id: int,
+    request: Request,
+    body: CanvasReconnectRequest,
+) -> StreamingResponse:
+    """从 Last-Event-ID 之后重新订阅既有执行。"""
+    user_id: int = request.state.user_id
+    await project_service.require_owned(user_id, project_id)
+    meta = await replay_store.require_owned_meta(
+        str(body.request_id),
+        user_id=user_id,
+        session_id=project_id,
+    )
+    logger.info(
+        "canvas.turn.reconnect",
+        request_id=meta.request_id,
+        turn_id=meta.turn_id,
+        last_event_id=request.headers.get("Last-Event-ID"),
+    )
+    return _stream_response(meta, request)
 
 
 @router.post("/{project_id}/turn/cancel")
 async def canvas_turn_cancel(project_id: int, request: Request) -> Response[dict]:
-    """取消当前项目正在运行的 Agent turn"""
+    """显式取消当前项目正在运行的 Agent turn（断连不会取消）。"""
     await project_service.require_owned(request.state.user_id, project_id)
-    active = await project_turn_lock.force_cancel(project_id)
+    active = await project_turn_lock.active_turn(project_id)
+    if active is not None:
+        await replay_store.signal_cancel(session_id=project_id, turn_id=active)
+        logger.info("canvas.turn.cancel_requested", project_id=project_id, turn_id=active)
+        await project_turn_lock.cancel_and_wait(
+            project_id,
+            timeout_sec=settings.CANVAS_TURN_CANCEL_WAIT_SEC,
+        )
+        logger.info("canvas.turn.cancel_completed", project_id=project_id, turn_id=active)
     return Response(data={"cancelled": active is not None, "active_turn_id": active})
 
 

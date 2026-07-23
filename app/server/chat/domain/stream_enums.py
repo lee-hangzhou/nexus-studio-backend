@@ -33,6 +33,8 @@ class StreamErrorCode(StrEnum):
     AGENT_RECOVERY_EXHAUSTED = "agent_recovery_exhausted"
     CANVAS_DUPLICATE_TURN = "canvas_duplicate_turn"
     CANVAS_PROJECT_BUSY = "canvas_project_busy"
+    EMPTY_RESPONSE = "empty_response"
+    EXECUTION_LOST = "execution_lost"
     GENERATION_FAILED = "generation_failed"
     GENERATION_TIMEOUT = "generation_timeout"
     GATEWAY_UPSTREAM_FAILED = "gateway_upstream_failed"
@@ -81,7 +83,7 @@ def normalize_stream_error_code(
 ) -> StreamErrorCode:
     if value is None:
         return fallback
-    if value in _GATEWAY_STREAM_ERROR_ALIASES or value.startswith("app_error_"):
+    if value in _GATEWAY_STREAM_ERROR_ALIASES:
         return StreamErrorCode.GATEWAY_UPSTREAM_FAILED
     try:
         return StreamErrorCode(value)

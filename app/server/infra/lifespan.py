@@ -9,6 +9,7 @@ from app.agent.chat.skills.registry import SkillRegistry
 from app.agent.chat.turn.stale_cleanup import clear_stale_active_turns_on_startup
 from app.agent.runtime.checkpointer import create_checkpointer, set_chat_checkpointer
 from app.agent.runtime.memory_store import create_memory_store, set_canvas_memory_store
+from app.agent.runtime.stream.replay import execution_supervisor, replay_store
 from app.server.infra.database import db
 from app.server.infra.gateway import gateway_client
 from app.server.infra.logger import logger
@@ -36,6 +37,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await redis_client.connect()
         logger.info("Redis connected")
 
+        await replay_store.connect()
+        logger.info("SSE replay store connected")
+
         await clear_stale_active_turns_on_startup()
 
         skills = SkillRegistry.load()
@@ -55,6 +59,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             finally:
                 set_chat_checkpointer(None)
                 set_canvas_memory_store(None)
+                await execution_supervisor.close()
+                await replay_store.disconnect()
                 await gateway_client.close()
                 await redis_client.disconnect()
                 db.mark_shutdown()

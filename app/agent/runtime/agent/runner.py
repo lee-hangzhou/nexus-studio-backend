@@ -8,7 +8,7 @@ from langgraph.errors import GraphInterrupt
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
-from app.agent.chat.agent.events import (
+from app.agent.runtime.agent.events import (
     AgentEvent,
     InvalidToolCall,
     ModelStepFinishedEvent,
@@ -19,10 +19,11 @@ from app.agent.chat.agent.events import (
     TurnFailedEvent,
 )
 from app.server.exceptions.base import AppError
-from app.server.infra.gateway_errors import GatewayChatError, stream_error_class_for_app_error
-from app.agent.chat.llm.thinking import build_ai_message, reasoning_content_from_message
-from app.agent.chat.tools.result import ToolResult
-from app.agent.chat.turn.trace import log_stage
+from app.server.infra.gateway_errors import GatewayChatError
+from app.agent.runtime.agent.gateway_fail import stream_error_class_for_app_error
+from app.agent.runtime.llm.thinking import build_ai_message, reasoning_content_from_message
+from app.agent.runtime.tools.result import ToolResult
+from app.agent.runtime.turn.trace import log_stage
 from app.server.infra.logger import log_exception
 from app.agent.runtime.turn.tool_loop_guard import ONCE_PER_TURN_TOOL_NAMES
 
@@ -396,7 +397,7 @@ async def run_agent_turn_stream(
     except AppError as exc:
         error_class = stream_error_class_for_app_error(exc)
         log_exception(
-            "chat.agent.turn_failed",
+            "agent.turn_failed",
             exc=exc,
             turn_id=turn_id,
             step_index=step_index,
@@ -410,7 +411,7 @@ async def run_agent_turn_stream(
         )
     except GatewayChatError as exc:
         log_exception(
-            "chat.agent.turn_failed",
+            "agent.turn_failed",
             exc=exc,
             turn_id=turn_id,
             step_index=step_index,
@@ -424,7 +425,7 @@ async def run_agent_turn_stream(
         )
     except Exception as exc:
         log_exception(
-            "chat.agent.turn_failed",
+            "agent.turn_failed",
             exc=exc,
             turn_id=turn_id,
             step_index=step_index,

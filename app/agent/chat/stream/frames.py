@@ -1,9 +1,5 @@
-"""SSE frame contracts.
+"""SSE frame contracts — stable import path; definitions live in contracts/runtime."""
 
-具体 frame 定义集中在 ``app.contracts.stream``；本模块保留聊天流内部的稳定导入路径。
-"""
-
-from app.contracts.stream import StreamFrame, create_stream_frame
-from app.server.chat.domain.stream_enums import StreamFrameType
+from app.agent.runtime.stream.frames import StreamFrame, StreamFrameType, create_stream_frame
 
 __all__ = ["StreamFrame", "StreamFrameType", "create_stream_frame"]

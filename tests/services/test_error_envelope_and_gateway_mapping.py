@@ -112,7 +112,7 @@ def test_app_error_rate_limited_status() -> None:
 
 def test_stream_error_class_for_app_error_aligns_with_sse() -> None:
     from app.server.chat.domain.stream_enums import StreamErrorCode, normalize_stream_error_code
-    from app.server.infra.gateway_errors import stream_error_class_for_app_error
+    from app.agent.runtime.agent.gateway_fail import stream_error_class_for_app_error
 
     timeout = stream_error_class_for_app_error(AppError(ErrorCode.SERVICE_UNAVAILABLE, "x"))
     assert timeout == "gateway_upstream_timeout"
@@ -122,4 +122,4 @@ def test_stream_error_class_for_app_error_aligns_with_sse() -> None:
     assert upstream == "gateway_upstream_failed"
     assert normalize_stream_error_code(upstream) == StreamErrorCode.GATEWAY_UPSTREAM_FAILED
 
-    assert normalize_stream_error_code("app_error_50301") == StreamErrorCode.GATEWAY_UPSTREAM_FAILED
+    assert normalize_stream_error_code("app_error_50301") == StreamErrorCode.INTERNAL

@@ -222,6 +222,26 @@ class Settings(BaseSettings):
     CANVAS_MEMORY_EMBEDDING_MODEL: str = Field(default="qwen/qwen3-embedding-8b")
     CANVAS_MEMORY_EXTRACT_MODEL: str = Field(default="")
 
+    # SSE Last-Event-ID replay (Redis Streams; disconnect ≠ cancel)
+    SSE_REDIS_SUBSCRIBER_MAX_CONNECTIONS: int = Field(default=512, gt=0)
+    SSE_REDIS_CONTROL_MAX_CONNECTIONS: int = Field(default=64, gt=0)
+    SSE_REDIS_SUBSCRIBER_ACQUIRE_TIMEOUT_SEC: float = Field(default=20.0, gt=0)
+    SSE_REDIS_SUBSCRIBER_SOCKET_TIMEOUT_SEC: float = Field(default=20.0, gt=0)
+    SSE_ACTIVE_SUBSCRIBER_WARN_THRESHOLD: int = Field(default=400, gt=0)
+    SSE_REPLAY_TTL_SEC: int = Field(default=3600, gt=0)
+    SSE_REPLAY_META_TTL_SEC: int = Field(default=86400, gt=0)
+    SSE_REPLAY_MAX_BYTES: int = Field(default=32 * 1024 * 1024, gt=0)
+    SSE_EXECUTION_LEASE_TTL_SEC: int = Field(default=15, gt=0)
+    SSE_EXECUTION_LEASE_REFRESH_SEC: int = Field(default=5, gt=0)
+    SSE_DELTA_FLUSH_INTERVAL_MS: int = Field(default=50, gt=0)
+    SSE_DELTA_MAX_CHARS: int = Field(default=512, gt=0)
+    CANVAS_TURN_CANCEL_WAIT_SEC: float = Field(default=12.0, gt=0)
+    CHAT_TURN_CANCEL_WAIT_SEC: float = Field(default=12.0, gt=0)
+
+    @property
+    def sse_replay_heartbeat_interval_sec(self) -> int:
+        return max(self.CHAT_HEARTBEAT_INTERVAL_SEC, self.CANVAS_HEARTBEAT_INTERVAL_SEC)
+
     @property
     def canvas_manual_confirm_tools(self) -> frozenset[str]:
         return frozenset(
