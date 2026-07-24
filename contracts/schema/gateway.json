@@ -201,9 +201,42 @@
       "title": "GatewayImageSubmitRequest",
       "type": "object"
     },
+    "GatewayMaterialLimits": {
+      "additionalProperties": false,
+      "description": "网关公开目录 parameters.material_limits。",
+      "properties": {
+        "allow_audio_only": {
+          "default": false,
+          "title": "Allow Audio Only",
+          "type": "boolean"
+        },
+        "audios": {
+          "default": 0,
+          "title": "Audios",
+          "type": "integer"
+        },
+        "images": {
+          "default": 0,
+          "title": "Images",
+          "type": "integer"
+        },
+        "requires_any": {
+          "default": false,
+          "title": "Requires Any",
+          "type": "boolean"
+        },
+        "videos": {
+          "default": 0,
+          "title": "Videos",
+          "type": "integer"
+        }
+      },
+      "title": "GatewayMaterialLimits",
+      "type": "object"
+    },
     "GatewayModelItem": {
       "additionalProperties": false,
-      "description": "Strict OpenAI-compatible model catalog item.",
+      "description": "Strict OpenAI-compatible model catalog item（厚目录）。",
       "properties": {
         "id": {
           "minLength": 1,
@@ -213,6 +246,9 @@
         "object": {
           "title": "Object",
           "type": "string"
+        },
+        "parameters": {
+          "$ref": "#/$defs/GatewayModelParameters"
         },
         "supports_vision": {
           "title": "Supports Vision",
@@ -226,9 +262,77 @@
         "id",
         "object",
         "task_type",
-        "supports_vision"
+        "supports_vision",
+        "parameters"
       ],
       "title": "GatewayModelItem",
+      "type": "object"
+    },
+    "GatewayModelParameters": {
+      "additionalProperties": false,
+      "description": "网关 GET /api/v1/models 厚目录 parameters。",
+      "properties": {
+        "counts": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Counts",
+          "type": "array"
+        },
+        "durations": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Durations",
+          "type": "array"
+        },
+        "input_schema": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JsonValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "material_limits": {
+          "$ref": "#/$defs/GatewayMaterialLimits"
+        },
+        "ratios": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ratios",
+          "type": "array"
+        },
+        "ratios_by_resolution": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Ratios By Resolution",
+          "type": "object"
+        },
+        "reference_modes": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Reference Modes",
+          "type": "array"
+        },
+        "resolutions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Resolutions",
+          "type": "array"
+        }
+      },
+      "title": "GatewayModelParameters",
       "type": "object"
     },
     "GatewayModelTaskType": {

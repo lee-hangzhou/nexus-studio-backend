@@ -5,7 +5,6 @@ from typing import List, Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.contracts.generation import GenerationModelCapabilitiesConfig
 from app.server.infra.config_models import (
     DatabasePoolConfig,
     GatewayTimeoutConfig,
@@ -107,9 +106,6 @@ class Settings(BaseSettings):
     GATEWAY_EMBEDDING_ENCODING_FORMAT: str = Field(default="float")
     GATEWAY_TIMEOUTS: GatewayTimeoutConfig = Field(default_factory=GatewayTimeoutConfig)
     GATEWAY_CAPTION_MODEL: str = Field(default="default-caption-model")
-    GENERATION_MODEL_CAPABILITIES: list[GenerationModelCapabilitiesConfig] = Field(
-        default_factory=list,
-    )
 
     CHAT_MODEL_REGISTRY: str = Field(default="{}")
     CHAT_DEFAULT_MODEL: str = Field(default="gpt-5.5")

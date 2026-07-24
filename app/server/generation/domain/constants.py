@@ -43,6 +43,7 @@ REFERENCE_MODE_LABELS: dict[ReferenceMode, str] = {
 REF_SOURCE_CHAT_ATTACHMENT = "chat_attachment"
 
 MODEL_LIST_CACHE_KEY_PREFIX = "gen:models:"
+MODEL_CAPABILITIES_CACHE_KEY = "gen:model_capabilities"
 
 RESULT_ASSET_META_TASK_ID = "task_id"
 RESULT_ASSET_META_UNION_TASK_ID = "union_task_id"

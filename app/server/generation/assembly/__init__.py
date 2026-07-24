@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from app.contracts.gateway import GatewayResultItem
-from app.contracts.generation import GenerateParamOptions, ReferenceModeOption
+from app.contracts.gateway import GatewayModelItem, GatewayResultItem
+from app.contracts.generation import GenerateMaterialLimits, GenerateParamOptions, ReferenceModeOption
 from app.server.assets.persistence.assets import Assets
 from app.server.assets.services.service import ASSET_SOURCE_GENERATE_RESULT
 from app.server.generation.domain.constants import (
@@ -12,7 +12,8 @@ from app.server.generation.domain.constants import (
     REFERENCE_MODE_LABELS,
     RESULT_ASSET_META_TASK_ID,
 )
-from app.server.generation.domain.models import GenerationModelCapabilities
+from app.server.generation.domain.enums import ReferenceMode
+from app.server.generation.domain.models import GenerationModelCapabilities, MaterialLimits
 from app.server.generation.persistence.generate_task import GenerateTask
 from app.server.generation.schemas import (
     GenerateRefMaterial,
@@ -21,6 +22,54 @@ from app.server.generation.schemas import (
 )
 from app.server.generation.schemas.observation import GatewayQueueObservation
 from app.server.infra.logger import logger
+
+
+def capabilities_from_gateway_model(gateway_model: GatewayModelItem) -> GenerationModelCapabilities | None:
+    """将网关厚目录条目映射为域内能力；非生成类返回 None。"""
+    kind = gateway_model.generation_kind
+    if kind is None:
+        return None
+    params = gateway_model.parameters
+    reference_modes: list[ReferenceMode] = []
+    for raw in params.reference_modes:
+        try:
+            reference_modes.append(ReferenceMode(raw))
+        except ValueError as exc:
+            raise ValueError(
+                f"unsupported reference_mode {raw!r} for model {gateway_model.id}"
+            ) from exc
+    limits = params.material_limits
+    return GenerationModelCapabilities(
+        model_id=gateway_model.id,
+        kind=kind,
+        ratios=tuple(params.ratios),
+        resolutions=tuple(params.resolutions),
+        counts=tuple(params.counts),
+        durations=tuple(params.durations),
+        reference_modes=tuple(reference_modes),
+        material_limits=MaterialLimits(
+            images=limits.images,
+            videos=limits.videos,
+            audios=limits.audios,
+            requires_any=limits.requires_any,
+            allow_audio_only=limits.allow_audio_only,
+        ),
+        ratios_by_resolution=tuple(
+            (resolution, tuple(ratios))
+            for resolution, ratios in params.ratios_by_resolution.items()
+        ),
+    )
+
+
+def capability_map_from_gateway_models(
+    gateway_models: list[GatewayModelItem],
+) -> dict[str, GenerationModelCapabilities]:
+    capability_map: dict[str, GenerationModelCapabilities] = {}
+    for gateway_model in gateway_models:
+        capabilities = capabilities_from_gateway_model(gateway_model)
+        if capabilities is not None:
+            capability_map[gateway_model.id] = capabilities
+    return capability_map
 
 
 def task_result_asset_ids(task: GenerateTask) -> list[int]:
@@ -52,6 +101,7 @@ def collect_reference_ids(tasks: list[GenerateTask]) -> tuple[set[int], set[int]
 
 
 def to_param_options(capabilities: GenerationModelCapabilities) -> GenerateParamOptions:
+    limits = capabilities.material_limits
     return GenerateParamOptions(
         ratios=list(capabilities.ratios),
         resolutions=list(capabilities.resolutions),
@@ -64,6 +114,13 @@ def to_param_options(capabilities: GenerationModelCapabilities) -> GenerateParam
         ratios_by_resolution={
             resolution: list(ratios) for resolution, ratios in capabilities.ratios_by_resolution
         },
+        material_limits=GenerateMaterialLimits(
+            images=limits.images,
+            videos=limits.videos,
+            audios=limits.audios,
+            requires_any=limits.requires_any,
+            allow_audio_only=limits.allow_audio_only,
+        ),
     )
 
 

@@ -22,7 +22,7 @@ async def resolve_node_generation_config(
         if not resp.items:
             raise AppError(
                 ErrorCode.GENERATION_MODEL_CAPABILITY_UNAVAILABLE,
-                "没有可用的生成模型，请检查网关与 GENERATION_MODEL_CAPABILITIES 配置",
+                "没有可用的生成模型，请检查网关 model_capabilities 与路由配置",
                 {"kind": node.kind},
             )
         model_id = resp.items[0].model_id

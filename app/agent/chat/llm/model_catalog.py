@@ -11,7 +11,7 @@ MODEL_CAPABILITY_UNAVAILABLE = "模型能力信息暂时不可用，请稍后重
 
 
 class ModelCatalog:
-    """union_lm list_models 的 supports_vision 内存缓存；启动拉取失败时为空。"""
+    """union_lm 厚目录 GET /api/v1/models 的 supports_vision 内存缓存；启动拉取失败时为空。"""
 
     def __init__(self) -> None:
         self._supports_vision: dict[str, bool] = {}

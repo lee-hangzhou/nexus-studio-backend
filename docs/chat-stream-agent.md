@@ -51,5 +51,5 @@ python -m pytest tests/chat/test_model_catalog.py tests/chat/test_image_compress
 - `HumanMessage.content`: text block + `image_ref` blocks (`attachment_id`, `mime_type`); checkpoint/DB payload stores refs only.
 - Hydrate scope: only refs in current turn `hydrate_attachment_ids`; historical checkpoint refs are skipped.
 - OpenAI adapter: `image_url` + data URL; Anthropic adapter: `image.source.base64` + `media_type`.
-- `supports_vision` from union_lm `/api/v1/models` via `ModelCatalog` (startup best-effort cache; runtime miss → `模型能力信息暂时不可用，请稍后重试`).
+- `supports_vision` / 生成参数枚举来自 union_lm 厚目录 `GET /api/v1/models`（`ModelCatalog` 缓存 vision；Generation 从同接口 `parameters` 组装）。启动拉取失败时 vision 缓存为空；runtime miss → `模型能力信息暂时不可用，请稍后重试`。
 - Frontend: disable image upload when `supports_vision=false`; switching to non-vision model shows hint without removing attachments.

@@ -45,8 +45,35 @@ class GatewayEnvelopeResponse(BaseModel):
     message: StrictStr
 
 
+class GatewayMaterialLimits(BaseModel):
+    """网关公开目录 parameters.material_limits。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    images: StrictInt = 0
+    videos: StrictInt = 0
+    audios: StrictInt = 0
+    requires_any: StrictBool = False
+    allow_audio_only: StrictBool = False
+
+
+class GatewayModelParameters(BaseModel):
+    """网关 GET /api/v1/models 厚目录 parameters。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    resolutions: list[StrictStr] = Field(default_factory=list)
+    ratios: list[StrictStr] = Field(default_factory=list)
+    ratios_by_resolution: dict[str, list[StrictStr]] = Field(default_factory=dict)
+    counts: list[StrictInt] = Field(default_factory=list)
+    durations: list[StrictInt] = Field(default_factory=list)
+    reference_modes: list[StrictInt] = Field(default_factory=list)
+    material_limits: GatewayMaterialLimits = Field(default_factory=GatewayMaterialLimits)
+    input_schema: JsonValue | None = None
+
+
 class GatewayModelItem(BaseModel):
-    """Strict OpenAI-compatible model catalog item."""
+    """Strict OpenAI-compatible model catalog item（厚目录）。"""
 
     model_config = ConfigDict(extra="forbid", use_enum_values=True)
 
@@ -54,6 +81,7 @@ class GatewayModelItem(BaseModel):
     object: StrictStr
     task_type: GatewayModelTaskType
     supports_vision: StrictBool
+    parameters: GatewayModelParameters
 
     @property
     def generation_kind(self) -> GenerationKind | None:

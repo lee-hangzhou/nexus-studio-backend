@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import uuid4
 
+from pydantic import ValidationError
 from tortoise.transactions import in_transaction
 
 from app.contracts.gateway import (
@@ -24,6 +27,7 @@ from app.server.chat.services.attachments.service import ChatAttachmentService
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
 from app.server.generation.domain.constants import (
+    MODEL_CAPABILITIES_CACHE_KEY,
     MODEL_LIST_CACHE_KEY_PREFIX,
     RESULT_ASSET_META_DURATION,
     RESULT_ASSET_META_GATEWAY_RESULT,
@@ -82,6 +86,7 @@ from app.server.generation.gateway.submit import (
     require_video_reference_mode,
 )
 from app.server.generation.schemas.callback import GenerationCallbackResult
+from app.server.generation.schemas.capabilities_cache import CachedCapabilitiesPayload
 from app.server.infra.config import settings
 from app.server.infra.logger import log_exception, logger
 from app.server.infra.object_storage import TosObjectStorage
@@ -111,10 +116,8 @@ class GenerationService:
         self._asset_service = asset_service
         self._object_storage = object_storage
         self._model_cache = model_cache
-        self._capabilities: dict[str, GenerationModelCapabilities] = {
-            config.model_id: config.to_domain()
-            for config in settings.GENERATION_MODEL_CAPABILITIES
-        }
+        self._capabilities: dict[str, GenerationModelCapabilities] = {}
+        self._capabilities_expires_at: float = 0.0
 
     async def submit(self, user_id: int, req: SubmitGenerateRequest) -> GenerateTaskSubmitResponse:
         capabilities = await self.require_model_capabilities(req.model_id, req.kind)
@@ -407,45 +410,106 @@ class GenerationService:
         return GenerationCallbackResult(task=task, applied=False)
 
     async def list_models(self, kind: GenerationKind) -> GenerateModelsResponse:
+        cache_key = f"{MODEL_LIST_CACHE_KEY_PREFIX}{kind.value}"
+
         async def _compute() -> dict[str, Any]:
             gateway_models = await self._gateway.list_generation_models()
-            items: list[GenerateModelItem] = []
-            for gateway_model in gateway_models:
-                if gateway_model.generation_kind != kind:
-                    continue
-                capabilities = self._resolve_capability_for_gateway_model(gateway_model, kind)
-                if capabilities is None:
-                    logger.warning(
-                        "generation.capability.unconfigured_model",
-                        model_id=gateway_model.id,
-                        generation_kind=kind.value,
-                    )
-                    continue
-                items.append(
-                    GenerateModelItem(
-                        model_id=gateway_model.id,
-                        label=gateway_model.id,
-                        kind=kind,
-                        supports_vision=gateway_model.supports_vision,
-                        param_options=assembly.to_param_options(capabilities),
-                    )
-                )
-            payload = GenerateModelsResponse(items=items).model_dump()
-            if not isinstance(payload, dict):
-                raise AppError(ErrorCode.INTERNAL_ERROR, "模型列表序列化失败")
-            return payload
+            capability_map = assembly.capability_map_from_gateway_models(gateway_models)
+            # 与 submit 共用同一份 capabilities 快照，避免 list options 与校验漂移
+            await self._store_capabilities_map(capability_map)
+            items = self._build_generate_model_items(kind, gateway_models, capability_map)
+            return GenerateModelsResponse(items=items).model_dump(mode="json")
 
         try:
-            raw = await self._model_cache.get_or_compute(
-                f"{MODEL_LIST_CACHE_KEY_PREFIX}{kind.value}",
-                _compute,
-                ttl=settings.GEN_MODEL_LIST_TTL,
-                cache_none=False,
-            )
+            response = await self._read_model_list_cache(cache_key, _compute)
+            return await self._attach_param_options_from_capabilities(kind, response)
+        except AppError:
+            raise
         except Exception as exc:
             logger.error("generate.list_models.error", error=str(exc))
             raise AppError(ErrorCode.GENERATION_MODEL_LIST_UNAVAILABLE, "模型列表暂时不可用") from exc
-        return GenerateModelsResponse.model_validate(raw)
+
+    def _build_generate_model_items(
+        self,
+        kind: GenerationKind,
+        gateway_models: list[GatewayModelItem],
+        capability_map: dict[str, GenerationModelCapabilities],
+    ) -> list[GenerateModelItem]:
+        items: list[GenerateModelItem] = []
+        for gateway_model in gateway_models:
+            if gateway_model.generation_kind != kind:
+                continue
+            capabilities = capability_map.get(gateway_model.id)
+            if capabilities is None:
+                logger.error(
+                    "generation.capability.missing_for_listed_model",
+                    model_id=gateway_model.id,
+                    generation_kind=kind.value,
+                )
+                raise AppError(
+                    ErrorCode.GENERATION_MODEL_LIST_UNAVAILABLE,
+                    f"模型 {gateway_model.id} 缺少可映射的能力配置",
+                    {"model_id": gateway_model.id},
+                )
+            items.append(
+                GenerateModelItem(
+                    model_id=gateway_model.id,
+                    label=gateway_model.id,
+                    kind=kind,
+                    supports_vision=gateway_model.supports_vision,
+                    param_options=assembly.to_param_options(capabilities),
+                )
+            )
+        return items
+
+    async def _attach_param_options_from_capabilities(
+        self,
+        kind: GenerationKind,
+        response: GenerateModelsResponse,
+    ) -> GenerateModelsResponse:
+        """列表目录可缓存；param_options 始终从共享 capabilities cache 读取。"""
+        capability_map = await self._ensure_capabilities()
+        items: list[GenerateModelItem] = []
+        for item in response.items:
+            capabilities = capability_map.get(item.model_id)
+            if capabilities is None or capabilities.kind != kind:
+                logger.error(
+                    "generation.capability.missing_for_listed_model",
+                    model_id=item.model_id,
+                    generation_kind=kind.value,
+                )
+                raise AppError(
+                    ErrorCode.GENERATION_MODEL_LIST_UNAVAILABLE,
+                    f"模型 {item.model_id} 缺少可映射的能力配置",
+                    {"model_id": item.model_id},
+                )
+            items.append(
+                item.model_copy(update={"param_options": assembly.to_param_options(capabilities)})
+            )
+        return GenerateModelsResponse(items=items)
+
+    async def _read_model_list_cache(
+        self,
+        cache_key: str,
+        compute: Callable[[], Awaitable[dict[str, Any]]],
+    ) -> GenerateModelsResponse:
+        raw = await self._model_cache.get_or_compute(
+            cache_key,
+            compute,
+            ttl=settings.GEN_MODEL_LIST_TTL,
+            cache_none=False,
+        )
+        try:
+            return GenerateModelsResponse.model_validate(raw)
+        except ValidationError:
+            await self._model_cache.delete(cache_key)
+            raw = await self._model_cache.get_or_compute(
+                cache_key,
+                compute,
+                ttl=settings.GEN_MODEL_LIST_TTL,
+                cache_none=False,
+            )
+            return GenerateModelsResponse.model_validate(raw)
 
     async def list_tts_voices(self, model_id: str) -> list[GatewayVoiceItem]:
         response = await self._gateway.list_voices(model_id)
@@ -484,22 +548,93 @@ class GenerationService:
         model_id: str,
         kind: GenerationKind,
     ) -> GenerationModelCapabilities:
-        capabilities = self.get_model_capabilities(model_id, kind)
-        if capabilities is not None:
+        capability_map = await self._ensure_capabilities()
+        capabilities = capability_map.get(model_id)
+        if capabilities is not None and capabilities.kind == kind:
             return capabilities
-        models = await self._gateway.list_generation_models()
-        gateway_model = next((item for item in models if item.id == model_id), None)
+        capability_map = await self._refresh_capabilities_from_gateway()
+        capabilities = capability_map.get(model_id)
+        if capabilities is not None and capabilities.kind == kind:
+            return capabilities
         logger.warning(
             "generation.capability.missing",
             model_id=model_id,
             requested_kind=kind.value,
-            gateway_model_present=gateway_model is not None,
+            gateway_model_present=model_id in capability_map,
         )
         raise AppError(
             ErrorCode.GENERATION_MODEL_CAPABILITY_UNAVAILABLE,
-            "模型能力信息不可用，请刷新模型列表或补充能力配置",
+            "模型能力信息不可用，请确认网关 model_capabilities 已配置",
             {"model_id": model_id},
         )
+
+    def _capabilities_fresh(self) -> bool:
+        return bool(self._capabilities) and time.time() < self._capabilities_expires_at
+
+    def _install_capabilities_from_payload(self, payload: CachedCapabilitiesPayload) -> None:
+        self._capabilities = payload.to_domain_map()
+        self._capabilities_expires_at = float(payload.expires_at)
+
+    async def _store_capabilities_map(
+        self,
+        capability_map: dict[str, GenerationModelCapabilities],
+    ) -> None:
+        payload = CachedCapabilitiesPayload.from_domain_map(
+            capability_map,
+            ttl_seconds=settings.GEN_MODEL_LIST_TTL,
+        )
+        await self._model_cache.set(
+            MODEL_CAPABILITIES_CACHE_KEY,
+            payload.model_dump(mode="json"),
+            ttl=settings.GEN_MODEL_LIST_TTL,
+        )
+        self._install_capabilities_from_payload(payload)
+
+    async def _ensure_capabilities(self) -> dict[str, GenerationModelCapabilities]:
+        if self._capabilities_fresh():
+            return self._capabilities
+        return await self._load_capabilities_from_shared_cache()
+
+    async def _load_capabilities_from_shared_cache(self) -> dict[str, GenerationModelCapabilities]:
+        async def _compute() -> dict[str, Any]:
+            return await self._fetch_capabilities_cache_payload()
+
+        try:
+            raw = await self._model_cache.get_or_compute(
+                MODEL_CAPABILITIES_CACHE_KEY,
+                _compute,
+                ttl=settings.GEN_MODEL_LIST_TTL,
+                cache_none=False,
+            )
+            payload = CachedCapabilitiesPayload.model_validate(raw)
+        except ValidationError:
+            await self._model_cache.delete(MODEL_CAPABILITIES_CACHE_KEY)
+            raw = await self._model_cache.get_or_compute(
+                MODEL_CAPABILITIES_CACHE_KEY,
+                _compute,
+                ttl=settings.GEN_MODEL_LIST_TTL,
+                cache_none=False,
+            )
+            payload = CachedCapabilitiesPayload.model_validate(raw)
+        self._install_capabilities_from_payload(payload)
+        if not self._capabilities_fresh():
+            return await self._refresh_capabilities_from_gateway()
+        return self._capabilities
+
+    async def _fetch_capabilities_cache_payload(self) -> dict[str, Any]:
+        gateway_models = await self._gateway.list_generation_models()
+        capability_map = assembly.capability_map_from_gateway_models(gateway_models)
+        return CachedCapabilitiesPayload.from_domain_map(
+            capability_map,
+            ttl_seconds=settings.GEN_MODEL_LIST_TTL,
+        ).model_dump(mode="json")
+
+    async def _refresh_capabilities_from_gateway(self) -> dict[str, GenerationModelCapabilities]:
+        """独立刷新用例：回源网关并写入共享 capabilities cache。"""
+        gateway_models = await self._gateway.list_generation_models()
+        capability_map = assembly.capability_map_from_gateway_models(gateway_models)
+        await self._store_capabilities_map(capability_map)
+        return self._capabilities
 
     async def apply_result(
         self,
@@ -817,11 +952,3 @@ class GenerationService:
                 task_ids.add(task_id)
         return task_ids
 
-    def _resolve_capability_for_gateway_model(
-        self,
-        gateway_model: GatewayModelItem,
-        kind: GenerationKind,
-    ) -> GenerationModelCapabilities | None:
-        if gateway_model.generation_kind != kind:
-            return None
-        return self.get_model_capabilities(gateway_model.id, kind)
