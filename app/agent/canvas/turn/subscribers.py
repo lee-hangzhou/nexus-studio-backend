@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
 from typing import Any
 
 from app.agent.canvas.turn.generation_hub import canvas_generation_hub
@@ -15,6 +14,7 @@ from app.agent.canvas.turn.persistence import (
     persist_canvas_user_message,
 )
 from app.agent.chat.tools.ui_preview import sanitize_tool_step_preview
+from app.agent.runtime.ports import get_canvas_port
 from app.agent.runtime.stream.frames import StreamFrameType, create_stream_frame
 from app.agent.runtime.tools.result import ToolResult, ToolResultProtocolError
 from app.agent.runtime.turn_engine.events import (
@@ -27,7 +27,6 @@ from app.agent.runtime.turn_engine.events import (
 )
 from app.agent.runtime.turn_engine.subscribers import TurnEmit
 from app.contracts.metadata import CanvasToolStepMetadata
-from app.server.projects.persistence.projects import Projects
 
 _PATCH_TOOLS = frozenset({"apply_canvas_patch", "submit_node_generation"})
 
@@ -83,8 +82,8 @@ async def _emit_canvas_patch_from_tool(event: ToolFinished, emit: TurnEmit) -> N
         await emit(create_stream_frame(type=StreamFrameType.CANVAS_PATCH, data=delta))
 
 
-async def _touch_project(project_id: int) -> None:
-    await Projects.filter(id=project_id).update(updated_at=datetime.now(timezone.utc))
+async def _touch_episode(episode_id: int) -> None:
+    await get_canvas_port().touch_episode(episode_id)
 
 
 class CanvasPersistenceSubscriber:
@@ -103,6 +102,7 @@ class CanvasPersistenceSubscriber:
         self,
         *,
         project_id: int,
+        episode_id: int,
         user_id: int,
         content: str,
         client_turn_id: str | None,
@@ -111,6 +111,7 @@ class CanvasPersistenceSubscriber:
         schedule_memory: bool = True,
     ) -> None:
         self._project_id = project_id
+        self._episode_id = episode_id
         self._user_id = user_id
         self._content = content
         self._client_turn_id = client_turn_id
@@ -121,7 +122,7 @@ class CanvasPersistenceSubscriber:
     async def handle(self, event: TurnEvent, *, emit: TurnEmit) -> None:
         if isinstance(event, TurnStarting) and self._persist_user:
             await persist_canvas_user_message(
-                project_id=self._project_id,
+                episode_id=self._episode_id,
                 user_id=self._user_id,
                 content=self._content,
                 client_turn_id=self._client_turn_id,
@@ -136,7 +137,7 @@ class CanvasPersistenceSubscriber:
                 ok=not event.tool_error,
             )
             await persist_canvas_tool_step(
-                project_id=self._project_id,
+                episode_id=self._episode_id,
                 user_id=self._user_id,
                 turn_id=event.turn_id,
                 step=CanvasToolStepMetadata(
@@ -151,7 +152,7 @@ class CanvasPersistenceSubscriber:
             return
 
         if isinstance(event, TurnFailed):
-            await _touch_project(self._project_id)
+            await _touch_episode(self._episode_id)
             return
 
         if isinstance(event, TurnCompleted):
@@ -161,14 +162,14 @@ class CanvasPersistenceSubscriber:
                 return
 
             await persist_canvas_assistant_message(
-                project_id=self._project_id,
+                episode_id=self._episode_id,
                 user_id=self._user_id,
                 content=answer_text,
                 client_turn_id=self._client_turn_id,
                 turn_id=event.turn_id,
                 tool_calls_count=event.tool_calls_count,
             )
-            await _touch_project(self._project_id)
+            await _touch_episode(self._episode_id)
             if self._schedule_memory:
                 schedule_canvas_memory_extract(
                     messages=list(event.messages),
@@ -183,8 +184,8 @@ class CanvasGenerationHubSubscriber:
     barrier_events = frozenset()
     broadcast_events = frozenset()
 
-    def __init__(self, *, project_id: int) -> None:
-        self._project_id = project_id
+    def __init__(self, *, episode_id: int) -> None:
+        self._episode_id = episode_id
         self._queue: asyncio.Queue[dict[str, Any] | None] | None = None
         self._fanout_task: asyncio.Task[None] | None = None
         self._emit: TurnEmit | None = None
@@ -193,7 +194,7 @@ class CanvasGenerationHubSubscriber:
     async def start(self, *, emit: TurnEmit, turn_id: str) -> None:
         self._emit = emit
         self._turn_id = turn_id
-        self._queue = canvas_generation_hub.subscribe(self._project_id)
+        self._queue = canvas_generation_hub.subscribe(self._episode_id)
         self._fanout_task = asyncio.create_task(self._fanout(), name=f"canvas-gen-fanout-{turn_id}")
 
     async def close(self) -> None:
@@ -205,7 +206,7 @@ class CanvasGenerationHubSubscriber:
                 pass
             self._fanout_task = None
         if self._queue is not None:
-            canvas_generation_hub.unsubscribe(self._project_id, self._queue)
+            canvas_generation_hub.unsubscribe(self._episode_id, self._queue)
             await self._queue.put(None)
             self._queue = None
 

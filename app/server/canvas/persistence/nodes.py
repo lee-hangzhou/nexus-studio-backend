@@ -9,7 +9,7 @@ class CanvasNodes(Model):
     """
 
     id = fields.UUIDField(pk=True)
-    project_id = fields.BigIntField(null=False)
+    episode_id = fields.BigIntField(null=False)
     kind = fields.CharField(max_length=16, null=False)
     position_x = fields.FloatField(null=False)
     position_y = fields.FloatField(null=False)
@@ -31,4 +31,4 @@ class CanvasNodes(Model):
 
     class Meta:
         table = "canvas_nodes"
-        indexes = [("project_id", "status")]
+        indexes = [("episode_id", "status")]

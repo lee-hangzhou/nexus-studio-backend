@@ -5,9 +5,9 @@ import json
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
-from app.server.assets.services.service import asset_service
 from app.agent.chat.tools.result import ToolResult
-from app.server.assets.persistence.assets import Assets
+from app.agent.runtime.ports import get_assets_port
+from app.server.ports.product import AssetDTO
 
 
 class ListAssetsInput(BaseModel):
@@ -27,19 +27,18 @@ class GetAssetInput(BaseModel):
     asset_id: int
 
 
-def _asset_payload(row: Assets) -> dict:
-    """资产行转工具可返回的结构化 payload"""
-    view = asset_service.to_view(row)
+def _asset_payload(asset: AssetDTO) -> dict:
+    """资产 DTO 转工具可返回的结构化 payload"""
     return {
-        "id": view.id,
-        "asset_type": view.asset_type,
-        "mime_type": view.mime_type,
-        "filename": view.filename,
-        "source_type": view.source_type,
-        "source_id": view.source_id,
-        "metadata": view.metadata,
-        "status": view.status,
-        "preview_url": view.preview_url,
+        "id": asset.id,
+        "asset_type": asset.asset_type,
+        "mime_type": asset.mime_type,
+        "filename": asset.filename,
+        "source_type": asset.source_type,
+        "source_id": asset.source_id,
+        "metadata": asset.metadata,
+        "status": asset.status,
+        "preview_url": asset.preview_url,
     }
 
 
@@ -48,14 +47,14 @@ def build_list_assets_tool(user_id: int) -> StructuredTool:
 
     async def _run(asset_type: str | None = None, source_type: str | None = None, limit: int = 20) -> str:
         """按类型与来源查询可复用系统资产"""
-        q = Assets.filter(user_id=user_id, deleted_at__isnull=True).order_by("-created_at")
-        if asset_type:
-            q = q.filter(asset_type=asset_type)
-        if source_type:
-            q = q.filter(source_type=source_type)
-        rows = await q.limit(limit)
+        items = await get_assets_port().list_assets(
+            user_id=user_id,
+            asset_type=asset_type,
+            source_type=source_type,
+            limit=limit,
+        )
         return ToolResult.ok(
-            json.dumps({"items": [_asset_payload(row) for row in rows]}, ensure_ascii=False)
+            json.dumps({"items": [_asset_payload(item) for item in items]}, ensure_ascii=False)
         ).to_tool_message()
 
     return StructuredTool.from_function(
@@ -71,10 +70,10 @@ def build_get_asset_tool(user_id: int) -> StructuredTool:
 
     async def _run(asset_id: int) -> str:
         """按 asset_id 读取资产, 不存在或不属于当前用户时结构化失败"""
-        row = await Assets.filter(user_id=user_id, id=asset_id, deleted_at__isnull=True).first()
-        if row is None:
+        asset = await get_assets_port().get_asset(user_id=user_id, asset_id=asset_id)
+        if asset is None:
             return ToolResult.fail("asset_not_found", detail=str(asset_id)).to_tool_message()
-        return ToolResult.ok(json.dumps(_asset_payload(row), ensure_ascii=False)).to_tool_message()
+        return ToolResult.ok(json.dumps(_asset_payload(asset), ensure_ascii=False)).to_tool_message()
 
     return StructuredTool.from_function(
         coroutine=_run,

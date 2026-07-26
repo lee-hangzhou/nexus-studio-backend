@@ -9,7 +9,7 @@ class CanvasOperations(Model):
     """
 
     op_id = fields.UUIDField(pk=True)
-    project_id = fields.BigIntField(null=False)
+    episode_id = fields.BigIntField(null=False)
     user_id = fields.BigIntField(null=False)
     turn_id = fields.CharField(max_length=64, null=True)
     op_type = fields.CharField(max_length=32, null=False)

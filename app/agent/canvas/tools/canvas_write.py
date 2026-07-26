@@ -5,10 +5,12 @@ import json
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
-from app.server.canvas.services.errors import REVISION_CONFLICT
+from app.agent.canvas.errors import REVISION_CONFLICT
 from app.server.canvas.schemas.api import CanvasPatchOp
-from app.server.canvas.services.canvas_service import CanvasRevisionConflictError, canvas_service
 from app.agent.chat.tools.result import ToolResult
+from app.agent.runtime.ports import get_canvas_port
+from app.server.exceptions.base import AppError
+from app.server.exceptions.codes import ErrorCode
 
 
 class ApplyCanvasPatchInput(BaseModel):
@@ -23,31 +25,36 @@ class ApplyCanvasPatchInput(BaseModel):
 
 async def _apply_patch(
     project_id: int,
+    episode_id: int,
     args: ApplyCanvasPatchInput,
     *,
-    user_id: int | None,
+    user_id: int,
     turn_id: str | None,
 ) -> ToolResult:
     """校验 patch 并写入画布, 返回 JSON 结构化结果"""
     try:
-        result = await canvas_service.apply_patch(
-            project_id,
-            args.ops,
-            args.expected_revision,
+        result = await get_canvas_port().apply_patch(
+            project_id=project_id,
+            episode_id=episode_id,
             user_id=user_id,
+            ops=args.ops,
+            expected_revision=args.expected_revision,
             turn_id=turn_id,
         )
         return ToolResult.ok(
             json.dumps(result.model_dump(mode="json"), ensure_ascii=False)
         )
-    except CanvasRevisionConflictError as exc:
+    except AppError as exc:
+        if exc.code != int(ErrorCode.CANVAS_REVISION_CONFLICT):
+            raise
         # revision 冲突时 Agent 应先重新 query_canvas_nodes
         return ToolResult.fail(REVISION_CONFLICT, detail=str(exc.details))
 
 
 def build_apply_canvas_patch_tool(
-    project_id: int,
     *,
+    project_id: int,
+    episode_id: int,
     user_id: int,
     turn_id_holder: dict[str, str | None],
 ) -> StructuredTool:
@@ -58,6 +65,7 @@ def build_apply_canvas_patch_tool(
         return (
             await _apply_patch(
                 project_id,
+                episode_id,
                 args,
                 user_id=user_id,
                 turn_id=turn_id_holder.get("turn_id"),

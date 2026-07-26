@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from app.agent.runtime.turn.enums import GuardAction
 from app.agent.runtime.turn.guards import TurnGuards
-from app.server.canvas.services.errors import (
+from app.agent.canvas.errors import (
     GENERATION_FAILED,
     INVALID_NODE_ID,
     INVALID_PATCH,

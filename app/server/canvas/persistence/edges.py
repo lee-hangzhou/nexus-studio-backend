@@ -9,7 +9,7 @@ class CanvasEdges(Model):
     """
 
     id = fields.UUIDField(pk=True)
-    project_id = fields.BigIntField(null=False)
+    episode_id = fields.BigIntField(null=False)
     source_node_id = fields.UUIDField(null=False)
     target_node_id = fields.UUIDField(null=False)
     source_port = fields.CharField(max_length=64, null=False)

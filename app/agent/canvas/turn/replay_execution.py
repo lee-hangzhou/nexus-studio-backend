@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator, Callable
 
-from app.agent.canvas.turn.lock import project_turn_lock
+from app.agent.canvas.turn.lock import canvas_turn_lock
 from app.agent.runtime.stream.frames import StreamFrameType
 from app.agent.runtime.stream.replay import (
     ReplayExecutionClosed,
@@ -29,6 +29,7 @@ async def run_canvas_replay_execution(
     *,
     request_id: str,
     project_id: int,
+    episode_id: int,
     turn_id: str,
     cancel_event: asyncio.Event,
     stream_factory: ReplayStreamFactory,
@@ -48,13 +49,14 @@ async def run_canvas_replay_execution(
                 request_id=request_id,
                 lease_owner=lease_owner,
                 project_id=project_id,
+                episode_id=episode_id,
                 turn_id=turn_id,
                 cancel_event=cancel_event,
                 lease_lost_event=lease_lost_event,
             )
         )
         cancel_task = asyncio.create_task(
-            _watch_cancel(project_id=project_id, turn_id=turn_id, cancel_event=cancel_event)
+            _watch_cancel(episode_id=episode_id, turn_id=turn_id, cancel_event=cancel_event)
         )
 
         async for chunk in stream_factory():
@@ -118,9 +120,9 @@ async def run_canvas_replay_execution(
             await replay_store.finish(request_id, final_status)
         finally:
             try:
-                await replay_store.clear_cancel(session_id=project_id, turn_id=turn_id)
+                await replay_store.clear_cancel(session_id=episode_id, turn_id=turn_id)
             finally:
-                await project_turn_lock.release(project_id, turn_id)
+                await canvas_turn_lock.release(episode_id, turn_id)
         logger.info(
             "canvas.turn.replay_finished",
             request_id=request_id,
@@ -134,6 +136,7 @@ async def _refresh_lease(
     request_id: str,
     lease_owner: str,
     project_id: int,
+    episode_id: int,
     turn_id: str,
     cancel_event: asyncio.Event,
     lease_lost_event: asyncio.Event,
@@ -153,12 +156,13 @@ async def _refresh_lease(
             cancel_event.set()
             return
         try:
-            lock_refreshed = await project_turn_lock.refresh(project_id, turn_id)
+            lock_refreshed = await canvas_turn_lock.refresh(episode_id, turn_id)
         except Exception as exc:
             logger.exception(
-                "canvas.turn.project_lock_refresh_failed",
+                "canvas.turn.episode_lock_refresh_failed",
                 request_id=request_id,
                 project_id=project_id,
+                episode_id=episode_id,
                 turn_id=turn_id,
                 error=str(exc),
             )
@@ -167,9 +171,10 @@ async def _refresh_lease(
             return
         if not lock_refreshed:
             logger.error(
-                "canvas.turn.project_lock_lost",
+                "canvas.turn.episode_lock_lost",
                 request_id=request_id,
                 project_id=project_id,
+                episode_id=episode_id,
                 turn_id=turn_id,
             )
             lease_lost_event.set()
@@ -177,9 +182,9 @@ async def _refresh_lease(
             return
 
 
-async def _watch_cancel(*, project_id: int, turn_id: str, cancel_event: asyncio.Event) -> None:
+async def _watch_cancel(*, episode_id: int, turn_id: str, cancel_event: asyncio.Event) -> None:
     while not cancel_event.is_set():
-        if await replay_store.is_cancel_requested(session_id=project_id, turn_id=turn_id):
+        if await replay_store.is_cancel_requested(session_id=episode_id, turn_id=turn_id):
             cancel_event.set()
             return
         await asyncio.sleep(0.25)

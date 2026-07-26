@@ -1,0 +1,519 @@
+{
+  "$defs": {
+    "CoverView": {
+      "properties": {
+        "asset_id": {
+          "title": "Asset Id",
+          "type": "integer"
+        },
+        "asset_type": {
+          "enum": [
+            "image",
+            "video"
+          ],
+          "title": "Asset Type",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "asset_id",
+        "asset_type",
+        "url"
+      ],
+      "title": "CoverView",
+      "type": "object"
+    },
+    "EpisodeCreateRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "project_id": {
+          "minimum": 1,
+          "title": "Project Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "title": "EpisodeCreateRequest",
+      "type": "object"
+    },
+    "EpisodeIdRequest": {
+      "properties": {
+        "episode_id": {
+          "minimum": 1,
+          "title": "Episode Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "episode_id"
+      ],
+      "title": "EpisodeIdRequest",
+      "type": "object"
+    },
+    "EpisodeListRequest": {
+      "properties": {
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "page_size": {
+          "default": 100,
+          "maximum": 200,
+          "minimum": 1,
+          "title": "Page Size",
+          "type": "integer"
+        },
+        "project_id": {
+          "minimum": 1,
+          "title": "Project Id",
+          "type": "integer"
+        },
+        "query": {
+          "default": "",
+          "title": "Query",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "title": "EpisodeListRequest",
+      "type": "object"
+    },
+    "EpisodeListResponse": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/EpisodeView"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "page": {
+          "default": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "page_size": {
+          "default": 100,
+          "title": "Page Size",
+          "type": "integer"
+        },
+        "total": {
+          "default": 0,
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "EpisodeListResponse",
+      "type": "object"
+    },
+    "EpisodeUpdateRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "cover_asset_id": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cover Asset Id"
+        },
+        "episode_id": {
+          "minimum": 1,
+          "title": "Episode Id",
+          "type": "integer"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        }
+      },
+      "required": [
+        "episode_id"
+      ],
+      "title": "EpisodeUpdateRequest",
+      "type": "object"
+    },
+    "EpisodeView": {
+      "properties": {
+        "cover": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "cover_asset_id": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cover Asset Id"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "creator_id": {
+          "title": "Creator Id",
+          "type": "integer"
+        },
+        "episode_no": {
+          "title": "Episode No",
+          "type": "integer"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "integer"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "creator_id",
+        "episode_no",
+        "name",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "EpisodeView",
+      "type": "object"
+    },
+    "ProjectCreateRequest": {
+      "properties": {
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ProjectCreateRequest",
+      "type": "object"
+    },
+    "ProjectCreateResponse": {
+      "properties": {
+        "default_episode": {
+          "$ref": "#/$defs/EpisodeView"
+        },
+        "project": {
+          "$ref": "#/$defs/ProjectView"
+        }
+      },
+      "required": [
+        "project",
+        "default_episode"
+      ],
+      "title": "ProjectCreateResponse",
+      "type": "object"
+    },
+    "ProjectDetailResponse": {
+      "properties": {
+        "episodes": {
+          "items": {
+            "$ref": "#/$defs/EpisodeView"
+          },
+          "title": "Episodes",
+          "type": "array"
+        },
+        "project": {
+          "$ref": "#/$defs/ProjectView"
+        }
+      },
+      "required": [
+        "project",
+        "episodes"
+      ],
+      "title": "ProjectDetailResponse",
+      "type": "object"
+    },
+    "ProjectIdRequest": {
+      "properties": {
+        "project_id": {
+          "minimum": 1,
+          "title": "Project Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "title": "ProjectIdRequest",
+      "type": "object"
+    },
+    "ProjectListRequest": {
+      "properties": {
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "page_size": {
+          "default": 11,
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Page Size",
+          "type": "integer"
+        },
+        "query": {
+          "default": "",
+          "title": "Query",
+          "type": "string"
+        }
+      },
+      "title": "ProjectListRequest",
+      "type": "object"
+    },
+    "ProjectListResponse": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ProjectView"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "page": {
+          "default": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "page_size": {
+          "default": 11,
+          "title": "Page Size",
+          "type": "integer"
+        },
+        "total": {
+          "default": 0,
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "ProjectListResponse",
+      "type": "object"
+    },
+    "ProjectUpdateRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "cover_asset_id": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cover Asset Id"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "project_id": {
+          "minimum": 1,
+          "title": "Project Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "title": "ProjectUpdateRequest",
+      "type": "object"
+    },
+    "ProjectView": {
+      "properties": {
+        "activity_at": {
+          "title": "Activity At",
+          "type": "string"
+        },
+        "cover": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "cover_asset_id": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cover Asset Id"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "episode_count": {
+          "default": 0,
+          "title": "Episode Count",
+          "type": "integer"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "integer"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "status",
+        "activity_at",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "ProjectView",
+      "type": "object"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/ProjectCreateRequest"
+    },
+    {
+      "$ref": "#/$defs/ProjectView"
+    },
+    {
+      "$ref": "#/$defs/ProjectCreateResponse"
+    },
+    {
+      "$ref": "#/$defs/ProjectListRequest"
+    },
+    {
+      "$ref": "#/$defs/ProjectListResponse"
+    },
+    {
+      "$ref": "#/$defs/ProjectIdRequest"
+    },
+    {
+      "$ref": "#/$defs/ProjectDetailResponse"
+    },
+    {
+      "$ref": "#/$defs/ProjectUpdateRequest"
+    },
+    {
+      "$ref": "#/$defs/EpisodeView"
+    },
+    {
+      "$ref": "#/$defs/EpisodeListRequest"
+    },
+    {
+      "$ref": "#/$defs/EpisodeListResponse"
+    },
+    {
+      "$ref": "#/$defs/EpisodeCreateRequest"
+    },
+    {
+      "$ref": "#/$defs/EpisodeIdRequest"
+    },
+    {
+      "$ref": "#/$defs/EpisodeUpdateRequest"
+    }
+  ]
+}

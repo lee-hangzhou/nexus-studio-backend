@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
-from app.server.projects.persistence.projects import Projects
+from app.agent.runtime.ports import get_canvas_port
 
 _SKILLS_DIR = Path(__file__).resolve().parent.parent / "skills"
 
@@ -15,22 +16,30 @@ def _load_skills() -> str:
     return "\n\n".join(parts)
 
 
-async def compose_canvas_system_prompt(*, project_id: int) -> str:
+def _json_meta(value: dict) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+async def compose_canvas_system_prompt(*, project_id: int, episode_id: int) -> str:
     """组合项目元信息, 技能文档, 工具调用硬性规则"""
     skills = _load_skills()
-    project = await Projects.filter(id=project_id).first()
+    context = await get_canvas_port().get_project_prompt_context(project_id, episode_id)
     meta_lines: list[str] = []
-    if project is not None:
-        meta_lines.append(f"project_id={project_id}")
-        if project.name:
-            meta_lines.append(f"name={project.name}")
-        if project.tone_constraint:
-            meta_lines.append(f"tone_constraint={project.tone_constraint}")
-        if project.style_constraint:
-            meta_lines.append(f"style_constraint={project.style_constraint}")
-        if project.config:
-            meta_lines.append(f"config={project.config}")
-    meta_block = "\n".join(meta_lines) if meta_lines else f"project_id={project_id}"
+    meta_lines.append(f"project_id={project_id}")
+    meta_lines.append(f"episode_id={episode_id}")
+    if context.episode_no is not None:
+        meta_lines.append(f"episode_no={context.episode_no}")
+    if context.episode_name is not None:
+        meta_lines.append(f"episode_name={context.episode_name}")
+    if context.project_name:
+        meta_lines.append(f"project_name={context.project_name}")
+    if context.tone_constraint:
+        meta_lines.append(f"tone_constraint={_json_meta(context.tone_constraint)}")
+    if context.style_constraint:
+        meta_lines.append(f"style_constraint={_json_meta(context.style_constraint)}")
+    if context.config:
+        meta_lines.append(f"config={_json_meta(context.config)}")
+    meta_block = "\n".join(meta_lines)
 
     policy = """## Policy
 

@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, File, Request, UploadFile
+from tortoise.transactions import in_transaction
 
 from app.server.assets.schemas import (
     AssetDeleteRequest,
@@ -13,6 +14,7 @@ from app.server.assets.schemas import (
 from app.server.assets.services.service import asset_service
 from app.server.assets.persistence.assets import Assets
 from app.server.api.schemas import Response
+from app.server.projects.services.cover import cover_service
 
 router = APIRouter()
 
@@ -108,5 +110,8 @@ async def update_asset(request: Request, body: AssetUpdateRequest) -> Response[A
 @router.post("/delete")
 async def delete_assets(request: Request, body: AssetDeleteRequest) -> Response[dict]:
     user_id: int = request.state.user_id
-    deleted = await asset_service.soft_delete_assets(user_id=user_id, asset_ids=body.asset_ids)
+    async with in_transaction():
+        deleted = await asset_service.soft_delete_assets(user_id=user_id, asset_ids=body.asset_ids)
+        # Cover refs are owned by projects; clear them explicitly at the use-case boundary.
+        await cover_service.clear_deleted_asset_refs(user_id=user_id, asset_ids=body.asset_ids)
     return Response(data={"deleted": deleted})

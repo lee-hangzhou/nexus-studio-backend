@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS projects (
   owner_user_id VARCHAR(255) NOT NULL,
   name VARCHAR(255) NOT NULL,
   status INTEGER NOT NULL,
+  cover_asset_id BIGINT,
   tone_constraint JSONB NOT NULL,
   style_constraint JSONB NOT NULL,
   config JSONB NOT NULL,
@@ -53,12 +54,16 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE INDEX IF NOT EXISTS idx_projects_owner_status ON projects (owner_user_id, status);
 CREATE INDEX IF NOT EXISTS idx_projects_owner_updated
   ON projects (owner_user_id, updated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_projects_cover_asset
+  ON projects (cover_asset_id)
+  WHERE cover_asset_id IS NOT NULL;
 
 COMMENT ON TABLE projects IS '短剧项目表，保存项目基本信息、全局约束和当前会话状态';
 COMMENT ON COLUMN projects.id IS '项目自增主键';
 COMMENT ON COLUMN projects.owner_user_id IS '项目所属用户标识';
 COMMENT ON COLUMN projects.name IS '项目名称';
 COMMENT ON COLUMN projects.status IS '项目状态枚举值';
+COMMENT ON COLUMN projects.cover_asset_id IS '项目封面资产 ID，代码层关联 assets.id';
 COMMENT ON COLUMN projects.tone_constraint IS '项目级基调约束，包含情绪和调性要求';
 COMMENT ON COLUMN projects.style_constraint IS '项目级视觉风格约束';
 COMMENT ON COLUMN projects.config IS '项目配置，包含集数、题材和生产参数';
@@ -68,6 +73,39 @@ COMMENT ON COLUMN projects.updated_at IS '更新时间';
 DROP TRIGGER IF EXISTS trg_projects_updated_at ON projects;
 CREATE TRIGGER trg_projects_updated_at
 BEFORE UPDATE ON projects
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+CREATE TABLE IF NOT EXISTS project_episodes (
+  id              BIGSERIAL PRIMARY KEY,
+  project_id      BIGINT NOT NULL,
+  creator_id      BIGINT NOT NULL,
+  episode_no      INTEGER NOT NULL,
+  name            VARCHAR(255) NOT NULL,
+  cover_asset_id  BIGINT,
+  deleted_at      TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_project_episodes_project_no
+  ON project_episodes (project_id, episode_no);
+CREATE INDEX IF NOT EXISTS idx_project_episodes_project_alive
+  ON project_episodes (project_id, episode_no, id)
+  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_project_episodes_project_updated_alive
+  ON project_episodes (project_id, updated_at DESC, id DESC)
+  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_project_episodes_creator_alive
+  ON project_episodes (creator_id, created_at DESC, id DESC)
+  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_project_episodes_cover_asset
+  ON project_episodes (cover_asset_id)
+  WHERE cover_asset_id IS NOT NULL;
+
+DROP TRIGGER IF EXISTS trg_project_episodes_updated_at ON project_episodes;
+CREATE TRIGGER trg_project_episodes_updated_at
+BEFORE UPDATE ON project_episodes
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 
@@ -236,79 +274,63 @@ COMMENT ON COLUMN generate_task.callback_sent IS '回调路径幂等标记，成
 
 
 
-CREATE TABLE IF NOT EXISTS canvas_project_meta (
-  project_id       BIGINT PRIMARY KEY REFERENCES projects(id),
-  revision         BIGINT NOT NULL DEFAULT 0,
-  node_count       INT NOT NULL DEFAULT 0,
-  edge_count       INT NOT NULL DEFAULT 0,
-  updated_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE IF NOT EXISTS canvas_episode_meta (
+  episode_id  BIGINT PRIMARY KEY,
+  revision    BIGINT NOT NULL DEFAULT 0,
+  node_count  INTEGER NOT NULL DEFAULT 0,
+  edge_count  INTEGER NOT NULL DEFAULT 0,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS canvas_nodes (
-  id               UUID PRIMARY KEY,
-  project_id       BIGINT NOT NULL REFERENCES projects(id),
-  kind             VARCHAR(16) NOT NULL,
-  position_x       DOUBLE PRECISION NOT NULL,
-  position_y       DOUBLE PRECISION NOT NULL,
-  title            VARCHAR(512) NOT NULL DEFAULT '',
-  input_prompt     TEXT NOT NULL DEFAULT '',
-  output_text      TEXT NOT NULL DEFAULT '',
-  status           VARCHAR(16) NOT NULL DEFAULT 'idle',
-  model_id         VARCHAR(128),
-  voice_id         VARCHAR(128),
-  ratio            VARCHAR(16),
-  duration_sec     INT,
-  resolution       VARCHAR(16),
-  task_id          BIGINT,
-  output_asset_ids JSONB,
-  error_message    TEXT,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  deleted_at       TIMESTAMPTZ
+  id                UUID PRIMARY KEY,
+  episode_id        BIGINT NOT NULL,
+  kind              VARCHAR(16) NOT NULL,
+  position_x        DOUBLE PRECISION NOT NULL,
+  position_y        DOUBLE PRECISION NOT NULL,
+  title             VARCHAR(512) NOT NULL DEFAULT '',
+  input_prompt      TEXT NOT NULL DEFAULT '',
+  output_text       TEXT NOT NULL DEFAULT '',
+  status            VARCHAR(16) NOT NULL DEFAULT 'idle',
+  model_id          VARCHAR(128),
+  voice_id          VARCHAR(128),
+  ratio             VARCHAR(16),
+  duration_sec      INTEGER,
+  resolution        VARCHAR(16),
+  task_id           BIGINT,
+  output_asset_ids  JSONB,
+  error_message     TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  deleted_at        TIMESTAMPTZ
 );
-
-CREATE INDEX IF NOT EXISTS idx_canvas_nodes_project_alive
-  ON canvas_nodes (project_id) WHERE deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_canvas_nodes_project_status
-  ON canvas_nodes (project_id, status) WHERE deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_canvas_nodes_task_alive
-  ON canvas_nodes (task_id) WHERE deleted_at IS NULL AND task_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS canvas_edges (
-  id               UUID PRIMARY KEY,
-  project_id       BIGINT NOT NULL REFERENCES projects(id),
-  source_node_id   UUID NOT NULL REFERENCES canvas_nodes(id),
-  target_node_id   UUID NOT NULL REFERENCES canvas_nodes(id),
-  source_port      VARCHAR(64) NOT NULL,
-  target_port      VARCHAR(64) NOT NULL,
-  edge_type        VARCHAR(32) NOT NULL DEFAULT 'dependency',
-  metadata         JSONB NOT NULL DEFAULT '{}',
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  deleted_at       TIMESTAMPTZ
+  id              UUID PRIMARY KEY,
+  episode_id      BIGINT NOT NULL,
+  source_node_id  UUID NOT NULL,
+  target_node_id  UUID NOT NULL,
+  source_port     VARCHAR(64) NOT NULL,
+  target_port     VARCHAR(64) NOT NULL,
+  edge_type       VARCHAR(32) NOT NULL DEFAULT 'dependency',
+  metadata        JSONB NOT NULL DEFAULT '{}',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  deleted_at      TIMESTAMPTZ
 );
-
-CREATE INDEX IF NOT EXISTS idx_canvas_edges_project_alive
-  ON canvas_edges (project_id) WHERE deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_canvas_edges_source
-  ON canvas_edges (project_id, source_node_id) WHERE deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_canvas_edges_target
-  ON canvas_edges (project_id, target_node_id) WHERE deleted_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS canvas_messages (
-  id               BIGSERIAL PRIMARY KEY,
-  project_id       BIGINT NOT NULL,
-  user_id          BIGINT NOT NULL,
-  role             SMALLINT NOT NULL,
-  content          TEXT NOT NULL,
-  metadata         JSONB NOT NULL DEFAULT '{}',
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+  id          BIGSERIAL PRIMARY KEY,
+  episode_id  BIGINT NOT NULL,
+  user_id     BIGINT NOT NULL,
+  role        SMALLINT NOT NULL,
+  content     TEXT NOT NULL,
+  metadata    JSONB NOT NULL DEFAULT '{}',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
-CREATE INDEX IF NOT EXISTS idx_canvas_messages_project ON canvas_messages (project_id, created_at);
 
 CREATE TABLE IF NOT EXISTS canvas_operations (
   op_id            UUID PRIMARY KEY,
-  project_id       BIGINT NOT NULL,
+  episode_id       BIGINT NOT NULL,
   user_id          BIGINT NOT NULL,
   turn_id          VARCHAR(64),
   op_type          VARCHAR(32) NOT NULL,
@@ -319,11 +341,34 @@ CREATE TABLE IF NOT EXISTS canvas_operations (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_canvas_operations_project ON canvas_operations (project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_canvas_nodes_episode_alive
+  ON canvas_nodes (episode_id)
+  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_canvas_nodes_episode_status_alive
+  ON canvas_nodes (episode_id, status)
+  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_canvas_nodes_task_alive
+  ON canvas_nodes (task_id)
+  WHERE deleted_at IS NULL AND task_id IS NOT NULL;
 
-DROP TRIGGER IF EXISTS trg_canvas_project_meta_updated_at ON canvas_project_meta;
-CREATE TRIGGER trg_canvas_project_meta_updated_at
-BEFORE UPDATE ON canvas_project_meta
+CREATE INDEX IF NOT EXISTS idx_canvas_edges_episode_alive
+  ON canvas_edges (episode_id)
+  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_canvas_edges_source_alive
+  ON canvas_edges (episode_id, source_node_id)
+  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_canvas_edges_target_alive
+  ON canvas_edges (episode_id, target_node_id)
+  WHERE deleted_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_canvas_messages_episode
+  ON canvas_messages (episode_id, created_at, id);
+CREATE INDEX IF NOT EXISTS idx_canvas_operations_episode
+  ON canvas_operations (episode_id, created_at DESC);
+
+DROP TRIGGER IF EXISTS trg_canvas_episode_meta_updated_at ON canvas_episode_meta;
+CREATE TRIGGER trg_canvas_episode_meta_updated_at
+BEFORE UPDATE ON canvas_episode_meta
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 

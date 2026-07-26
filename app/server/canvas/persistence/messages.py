@@ -9,7 +9,7 @@ class CanvasMessages(AppendOnlyModel):
     使用 append-only 基类保留对话历史，metadata 存 turn_id、工具步骤摘要等辅助信息。
     """
 
-    project_id = fields.BigIntField(null=False)
+    episode_id = fields.BigIntField(null=False)
     user_id = fields.BigIntField(null=False)
     role = fields.SmallIntField(null=False)
     content = fields.TextField(null=False)
@@ -18,4 +18,4 @@ class CanvasMessages(AppendOnlyModel):
     class Meta(AppendOnlyModel.Meta):
         table = "canvas_messages"
         abstract = False
-        indexes = [("project_id", "created_at")]
+        indexes = [("episode_id", "created_at")]

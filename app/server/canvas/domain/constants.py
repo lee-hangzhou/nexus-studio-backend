@@ -6,4 +6,4 @@ CANVAS_OPERATION_TYPE_APPLY_PATCH = "apply_patch"
 CANVAS_OPERATION_STATUS_APPLIED = "applied"
 
 CANVAS_CHECKPOINT_THREAD_PREFIX = "canvas"
-CANVAS_TURN_LOCK_KEY_TEMPLATE = "canvas:turn_lock:{project_id}"
+CANVAS_TURN_LOCK_KEY_TEMPLATE = "canvas:turn_lock:{episode_id}"

@@ -7,6 +7,7 @@ class Projects(BaseModel):
     owner_user_id = fields.CharField(max_length=255, null=False)
     name = fields.CharField(max_length=255, null=False)
     status = fields.IntField(null=False)
+    cover_asset_id = fields.BigIntField(null=True)
     tone_constraint = fields.JSONField(null=False)
     style_constraint = fields.JSONField(null=False)
     config = fields.JSONField(null=False)

@@ -365,6 +365,10 @@
           "title": "Edges",
           "type": "array"
         },
+        "episode_id": {
+          "title": "Episode Id",
+          "type": "integer"
+        },
         "nodes": {
           "items": {
             "$ref": "#/$defs/CanvasNodeView"
@@ -372,12 +376,18 @@
           "title": "Nodes",
           "type": "array"
         },
+        "project_id": {
+          "title": "Project Id",
+          "type": "integer"
+        },
         "revision": {
           "title": "Revision",
           "type": "integer"
         }
       },
       "required": [
+        "project_id",
+        "episode_id",
         "revision",
         "nodes",
         "edges"

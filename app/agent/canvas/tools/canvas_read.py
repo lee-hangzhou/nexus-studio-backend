@@ -7,12 +7,9 @@ from uuid import UUID
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
-from app.server.canvas.services.canvas_service import node_view_from_row, refresh_node_asset_urls
 from app.agent.chat.tools.result import ToolResult
+from app.agent.runtime.ports import get_canvas_port
 from app.server.canvas.domain.enums import CanvasNodeKind, CanvasNodeStatus
-from app.server.canvas.persistence.edges import CanvasEdges
-from app.server.canvas.persistence.nodes import CanvasNodes
-from app.server.canvas.persistence.project_meta import CanvasProjectMeta
 
 
 class CanvasQueryDetail(StrEnum):
@@ -33,33 +30,37 @@ class QueryCanvasNodesInput(BaseModel):
     include_edges: bool = Field(default=False)
 
 
-async def _query_canvas_nodes(project_id: int, args: QueryCanvasNodesInput) -> ToolResult:
+async def _query_canvas_nodes(
+    *,
+    project_id: int,
+    episode_id: int,
+    user_id: int,
+    args: QueryCanvasNodesInput,
+) -> ToolResult:
     """读取画布 revision, 节点, 可选边, 按 detail 控制字段量"""
-    meta = await CanvasProjectMeta.filter(project_id=project_id).first()
-    revision = int(meta.revision) if meta else 0
-    q = CanvasNodes.filter(project_id=project_id, deleted_at__isnull=True)
+    node_ids: tuple[str, ...] | None = None
     if args.node_ids:
-        uuids = []
         for nid in args.node_ids:
             try:
-                uuids.append(UUID(nid))
+                UUID(nid)
             except ValueError:
                 return ToolResult.fail("invalid_node_id", detail=nid)
-        q = q.filter(id__in=uuids)
-    if args.kind:
-        q = q.filter(kind=args.kind)
-    if args.status:
-        q = q.filter(status=args.status)
-    rows = await q.all()
-    node_views = [node_view_from_row(row) for row in rows]
-    if args.detail == CanvasQueryDetail.FULL:
-        await refresh_node_asset_urls(node_views)
-    node_views_by_id = {str(view.id): view for view in node_views}
+        node_ids = tuple(args.node_ids)
+    graph = await get_canvas_port().get_graph(
+        project_id=project_id,
+        episode_id=episode_id,
+        user_id=user_id,
+        node_ids=node_ids,
+        kind=args.kind,
+        status=args.status,
+        include_edges=args.include_edges,
+        include_asset_urls=args.detail == CanvasQueryDetail.FULL,
+    )
     status_counts: dict[str, int] = {}
     nodes_out: list[dict] = []
-    for row in rows:
+    for row in graph.nodes:
         # standard 只含模型决策必需字段, full 含资产与错误信息
-        status_counts[row.status] = status_counts.get(row.status, 0) + 1
+        status_counts[row.status.value] = status_counts.get(row.status.value, 0) + 1
         item: dict = {
             "id": str(row.id),
             "kind": row.kind,
@@ -83,28 +84,27 @@ async def _query_canvas_nodes(project_id: int, args: QueryCanvasNodesInput) -> T
                 }
             )
         if args.detail == CanvasQueryDetail.FULL:
-            item["output_asset_ids"] = row.output_asset_ids
-            item["output_asset_urls"] = node_views_by_id[str(row.id)].output_asset_urls
+            item["output_asset_ids"] = list(row.output_asset_ids)
+            item["output_asset_urls"] = list(row.output_asset_urls)
             item["error_message"] = row.error_message
         nodes_out.append(item)
     edges_out: list[dict[str, str]] = []
     if args.include_edges:
         # 依赖边供 Agent 判断 text, image, video 链路顺序
-        edges = await CanvasEdges.filter(project_id=project_id, deleted_at__isnull=True).all()
         edges_out = [
             {
                 "id": str(e.id),
-                "source": str(e.source_node_id),
-                "target": str(e.target_node_id),
-                "source_port": e.source_port,
-                "target_port": e.target_port,
-                "edge_type": e.edge_type,
-                "metadata": e.metadata or {},
+                "source": e.source_node_id,
+                "target": e.target_node_id,
+                "source_port": e.source_port.value,
+                "target_port": e.target_port.value,
+                "edge_type": e.edge_type.value,
+                "metadata": e.metadata,
             }
-            for e in edges
+            for e in graph.edges
         ]
     payload = {
-        "revision": revision,
+        "revision": graph.revision,
         "matched": len(nodes_out),
         "status_counts": status_counts,
         "nodes": nodes_out,
@@ -116,7 +116,7 @@ async def _query_canvas_nodes(project_id: int, args: QueryCanvasNodesInput) -> T
     return ToolResult.ok(text)
 
 
-def build_query_canvas_nodes_tool(project_id: int) -> StructuredTool:
+def build_query_canvas_nodes_tool(*, project_id: int, episode_id: int, user_id: int) -> StructuredTool:
     """构建 query_canvas_nodes 结构化工具"""
     async def _run(
         node_ids: list[str] | None = None,
@@ -133,13 +133,20 @@ def build_query_canvas_nodes_tool(project_id: int) -> StructuredTool:
             detail=detail,
             include_edges=include_edges,
         )
-        return (await _query_canvas_nodes(project_id, args)).to_tool_message()
+        return (
+            await _query_canvas_nodes(
+                project_id=project_id,
+                episode_id=episode_id,
+                user_id=user_id,
+                args=args,
+            )
+        ).to_tool_message()
 
     return StructuredTool.from_function(
         coroutine=_run,
         name="query_canvas_nodes",
         description=(
-            "Query canvas nodes and optional edges for this project. "
+            "Query canvas nodes and optional edges for this episode. "
             "Call before patch or generation when you need current layout. "
             "Returns revision for apply_canvas_patch."
         ),

@@ -9,7 +9,7 @@ from uuid import uuid4
 from langgraph.types import Command
 
 from app.agent.canvas.mount import CANVAS_MOUNT, CanvasMountContext
-from app.agent.canvas.turn.lock import project_turn_lock
+from app.agent.canvas.turn.lock import canvas_turn_lock
 from app.agent.chat.stream.encoder import encode_sse_frame
 from app.agent.chat.stream.frames import StreamFrameType, create_stream_frame
 from app.agent.runtime.checkpointer import get_chat_checkpointer
@@ -23,6 +23,7 @@ from app.server.infra.logger import bind_context, log_exception, logger
 async def stream_canvas_turn(
     *,
     project_id: int,
+    episode_id: int,
     user_id: int,
     content: str,
     model_key: str,
@@ -34,16 +35,17 @@ async def stream_canvas_turn(
     lock_held: bool = False,
 ) -> AsyncIterator[str]:
     turn_id = turn_id or uuid4().hex
-    bind_context(user_id=user_id, project_id=project_id, turn_id=turn_id)
+    bind_context(user_id=user_id, project_id=project_id, episode_id=episode_id, turn_id=turn_id)
     acquired = False
     try:
         if not lock_held:
-            await project_turn_lock.acquire(project_id, turn_id)
+            await canvas_turn_lock.acquire(episode_id, turn_id)
             acquired = True
 
         ctx = CanvasMountContext(
             user_id=user_id,
-            conversation_id=project_id,
+            project_id=project_id,
+            episode_id=episode_id,
             turn_id=turn_id,
             cancel_event=cancel_event,
             checkpointer=get_chat_checkpointer(),
@@ -57,6 +59,7 @@ async def stream_canvas_turn(
         logger.info(
             "canvas.turn.start",
             project_id=project_id,
+            episode_id=episode_id,
             turn_id=turn_id,
             mode=mode,
             model_key=ctx.resolved_model_key,
@@ -66,8 +69,8 @@ async def stream_canvas_turn(
             yield chunk
     except AppError as exc:
         code = {
-            int(ErrorCode.CANVAS_PROJECT_BUSY): "canvas_project_busy",
-            int(ErrorCode.CANVAS_DUPLICATE_TURN): "canvas_duplicate_turn",
+            int(ErrorCode.CANVAS_EPISODE_BUSY): StreamErrorCode.CANVAS_EPISODE_BUSY.value,
+            int(ErrorCode.CANVAS_DUPLICATE_TURN): StreamErrorCode.CANVAS_DUPLICATE_TURN.value,
         }.get(exc.code, "internal")
         yield encode_sse_frame(
             create_stream_frame(
@@ -83,6 +86,7 @@ async def stream_canvas_turn(
             "canvas.turn.error",
             exc=exc,
             project_id=project_id,
+            episode_id=episode_id,
             turn_id=turn_id,
         )
         yield encode_sse_frame(
@@ -95,12 +99,13 @@ async def stream_canvas_turn(
         )
     finally:
         if acquired:
-            await project_turn_lock.release(project_id, turn_id)
+            await canvas_turn_lock.release(episode_id, turn_id)
 
 
 async def stream_canvas_resume(
     *,
     project_id: int,
+    episode_id: int,
     user_id: int,
     turn_id: str,
     tool_call_id: str,
@@ -113,7 +118,7 @@ async def stream_canvas_resume(
     acquired = False
     try:
         if not lock_held:
-            await project_turn_lock.acquire(project_id, turn_id)
+            await canvas_turn_lock.acquire(episode_id, turn_id)
             acquired = True
 
         decision = (
@@ -123,7 +128,8 @@ async def stream_canvas_resume(
         )
         ctx = CanvasMountContext(
             user_id=user_id,
-            conversation_id=project_id,
+            project_id=project_id,
+            episode_id=episode_id,
             turn_id=turn_id,
             cancel_event=cancel_event,
             checkpointer=get_chat_checkpointer(),
@@ -141,4 +147,4 @@ async def stream_canvas_resume(
             yield chunk
     finally:
         if acquired:
-            await project_turn_lock.release(project_id, turn_id)
+            await canvas_turn_lock.release(episode_id, turn_id)

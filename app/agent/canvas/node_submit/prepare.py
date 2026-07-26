@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Literal
-from uuid import UUID
 
 from app.agent.canvas.node_submit.collect_refs import (
     collect_submit_material_refs,
@@ -14,48 +13,35 @@ from app.agent.canvas.node_submit.types import (
     WorkflowPromptContent,
 )
 from app.agent.canvas.workflow.inputs import resolve_node_inputs
+from app.agent.runtime.ports import get_canvas_port
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
-from app.server.canvas.persistence.edges import CanvasEdges
-from app.server.canvas.persistence.nodes import CanvasNodes
+from app.server.ports.product import CanvasEdgeDTO, CanvasNodeDTO
 
 
-def _edge_to_graph(edge: CanvasEdges) -> dict:
+def _edge_to_graph(edge: CanvasEdgeDTO) -> dict:
     return {
-        "source": str(edge.source_node_id),
-        "target": str(edge.target_node_id),
-        "data": {"source_port": edge.source_port, "target_port": edge.target_port},
+        "source": edge.source_node_id,
+        "target": edge.target_node_id,
+        "data": {"source_port": edge.source_port.value, "target_port": edge.target_port.value},
     }
 
 
-def _node_to_graph(row: CanvasNodes) -> dict:
-    raw_ids = row.output_asset_ids
-    asset_ids = [int(item) for item in raw_ids] if isinstance(raw_ids, list) else []
+def _node_to_graph(node: CanvasNodeDTO) -> dict:
     return {
-        "id": str(row.id),
+        "id": node.id,
         "data": {
-            "status": row.status,
-            "input_prompt": row.input_prompt,
-            "output_text": row.output_text,
-            "output_asset_ids": asset_ids,
+            "status": node.status.value,
+            "input_prompt": node.input_prompt,
+            "output_text": node.output_text,
+            "output_asset_ids": list(node.output_asset_ids),
         },
     }
 
 
-async def _load_incoming_graph(project_id: int, node_id: str) -> tuple[list[dict], list[dict]]:
-    edges = await CanvasEdges.filter(
-        project_id=project_id,
-        target_node_id=UUID(node_id),
-        deleted_at__isnull=True,
-    ).all()
-    source_ids = {edge.source_node_id for edge in edges}
-    node_ids = {UUID(node_id), *source_ids}
-    rows = await CanvasNodes.filter(
-        project_id=project_id,
-        id__in=list(node_ids),
-        deleted_at__isnull=True,
-    ).all()
-    return [_node_to_graph(row) for row in rows], [_edge_to_graph(edge) for edge in edges]
+async def _load_incoming_graph(episode_id: int, node_id: str) -> tuple[list[dict], list[dict]]:
+    graph = await get_canvas_port().get_incoming_graph(episode_id, node_id)
+    return [_node_to_graph(node) for node in graph.nodes], [_edge_to_graph(edge) for edge in graph.edges]
 
 
 def _expected_refs_from_graph(
@@ -132,7 +118,7 @@ def _validate_agent_ref_asset_ids(
 
 
 async def prepare_node_submit(
-    project_id: int,
+    episode_id: int,
     node_id: str,
     *,
     mode: Literal["manual", "agent"],
@@ -145,7 +131,7 @@ async def prepare_node_submit(
 ) -> PrepareNodeSubmitResult:
     """画布节点提交唯一契约：manual 校验 refs，agent 校验 prompt + 有序 refs。"""
     if mode == "manual":
-        nodes, edges = await _load_incoming_graph(project_id, node_id)
+        nodes, edges = await _load_incoming_graph(episode_id, node_id)
         expected = _expected_refs_from_graph(
             node_id,
             nodes,
@@ -169,7 +155,7 @@ async def prepare_node_submit(
             ref_attachment_ids=expected.ref_attachment_ids,
         )
 
-    resolved = await resolve_node_inputs(project_id, node_id)
+    resolved = await resolve_node_inputs(episode_id, node_id)
     if resolved.waiting_on:
         reasons = ", ".join(item.reason.value for item in resolved.waiting_on)
         raise AppError(

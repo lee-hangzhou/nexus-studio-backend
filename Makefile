@@ -73,7 +73,7 @@ clean:
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
 db-schema:
-	psql "$$DATABASE_URL" < db/schema.sql
+	psql "$$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/schema.sql
 
 db-reset:
 	@test "$$ENV" != "production"

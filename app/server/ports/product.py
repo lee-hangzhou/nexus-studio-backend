@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
-from app.contracts.canvas import CanvasNodeView, CanvasPatchResponse
-from app.server.canvas.domain.enums import CanvasNodeStatus
+from app.contracts.canvas import CanvasNodeView, CanvasPatchOp, CanvasPatchResponse
+from app.server.canvas.domain.enums import (
+    CanvasEdgeType,
+    CanvasNodeKind,
+    CanvasNodeStatus,
+    CanvasSourcePort,
+    CanvasTargetPort,
+)
 from app.server.generation.domain.enums import GenerationKind
 from app.server.generation.domain.models import GenerationModelCapabilities
-from app.server.generation.schemas.observation import GatewayQueueObservation
-from app.server.generation.persistence.generate_task import GenerateTask
 from app.server.generation.schemas import (
     GenerateMaterialUploadResponse,
     GenerateModelsResponse,
@@ -19,15 +23,102 @@ from app.server.generation.schemas import (
 
 
 @dataclass(frozen=True)
-class ObservedGenerationDTO:
-    task: GenerateTask
-    observation: GatewayQueueObservation | None = None
+class GenerationTaskDTO:
+    id: int
+    user_id: int
+    status: int
+    result_asset_ids: tuple[int, ...]
+    error_message: str | None
 
 
 @dataclass(frozen=True)
-class CanvasNodeRef:
-    node_id: str
+class ObservedGenerationDTO:
+    task: GenerationTaskDTO
+    view: GenerateTaskView
+
+
+@dataclass(frozen=True)
+class CanvasNodeDTO:
+    id: str
+    episode_id: int
+    kind: CanvasNodeKind
+    status: CanvasNodeStatus
+    position_x: float
+    position_y: float
+    title: str
+    input_prompt: str
+    output_text: str
+    model_id: str | None
+    voice_id: str | None
+    ratio: str | None
+    duration_sec: int | None
+    resolution: str | None
     task_id: int | None
+    output_asset_ids: tuple[int, ...]
+    output_asset_urls: tuple[str, ...]
+    error_message: str | None
+
+
+@dataclass(frozen=True)
+class CanvasEdgeDTO:
+    id: str
+    source_node_id: str
+    target_node_id: str
+    source_port: CanvasSourcePort
+    target_port: CanvasTargetPort
+    edge_type: CanvasEdgeType
+    metadata: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class CanvasGraphDTO:
+    revision: int
+    nodes: tuple[CanvasNodeDTO, ...]
+    edges: tuple[CanvasEdgeDTO, ...]
+
+
+@dataclass(frozen=True)
+class CanvasNodeClaimDTO:
+    claimed: bool
+    active_task_id: int | None = None
+    revision: int | None = None
+    node: CanvasNodeView | None = None
+
+
+@dataclass(frozen=True)
+class CanvasTaskProjectionDTO:
+    project_id: int
+    episode_id: int
+    node_id: str
+    task_id: int
+    user_id: int
+    status: CanvasNodeStatus
+    patch: CanvasPatchResponse | None
+
+
+@dataclass(frozen=True)
+class ProjectPromptContextDTO:
+    project_id: int
+    episode_id: int
+    project_name: str | None = None
+    episode_no: int | None = None
+    episode_name: str | None = None
+    tone_constraint: dict[str, Any] | None = None
+    style_constraint: dict[str, Any] | None = None
+    config: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class AssetDTO:
+    id: int
+    asset_type: str
+    mime_type: str
+    filename: str
+    source_type: str
+    source_id: str | None
+    metadata: dict[str, Any]
+    status: str
+    preview_url: str
 
 
 @runtime_checkable
@@ -35,8 +126,6 @@ class GenerationPort(Protocol):
     async def submit(self, user_id: int, req: SubmitGenerateRequest) -> GenerateTaskSubmitResponse: ...
 
     async def observe_task(self, task_id: int, user_id: int) -> ObservedGenerationDTO: ...
-
-    async def assemble_task_view(self, observed: ObservedGenerationDTO, user_id: int) -> GenerateTaskView: ...
 
     async def list_models(self, kind: GenerationKind) -> GenerateModelsResponse: ...
 
@@ -72,23 +161,100 @@ class GenerationPort(Protocol):
 
 @runtime_checkable
 class CanvasPort(Protocol):
-    async def project_from_task(self, task: GenerateTask) -> CanvasPatchResponse | None: ...
+    async def project_generation_task(self, task_id: int, user_id: int) -> CanvasTaskProjectionDTO | None: ...
 
-    async def get_node(self, project_id: int, node_id: str) -> CanvasNodeRef | None: ...
+    async def get_node(self, episode_id: int, node_id: str) -> CanvasNodeDTO | None: ...
 
-    async def list_project_node_task_ids(self, project_id: int, *, limit: int) -> list[int]: ...
+    async def get_graph(
+        self,
+        *,
+        project_id: int,
+        episode_id: int,
+        user_id: int,
+        node_ids: tuple[str, ...] | None = None,
+        kind: CanvasNodeKind | None = None,
+        status: CanvasNodeStatus | None = None,
+        include_edges: bool = False,
+        include_asset_urls: bool = False,
+    ) -> CanvasGraphDTO: ...
+
+    async def get_incoming_graph(self, episode_id: int, node_id: str) -> CanvasGraphDTO: ...
+
+    async def list_dependency_targets(self, episode_id: int, source_node_id: str) -> tuple[str, ...]: ...
+
+    async def list_episode_node_task_ids(self, episode_id: int, *, limit: int) -> list[int]: ...
+
+    async def get_project_prompt_context(
+        self,
+        project_id: int,
+        episode_id: int,
+    ) -> ProjectPromptContextDTO: ...
+
+    async def apply_patch(
+        self,
+        *,
+        project_id: int,
+        episode_id: int,
+        user_id: int,
+        ops: list[CanvasPatchOp],
+        expected_revision: int,
+        turn_id: str | None,
+    ) -> CanvasPatchResponse: ...
+
+    async def claim_node_for_generation(self, episode_id: int, node_id: str) -> CanvasNodeClaimDTO: ...
+
+    async def claim_workflow_node(
+        self,
+        episode_id: int,
+        node_id: str,
+        *,
+        allowed_statuses: tuple[CanvasNodeStatus, ...],
+    ) -> tuple[int, CanvasNodeView] | None: ...
 
     async def update_node_generation(
         self,
-        project_id: int,
+        episode_id: int,
         node_id: str,
         *,
         task_id: int | None,
         status: CanvasNodeStatus,
         output_asset_ids: list[int] | None = None,
         error_message: str | None = None,
+        model_id: str | None = None,
+        voice_id: str | None = None,
+        duration_sec: int | None = None,
+        ratio: str | None = None,
+        resolution: str | None = None,
         expected_revision: int | None = None,
     ) -> tuple[int, CanvasNodeView]: ...
+
+    async def update_node_text_output(
+        self,
+        episode_id: int,
+        node_id: str,
+        *,
+        status: CanvasNodeStatus,
+        output_text: str | None = None,
+        error_message: str | None = None,
+        model_id: str | None = None,
+        expected_revision: int | None = None,
+    ) -> tuple[int, CanvasNodeView]: ...
+
+    async def is_turn_completed(self, episode_id: int, client_turn_id: str) -> bool: ...
+
+    async def append_canvas_message(
+        self,
+        *,
+        episode_id: int,
+        user_id: int,
+        role: int,
+        content: str,
+        metadata: dict[str, Any],
+    ) -> None: ...
+
+    async def find_user_turn_message(self, episode_id: int, client_turn_id: str) -> bool: ...
+
+    async def touch_episode(self, episode_id: int) -> None: ...
 
 
 @runtime_checkable
@@ -101,3 +267,14 @@ class AssetsPort(Protocol):
     async def resolve_storage_key(self, asset_id: int, user_id: int) -> str | None: ...
 
     def build_url(self, storage_key: str) -> str: ...
+
+    async def list_assets(
+        self,
+        *,
+        user_id: int,
+        asset_type: str | None,
+        source_type: str | None,
+        limit: int,
+    ) -> tuple[AssetDTO, ...]: ...
+
+    async def get_asset(self, *, user_id: int, asset_id: int) -> AssetDTO | None: ...

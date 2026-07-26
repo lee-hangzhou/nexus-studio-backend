@@ -1,0 +1,5 @@
+REVISION_CONFLICT = "revision_conflict"
+INVALID_NODE_ID = "invalid_node_id"
+INVALID_PATCH = "invalid_patch"
+GENERATION_FAILED = "generation_failed"
+NODE_GENERATION_IN_PROGRESS = "node_generation_in_progress"

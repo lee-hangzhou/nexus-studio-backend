@@ -12,6 +12,15 @@ from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
 from app.server.canvas.persistence.nodes import CanvasNodes
 from app.server.generation.persistence.generate_task import GenerateTask
+from app.server.projects.domain.models import CanvasScope
+from app.server.projects.persistence.episodes import ProjectEpisodes
+
+
+async def _scope_for_node(node: CanvasNodes, *, user_id: int) -> CanvasScope | None:
+    episode = await ProjectEpisodes.filter(id=node.episode_id, deleted_at__isnull=True).first()
+    if episode is None:
+        return None
+    return CanvasScope(project_id=int(episode.project_id), episode_id=int(episode.id), user_id=user_id)
 
 
 def node_status_from_task(status: int) -> CanvasNodeStatus:
@@ -82,6 +91,9 @@ async def sync_canvas_node_from_generate_task(
     node = await CanvasNodes.filter(task_id=task.id, deleted_at__isnull=True).first()
     if node is None:
         return None
+    scope = await _scope_for_node(node, user_id=int(task.user_id))
+    if scope is None:
+        return None
 
     status = node_status_from_task(task.status)
     output_asset_ids = (
@@ -91,12 +103,12 @@ async def sync_canvas_node_from_generate_task(
     )
 
     rev, node_view = await canvas_service.update_node_generation(
-        node.project_id,
+        node.episode_id,
         str(node.id),
         task_id=task.id,
         status=status,
         output_asset_ids=output_asset_ids,
         error_message=task.error_message,
+        scope=scope,
     )
-    await canvas_service.refresh_node_asset_urls([node_view])
     return CanvasPatchResponse(revision=rev, nodes=[node_view])

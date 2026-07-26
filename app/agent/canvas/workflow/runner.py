@@ -1,19 +1,16 @@
 from __future__ import annotations
 
-from app.server.canvas.services.canvas_service import canvas_service
-from app.agent.canvas.turn.generation_hub import canvas_generation_hub
 from app.agent.canvas.node_submit.prepare import prepare_node_submit
+from app.agent.canvas.turn.generation_hub import canvas_generation_hub
 from app.agent.canvas.workflow.inputs import resolve_node_inputs
 from app.agent.canvas.workflow.params import resolve_node_generation_config
-from app.server.infra.logger import logger
-from app.server.canvas.domain.enums import CanvasEdgeType, CanvasNodeKind, CanvasNodeStatus
+from app.agent.runtime.ports import get_canvas_port, get_generation_port
+from app.server.canvas.domain.enums import CanvasNodeKind, CanvasNodeStatus
 from app.server.canvas.domain.models import ResolvedCanvasInputs
-from app.server.generation.domain.enums import GenerationKind
 from app.server.exceptions.base import AppError
-from app.server.canvas.persistence.edges import CanvasEdges
-from app.server.canvas.persistence.nodes import CanvasNodes
+from app.server.generation.domain.enums import GenerationKind
 from app.server.generation.schemas import SubmitGenerateRequest
-from app.agent.runtime.ports import get_generation_port
+from app.server.infra.logger import logger
 
 RUNNABLE_NODE_KINDS = {CanvasNodeKind.IMAGE, CanvasNodeKind.VIDEO}
 ADVANCEABLE_STATUSES = {
@@ -31,21 +28,22 @@ NON_REPEATABLE_STATUSES = {
 class CanvasWorkflowRunner:
     """根据依赖边推进下游节点生成"""
 
-    async def advance_from_node(self, project_id: int, source_node_id: str, *, user_id: int) -> None:
+    async def advance_from_node(
+        self,
+        project_id: int,
+        episode_id: int,
+        source_node_id: str,
+        *,
+        user_id: int,
+    ) -> None:
         """源节点完成后, 尝试推进其全部下游节点"""
-        edges = await CanvasEdges.filter(
-            project_id=project_id,
-            source_node_id=source_node_id,
-            deleted_at__isnull=True,
-            edge_type=CanvasEdgeType.DEPENDENCY.value,
-        ).all()
-        target_ids = list(dict.fromkeys(str(edge.target_node_id) for edge in edges))
+        target_ids = await get_canvas_port().list_dependency_targets(episode_id, source_node_id)
         for target_id in target_ids:
-            await self.advance_node(project_id, target_id, user_id=user_id)
+            await self.advance_node(project_id, episode_id, target_id, user_id=user_id)
 
-    async def advance_node(self, project_id: int, node_id: str, *, user_id: int) -> None:
+    async def advance_node(self, project_id: int, episode_id: int, node_id: str, *, user_id: int) -> None:
         """尝试推进单节点, 输入未齐时写 waiting_inputs"""
-        node = await CanvasNodes.filter(project_id=project_id, id=node_id, deleted_at__isnull=True).first()
+        node = await get_canvas_port().get_node(episode_id, node_id)
         if node is None or node.kind not in RUNNABLE_NODE_KINDS:
             return
         if node.status in NON_REPEATABLE_STATUSES or node.task_id is not None:
@@ -59,25 +57,27 @@ class CanvasWorkflowRunner:
             # 系统默认补齐 model 或时长后先持久化并通知前端
             await self._persist_generation_config(
                 project_id,
+                episode_id,
                 node_id,
                 model_id=model_id,
                 duration_sec=duration_sec,
             )
-            node = await CanvasNodes.filter(project_id=project_id, id=node_id, deleted_at__isnull=True).first()
+            node = await get_canvas_port().get_node(episode_id, node_id)
             if node is None:
                 return
 
-        resolved = await resolve_node_inputs(project_id, node_id)
+        resolved = await resolve_node_inputs(episode_id, node_id)
         missing = self._missing_requirements(
             resolved,
             model_id=model_id,
             duration_sec=duration_sec,
-            kind=CanvasNodeKind(node.kind),
+            kind=node.kind,
         )
         if missing:
             # 输入未齐不标失败, 记录等待原因待上游完成后再推
             await self._update_node_state(
                 project_id,
+                episode_id,
                 node_id,
                 status=CanvasNodeStatus.WAITING_INPUTS,
                 task_id=node.task_id,
@@ -85,20 +85,43 @@ class CanvasWorkflowRunner:
             )
             return
 
-        claimed = await self._claim_node(project_id, node_id)
-        if not claimed:
+        claimed = await get_canvas_port().claim_workflow_node(
+            episode_id,
+            node_id,
+            allowed_statuses=tuple(ADVANCEABLE_STATUSES),
+        )
+        if claimed is None:
             # 多 worker 或重复回调并发时仅一个 claim 成功
             return
+        rev, node_view = claimed
+        await canvas_generation_hub.publish(
+            episode_id,
+            {
+                "canvas_patch": {
+                    "revision": rev,
+                    "nodes": [node_view.model_dump(mode="json")],
+                    "edges": [],
+                    "deleted_node_ids": [],
+                    "deleted_edge_ids": [],
+                },
+                "progress": {
+                    "node_id": node_id,
+                    "task_id": None,
+                    "status": CanvasNodeStatus.RUNNING.value,
+                    "revision": rev,
+                },
+            },
+        )
         try:
             prepared = await prepare_node_submit(
-                project_id,
+                episode_id,
                 node_id,
                 mode="agent",
                 prompt=resolved.local_prompt,
                 ref_asset_ids=[slot.asset_id for slot in resolved.refs],
             )
             req = SubmitGenerateRequest(
-                kind=GenerationKind(node.kind),
+                kind=GenerationKind(node.kind.value),
                 prompt=prepared.prompt,
                 model_id=model_id,
                 ratio=node.ratio,
@@ -109,6 +132,7 @@ class CanvasWorkflowRunner:
             submitted = await get_generation_port().submit(user_id, req)
             await self._persist_generation_config(
                 project_id,
+                episode_id,
                 node_id,
                 model_id=model_id,
                 duration_sec=duration_sec if node.kind == CanvasNodeKind.VIDEO else None,
@@ -119,15 +143,17 @@ class CanvasWorkflowRunner:
             logger.info(
                 "canvas.workflow.submitted",
                 project_id=project_id,
+                episode_id=episode_id,
                 node_id=node_id,
                 task_id=submitted.task_id,
-                kind=node.kind,
+                kind=node.kind.value,
                 model_id=model_id,
             )
         except Exception as exc:
             message = exc.message if isinstance(exc, AppError) else str(exc)
             await self._update_node_state(
                 project_id,
+                episode_id,
                 node_id,
                 status=CanvasNodeStatus.FAILED,
                 task_id=None,
@@ -136,6 +162,7 @@ class CanvasWorkflowRunner:
             logger.warning(
                 "canvas.workflow.submit_failed",
                 project_id=project_id,
+                episode_id=episode_id,
                 node_id=node_id,
                 error=message,
             )
@@ -143,6 +170,7 @@ class CanvasWorkflowRunner:
     async def _persist_generation_config(
         self,
         project_id: int,
+        episode_id: int,
         node_id: str,
         *,
         model_id: str | None = None,
@@ -152,14 +180,14 @@ class CanvasWorkflowRunner:
         error_message: str | None = None,
     ) -> None:
         """持久化节点生成配置并通过 hub 广播"""
-        row = await CanvasNodes.filter(project_id=project_id, id=node_id, deleted_at__isnull=True).first()
+        row = await get_canvas_port().get_node(episode_id, node_id)
         if row is None:
             return
-        rev, node_view = await canvas_service.update_node_generation(
-            project_id,
+        rev, node_view = await get_canvas_port().update_node_generation(
+            episode_id,
             node_id,
             task_id=row.task_id if task_id is None else task_id,
-            status=status if status is not None else CanvasNodeStatus(row.status),
+            status=status if status is not None else row.status,
             model_id=model_id,
             duration_sec=duration_sec,
             error_message=error_message if error_message is not None else row.error_message,
@@ -172,7 +200,7 @@ class CanvasWorkflowRunner:
             "deleted_edge_ids": [],
         }
         await canvas_generation_hub.publish(
-            project_id,
+            episode_id,
             {
                 "canvas_patch": payload,
                 "progress": {
@@ -183,26 +211,6 @@ class CanvasWorkflowRunner:
                 },
             },
         )
-
-    async def _claim_node(self, project_id: int, node_id: str) -> bool:
-        """条件更新 claim 节点, 避免并发重复提交"""
-        updated = await CanvasNodes.filter(
-            project_id=project_id,
-            id=node_id,
-            deleted_at__isnull=True,
-            task_id__isnull=True,
-            status__in=[status.value for status in ADVANCEABLE_STATUSES],
-        ).update(status=CanvasNodeStatus.RUNNING.value, error_message=None)
-        if not updated:
-            return False
-        await self._update_node_state(
-            project_id,
-            node_id,
-            status=CanvasNodeStatus.RUNNING,
-            task_id=None,
-            error_message="",
-        )
-        return True
 
     def _missing_requirements(
         self,
@@ -226,6 +234,7 @@ class CanvasWorkflowRunner:
     async def _update_node_state(
         self,
         project_id: int,
+        episode_id: int,
         node_id: str,
         *,
         status: CanvasNodeStatus,
@@ -233,8 +242,8 @@ class CanvasWorkflowRunner:
         error_message: str | None,
     ) -> None:
         """更新节点状态并通过 generation hub 推送前端"""
-        rev, node_view = await canvas_service.update_node_generation(
-            project_id,
+        rev, node_view = await get_canvas_port().update_node_generation(
+            episode_id,
             node_id,
             task_id=task_id,
             status=status,
@@ -248,7 +257,7 @@ class CanvasWorkflowRunner:
             "deleted_edge_ids": [],
         }
         await canvas_generation_hub.publish(
-            project_id,
+            episode_id,
             {
                 "canvas_patch": payload,
                 "progress": {

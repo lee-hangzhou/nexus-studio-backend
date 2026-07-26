@@ -68,11 +68,16 @@ async def stream_agent_turn(
             if mount.resolve_client_turn_id is not None
             else getattr(ctx, "client_turn_id", None)
         )
+        runtime_scope_id = (
+            mount.resolve_runtime_scope_id(ctx)
+            if mount.resolve_runtime_scope_id is not None
+            else getattr(ctx, "conversation_id", None)
+        )
 
         prepared = PreparedTurn(
             agent=agent,
             turn_id=turn_id,
-            conversation_id=ctx.conversation_id,
+            conversation_id=runtime_scope_id,
             user_id=ctx.user_id,
             runnable_config=runnable_config,
             thread_id=thread_id,

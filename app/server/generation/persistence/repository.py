@@ -41,6 +41,14 @@ class GenerateTaskRepository(BaseRepository[GenerateTask]):
             deleted_at__isnull=True,
         ).all()
 
+    async def get_active_by_ids(self, task_ids: Collection[int]) -> list[GenerateTask]:
+        if not task_ids:
+            return []
+        return await self.model.filter(
+            id__in=task_ids,
+            deleted_at__isnull=True,
+        ).all()
+
     async def get_active_for_user(self, task_id: int, user_id: int) -> GenerateTask | None:
         return await self.model.get_or_none(
             id=task_id,

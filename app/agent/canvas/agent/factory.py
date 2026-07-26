@@ -16,6 +16,7 @@ async def build_canvas_agent(
     llm: GatewayChatModel,
     *,
     project_id: int,
+    episode_id: int,
     user_id: int,
     checkpointer: BaseCheckpointSaver,
     enable_tools: bool,
@@ -25,15 +26,16 @@ async def build_canvas_agent(
     loop_guard: TurnToolLoopGuard | None = None,
 ) -> tuple[CompiledStateGraph, str]:
     """组装 LLM, 工具, system prompt, checkpointer, store 为可运行图"""
-    system_prompt = await compose_canvas_system_prompt(project_id=project_id)
+    system_prompt = await compose_canvas_system_prompt(project_id=project_id, episode_id=episode_id)
     # turn_id_holder 可变容器, SSE turn 创建后工具执行可读最新 turn_id
     turn_id_holder = turn_id_holder if turn_id_holder is not None else {"turn_id": turn_id}
     if turn_id and not turn_id_holder.get("turn_id"):
         turn_id_holder["turn_id"] = turn_id
     tools: list[StructuredTool] = (
         build_canvas_tools(
-            project_id,
-            user_id,
+            project_id=project_id,
+            episode_id=episode_id,
+            user_id=user_id,
             turn_id_holder=turn_id_holder,
             loop_guard=loop_guard,
         )

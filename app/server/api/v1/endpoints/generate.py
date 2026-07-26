@@ -130,5 +130,5 @@ async def list_voices(model: str) -> Response[dict]:
 async def receive_generate_callback(payload: GenerateCallbackPayload) -> Response[dict]:
     """接收 union_lm 网关回调（内网专用，已在 JWT 白名单中放行）"""
     outcome = await generation_service.handle_callback(payload)
-    await project_from_task(outcome.task)
+    await project_from_task(int(outcome.task.id), int(outcome.task.user_id))
     return Response(data={"accepted": True})

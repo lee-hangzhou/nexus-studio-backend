@@ -1,20 +1,11 @@
 from __future__ import annotations
 
-from uuid import UUID
-
-from tortoise.transactions import in_transaction
-
-from app.server.canvas.services.errors import NODE_GENERATION_IN_PROGRESS
-from app.server.canvas.services.canvas_service import node_view_from_row
+from app.agent.canvas.errors import NODE_GENERATION_IN_PROGRESS
+from app.agent.runtime.ports import get_canvas_port
 from app.contracts.canvas import CanvasNodeView
-from app.server.infra.logger import logger
-from app.server.canvas.domain.enums import CanvasNodeStatus
-from app.server.generation.domain.gateway_status import GatewayTaskStatus
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
-from app.server.canvas.persistence.nodes import CanvasNodes
-from app.server.canvas.persistence.project_meta import CanvasProjectMeta
-from app.server.generation.persistence.generate_task import GenerateTask
+from app.server.infra.logger import logger
 
 
 def node_generation_in_progress_detail(*, task_id: int | None = None) -> str:
@@ -42,61 +33,17 @@ class NodeGenerationInProgressError(AppError):
         )
 
 
-async def _active_task_id_for_node(row: CanvasNodes) -> int | None:
-    """若节点关联非终态 generate_task，返回 task_id。"""
-    if row.task_id is None:
-        return None
-    task = await GenerateTask.filter(id=row.task_id, deleted_at__isnull=True).first()
-    if task is None:
-        return None
-    if GatewayTaskStatus(task.status).is_non_terminal:
-        return int(task.id)
-    return None
-
-
-async def assert_node_generation_idle(row: CanvasNodes) -> None:
-    """在已持有 node 行锁的前提下检查是否在途。"""
-    if row.status == CanvasNodeStatus.RUNNING.value:
-        active_task_id = await _active_task_id_for_node(row)
+async def claim_node_for_generation(episode_id: int, node_id: str) -> tuple[int, CanvasNodeView]:
+    """经 CanvasPort 占坑：检查在途 + 标 running + 推进 revision。"""
+    claim = await get_canvas_port().claim_node_for_generation(episode_id, node_id)
+    if not claim.claimed or claim.revision is None or claim.node is None:
         logger.info(
             "canvas.node_generation.rejected",
             action="in_progress",
-            project_id=row.project_id,
-            node_id=str(row.id),
-            active_task_id=active_task_id,
-            reason="node_running",
+            episode_id=episode_id,
+            node_id=node_id,
+            active_task_id=claim.active_task_id,
+            reason="claim_rejected",
         )
-        raise NodeGenerationInProgressError(node_id=str(row.id), task_id=active_task_id)
-
-    active_task_id = await _active_task_id_for_node(row)
-    if active_task_id is not None:
-        logger.info(
-            "canvas.node_generation.rejected",
-            action="in_progress",
-            project_id=row.project_id,
-            node_id=str(row.id),
-            active_task_id=active_task_id,
-            reason="task_non_terminal",
-        )
-        raise NodeGenerationInProgressError(node_id=str(row.id), task_id=active_task_id)
-
-
-async def claim_node_for_generation(project_id: int, node_id: str) -> tuple[int, CanvasNodeView]:
-    """占坑：同行锁检查在途 + 标 running + 推进 revision，commit 后返回。"""
-    async with in_transaction():
-        await CanvasProjectMeta.select_for_update().get(project_id=project_id)
-        row = await CanvasNodes.select_for_update().get(
-            id=UUID(node_id),
-            project_id=project_id,
-            deleted_at__isnull=True,
-        )
-        await assert_node_generation_idle(row)
-        row.status = CanvasNodeStatus.RUNNING.value
-        row.error_message = ""
-        await row.save()
-        meta = await CanvasProjectMeta.select_for_update().get(project_id=project_id)
-        meta.revision = int(meta.revision) + 1
-        await meta.save()
-        rev = int(meta.revision)
-    refreshed = await CanvasNodes.get(id=UUID(node_id))
-    return rev, node_view_from_row(refreshed)
+        raise NodeGenerationInProgressError(node_id=node_id, task_id=claim.active_task_id)
+    return claim.revision, claim.node

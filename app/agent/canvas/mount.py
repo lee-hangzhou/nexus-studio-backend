@@ -34,7 +34,8 @@ from app.server.infra.config import settings
 @dataclass
 class CanvasMountContext:
     user_id: int
-    conversation_id: int  # project_id at the mount boundary
+    project_id: int
+    episode_id: int
     turn_id: str
     cancel_event: asyncio.Event
     checkpointer: BaseCheckpointSaver
@@ -49,17 +50,17 @@ class CanvasMountContext:
     _turn_id_holder: dict[str, str] = field(default_factory=dict)
 
     @property
-    def project_id(self) -> int:
-        return int(self.conversation_id)
-
-    @property
     def resolved_model_key(self) -> str:
         key = (self.model_key or "").strip()
         return key or settings.CHAT_DEFAULT_MODEL
 
 
 def _thread_id(ctx: CanvasMountContext) -> str:
-    return f"{settings.CANVAS_CHECKPOINT_THREAD_PREFIX}-{ctx.project_id}"
+    return f"{settings.CANVAS_CHECKPOINT_THREAD_PREFIX}:{ctx.episode_id}"
+
+
+def _runtime_scope_id(ctx: CanvasMountContext) -> str:
+    return f"canvas:{ctx.episode_id}"
 
 
 async def _prepare_turn(ctx: CanvasMountContext) -> CanvasMountContext:
@@ -82,6 +83,7 @@ async def _build_agent(ctx: CanvasMountContext) -> CompiledStateGraph:
     agent, _ = await build_canvas_agent(
         llm,
         project_id=ctx.project_id,
+        episode_id=ctx.episode_id,
         user_id=ctx.user_id,
         checkpointer=ctx.checkpointer,
         enable_tools=ctx.enable_tools,
@@ -106,9 +108,10 @@ def _build_subscribers(ctx: CanvasMountContext) -> list:
     if ctx.is_resume:
         return [CanvasResumeSubscriber()]
     return [
-        CanvasGenerationHubSubscriber(project_id=ctx.project_id),
+        CanvasGenerationHubSubscriber(episode_id=ctx.episode_id),
         CanvasPersistenceSubscriber(
             project_id=ctx.project_id,
+            episode_id=ctx.episode_id,
             user_id=ctx.user_id,
             content=ctx.content,
             client_turn_id=ctx.client_turn_id,
@@ -124,6 +127,7 @@ def _build_runnable_config(ctx: CanvasMountContext) -> RunnableConfig:
         thread_id=_thread_id(ctx),
         user_id=ctx.user_id,
         project_id=ctx.project_id,
+        episode_id=ctx.episode_id,
         mode=ctx.mode,
     )
     ctx.runnable_config = config
@@ -156,6 +160,7 @@ def _start_repair(ctx: CanvasMountContext):
             agent,
             runnable_config,
             project_id=ctx.project_id,
+            episode_id=ctx.episode_id,
             turn_id=ctx.turn_id,
             reason=kwargs.get("reason") if kwargs.get("reason") != "turn_start" else None,
         )
@@ -188,4 +193,5 @@ CANVAS_MOUNT = AgentMountSpec(
     resolve_on_turn_cleanup_repair=_cleanup_repair,
     resolve_mode=lambda ctx: ctx.mode,
     resolve_client_turn_id=lambda ctx: ctx.client_turn_id,
+    resolve_runtime_scope_id=_runtime_scope_id,
 )

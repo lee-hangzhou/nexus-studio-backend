@@ -18,6 +18,7 @@ def canvas_runnable_config(
     thread_id: str,
     user_id: int,
     project_id: int,
+    episode_id: int,
     mode: str = "auto",
 ) -> RunnableConfig:
     """生成本轮 Agent RunnableConfig, 含 thread_id 与 memory namespace 占位"""
@@ -26,6 +27,7 @@ def canvas_runnable_config(
             "thread_id": thread_id,
             "langgraph_user_id": str(user_id),
             "project_id": str(project_id),
+            "episode_id": str(episode_id),
             "mode": mode,
         },
         "recursion_limit": langgraph_recursion_limit(

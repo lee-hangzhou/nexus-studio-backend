@@ -418,7 +418,8 @@ class GenerationService:
             # 与 submit 共用同一份 capabilities 快照，避免 list options 与校验漂移
             await self._store_capabilities_map(capability_map)
             items = self._build_generate_model_items(kind, gateway_models, capability_map)
-            return GenerateModelsResponse(items=items).model_dump(mode="json")
+            payload: dict[str, Any] = GenerateModelsResponse(items=items).model_dump(mode="json")
+            return payload
 
         try:
             response = await self._read_model_list_cache(cache_key, _compute)
@@ -624,10 +625,11 @@ class GenerationService:
     async def _fetch_capabilities_cache_payload(self) -> dict[str, Any]:
         gateway_models = await self._gateway.list_generation_models()
         capability_map = assembly.capability_map_from_gateway_models(gateway_models)
-        return CachedCapabilitiesPayload.from_domain_map(
+        payload: dict[str, Any] = CachedCapabilitiesPayload.from_domain_map(
             capability_map,
             ttl_seconds=settings.GEN_MODEL_LIST_TTL,
         ).model_dump(mode="json")
+        return payload
 
     async def _refresh_capabilities_from_gateway(self) -> dict[str, GenerationModelCapabilities]:
         """独立刷新用例：回源网关并写入共享 capabilities cache。"""
@@ -951,4 +953,3 @@ class GenerationService:
             if task_id is not None:
                 task_ids.add(task_id)
         return task_ids
-

@@ -76,8 +76,7 @@ async def _ensure_store_vector_schema(uri: str, *, dims: int) -> None:
                         embedding vector({safe_dims}),
                         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                        PRIMARY KEY (prefix, key, field_name),
-                        FOREIGN KEY (prefix, key) REFERENCES store(prefix, key) ON DELETE CASCADE
+                        PRIMARY KEY (prefix, key, field_name)
                     )
                     """
                 )

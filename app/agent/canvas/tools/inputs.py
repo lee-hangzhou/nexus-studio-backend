@@ -16,11 +16,11 @@ class ResolveNodeInputsInput(BaseModel):
     node_id: str = Field(description="需要解析输入依赖的画布节点 UUID")
 
 
-def build_resolve_node_inputs_tool(project_id: int) -> StructuredTool:
+def build_resolve_node_inputs_tool(episode_id: int) -> StructuredTool:
     """构建 resolve_node_inputs 结构化工具"""
     async def _run(node_id: str) -> str:
         """解析节点依赖边, 返回 local_prompt、upstream_texts、refs、waiting_on"""
-        resolved = await resolve_node_inputs(project_id, node_id)
+        resolved = await resolve_node_inputs(episode_id, node_id)
         payload = {
             **asdict(resolved),
             "ready": resolved.ready,

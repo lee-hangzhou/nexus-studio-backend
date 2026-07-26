@@ -37,6 +37,22 @@ from app.server.generation.schemas import (
     GenerateTaskView,
     SubmitGenerateRequest,
 )
+from app.contracts.projects import (
+    EpisodeCreateRequest,
+    EpisodeIdRequest,
+    EpisodeListRequest,
+    EpisodeListResponse,
+    EpisodeUpdateRequest,
+    EpisodeView,
+    ProjectCreateRequest,
+    ProjectCreateResponse,
+    ProjectDetailResponse,
+    ProjectIdRequest,
+    ProjectListRequest,
+    ProjectListResponse,
+    ProjectUpdateRequest,
+    ProjectView,
+)
 
 SCHEMA_DIR = ROOT / "contracts" / "schema"
 
@@ -67,11 +83,29 @@ GatewayContracts = Annotated[
     | GatewayGenerateCallback,
     Field(union_mode="left_to_right"),
 ]
+ProjectContracts = Annotated[
+    ProjectCreateRequest
+    | ProjectView
+    | ProjectCreateResponse
+    | ProjectListRequest
+    | ProjectListResponse
+    | ProjectIdRequest
+    | ProjectDetailResponse
+    | ProjectUpdateRequest
+    | EpisodeView
+    | EpisodeListRequest
+    | EpisodeListResponse
+    | EpisodeCreateRequest
+    | EpisodeIdRequest
+    | EpisodeUpdateRequest,
+    Field(union_mode="left_to_right"),
+]
 
 CONTRACTS = {
     "canvas": TypeAdapter(CanvasContracts),
     "generation": TypeAdapter(GenerationContracts),
     "gateway": TypeAdapter(GatewayContracts),
+    "projects": TypeAdapter(ProjectContracts),
     "stream": TypeAdapter(StreamFrame),
 }
 

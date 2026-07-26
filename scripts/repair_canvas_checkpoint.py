@@ -41,8 +41,8 @@ def _summarize_orphans(messages: list) -> int:
     return orphans + len(pending)
 
 
-async def _run(project_id: int) -> int:
-    thread_id = f"{settings.CANVAS_CHECKPOINT_THREAD_PREFIX}-{project_id}"
+async def _run(project_id: int, episode_id: int) -> int:
+    thread_id = f"{settings.CANVAS_CHECKPOINT_THREAD_PREFIX}:{episode_id}"
     async with create_checkpointer() as checkpointer:
         agent = create_agent(
             FakeListChatModel(responses=["ok"]),
@@ -60,6 +60,7 @@ async def _run(project_id: int) -> int:
             agent,
             config,
             project_id=project_id,
+            episode_id=episode_id,
             turn_id="repair-script",
         )
         after = list((await agent.aget_state(config)).values.get("messages") or [])
@@ -70,8 +71,9 @@ async def _run(project_id: int) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Repair orphan tool_calls in canvas checkpoint")
     parser.add_argument("--project-id", type=int, required=True)
+    parser.add_argument("--episode-id", type=int, required=True)
     args = parser.parse_args()
-    raise SystemExit(asyncio.run(_run(args.project_id)))
+    raise SystemExit(asyncio.run(_run(args.project_id, args.episode_id)))
 
 
 if __name__ == "__main__":

@@ -32,7 +32,7 @@ class TurnStreamPhase(StrEnum):
 class StreamErrorCode(StrEnum):
     AGENT_RECOVERY_EXHAUSTED = "agent_recovery_exhausted"
     CANVAS_DUPLICATE_TURN = "canvas_duplicate_turn"
-    CANVAS_PROJECT_BUSY = "canvas_project_busy"
+    CANVAS_EPISODE_BUSY = "canvas_episode_busy"
     EMPTY_RESPONSE = "empty_response"
     EXECUTION_LOST = "execution_lost"
     GENERATION_FAILED = "generation_failed"

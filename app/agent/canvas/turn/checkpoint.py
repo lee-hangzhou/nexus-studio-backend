@@ -14,6 +14,7 @@ async def repair_canvas_checkpoint_if_needed(
     config: RunnableConfig,
     *,
     project_id: int,
+    episode_id: int,
     turn_id: str,
     reason: str = "turn_interrupted",
 ) -> bool:
@@ -30,6 +31,7 @@ async def repair_canvas_checkpoint_if_needed(
     logger.warning(
         "canvas.checkpoint.repaired_unresolved_tool_calls",
         project_id=project_id,
+        episode_id=episode_id,
         turn_id=turn_id,
         message_count=len(messages),
         reason=reason,

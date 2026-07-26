@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import json
 
-from app.server.canvas.services.errors import NODE_GENERATION_IN_PROGRESS
+from app.agent.canvas.errors import NODE_GENERATION_IN_PROGRESS
 from app.agent.canvas.node_execution.text import execute_text_node_generation
 from app.agent.canvas.node_submit.prepare import prepare_node_submit
 from app.agent.canvas.node_submit.types import ManualMaterialRef, MentionItemRef
 from app.server.canvas.schemas.api import CanvasNodeGenerateResponse
 from app.server.canvas.schemas.node_execute import SubmitNodeExecuteInput
-from app.agent.canvas.tools.generation import submit_node_generation_for_project
+from app.agent.canvas.tools.generation import submit_node_generation_for_episode
 from app.contracts.canvas import CanvasNodeView
 from app.server.canvas.domain.enums import CanvasNodeStatus
 from app.server.exceptions.base import AppError
@@ -18,16 +18,18 @@ from app.server.exceptions.codes import ErrorCode
 async def run_manual_node_generate(
     *,
     project_id: int,
+    episode_id: int,
     user_id: int,
     body: SubmitNodeExecuteInput,
 ) -> CanvasNodeGenerateResponse:
-    """用户手动节点生成：不占 project_turn_lock，不依赖 expected_revision。"""
+    """用户手动节点生成：入口持有集级锁，不依赖 expected_revision"""
     node_id = body.node_id
     if body.kind == "text":
         if not body.model_key:
             raise AppError(ErrorCode.INVALID_PARAMS, "text 节点需要 model_key")
         rev, delta = await execute_text_node_generation(
             project_id=project_id,
+            episode_id=episode_id,
             user_id=user_id,
             node_id=node_id,
             model_key=body.model_key,
@@ -49,7 +51,7 @@ async def run_manual_node_generate(
         raise AppError(ErrorCode.INVALID_PARAMS, f"unsupported kind: {body.kind}")
 
     prepared = await prepare_node_submit(
-        project_id,
+        episode_id,
         node_id,
         mode="manual",
         prompt=body.prompt,
@@ -74,7 +76,7 @@ async def run_manual_node_generate(
             "ref_attachment_ids": list(prepared.ref_attachment_ids),
         }
     )
-    result, delta = await submit_node_generation_for_project(project_id, user_id, gen_input)
+    result, delta = await submit_node_generation_for_episode(project_id, episode_id, user_id, gen_input)
     if not result.success:
         if result.error_type == NODE_GENERATION_IN_PROGRESS:
             raise AppError(

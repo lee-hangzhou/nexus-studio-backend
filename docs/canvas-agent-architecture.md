@@ -130,7 +130,7 @@ app/canvas/
     graph.py            # StateGraph：summarize → model → tools
   turn/
     orchestrator.py     # stream_canvas_turn
-    lock.py             # ProjectTurnLock（Redis，同 Chat conversation_turn_lock）
+    lock.py             # CanvasTurnLock（Redis，同 Chat conversation_turn_lock）
     persistence.py      # canvas_messages 写入（同 Chat TurnPersistence 模式）
     guards.py           # 复用或扩展 Chat TurnGuards
     memory_background.py # turn 结束 create_memory_store_manager
@@ -375,7 +375,7 @@ CREATE TABLE canvas_operations (
 | 需求                           | 机制                                                                        |
 | ---------------------------- | ------------------------------------------------------------------------- |
 | 运行中 / interrupt / 续跑         | LangGraph checkpoint 四表（`thread_id = canvas-{project_id}`）                |
-| 同一 project 同时只有一个 Agent turn | Redis `project_turn_lock`（§8.4）                                           |
+| 同一 episode 同时只有一个 Agent turn | Redis `canvas_turn_lock`（§8.4）                                           |
 | 重复提交同一用户消息                   | `canvas_messages.metadata.client_turn_id` 唯一约束或先查后插                       |
 | 画布 patch 原子性                 | `in_transaction()` + 行级表 + `revision` CAS（§5.6.2）                         |
 | Feed / 列表 / 画布真相             | `canvas_messages` + `canvas_nodes` / `canvas_edges` / `canvas_operations` |
@@ -633,11 +633,11 @@ class CanvasTurnFacts:
 ### 8.2 orchestrator 流程
 
 ```
-stream_canvas_turn(project_id, user_message, model_key, mode, client_turn_id, ...)
+stream_canvas_turn(episode_id, user_message, model_key, mode, client_turn_id, ...)
   │
-  ├─ 1. Redis acquire project_turn_lock（跨 worker）
+  ├─ 1. Redis acquire canvas_turn_lock（跨 worker）
   ├─ 2. 幂等检查 client_turn_id（canvas_messages.metadata）
-  ├─ 3. 读 canvas_project_meta.revision、node_count 等标量 facts
+  ├─ 3. 读 canvas_episode_meta.revision、node_count 等标量 facts
   ├─ 4. persist_user_message → canvas_messages（业务事务或单条写入）
   ├─ 5. build_canvas_agent(checkpointer=AsyncPostgresSaver, store, tools)
   ├─ 6. run_agent_turn_stream
@@ -660,7 +660,7 @@ stream_canvas_turn(project_id, user_message, model_key, mode, client_turn_id, ..
 | `StreamFrame` / SSE encoder         | 直接复用                                                                       |
 | `ToolResult` / `parse_tool_message` | 直接复用，扩展 canvas 专用 `error_type`                                             |
 | `TurnGuards`                        | 复用，配置独立常量                                                                  |
-| `**ProjectTurnLock`**               | **同构** `app/chat/turn/lock.py` 的 `ConversationTurnLock`（Redis `SET NX EX`） |
+| `**CanvasTurnLock`**                | **同构** `app/chat/turn/lock.py` 的 `ConversationTurnLock`（Redis `SET NX EX`） |
 | `GatewayChatModel`                  | 复用；画布 graph 用 SummarizationNode 替代 model 内 trim                            |
 | `PromptComposer`                    | 参考，canvas 独立 composer                                                      |
 
@@ -704,10 +704,10 @@ class ConversationTurnLock:
 
 | 项        | Chat                               | Canvas                          |
 | -------- | ---------------------------------- | ------------------------------- |
-| Key      | `chat:turn_lock:{conversation_id}` | `canvas:turn_lock:{project_id}` |
+| Key      | `chat:turn_lock:{conversation_id}` | `canvas:turn_lock:{episode_id}` |
 | TTL 配置   | `CHAT_TURN_LOCK_TTL_SEC`           | `CANVAS_TURN_LOCK_TTL_SEC`      |
-| busy 错误码 | `CONVERSATION_BUSY`                | `CANVAS_PROJECT_BUSY`（建议新增）     |
-| 实例       | `conversation_turn_lock`           | `project_turn_lock`             |
+| busy 错误码 | `CONVERSATION_BUSY`                | `CANVAS_EPISODE_BUSY`           |
+| 实例       | `conversation_turn_lock`           | `canvas_turn_lock`              |
 
 
 **Redis 客户端**：复用 `app/core/redis.py` 的 `redis_client`（生产 `deploy/.env.prod` 已配 `REDIS_URL`）。
@@ -729,14 +729,14 @@ class ConversationTurnLock:
 #### 8.4.4 生命周期与 TTL
 
 ```
-POST /canvas/{project_id}/turn
-  → project_turn_lock.acquire(project_id, turn_id)   # 失败 → 409 CANVAS_PROJECT_BUSY + active_turn_id
+POST /canvas/episodes/{episode_id}/turn
+  → canvas_turn_lock.acquire(episode_id, turn_id)   # 失败 → 409 CANVAS_EPISODE_BUSY + active_turn_id
   → try: ... orchestrator ...
-  → finally: project_turn_lock.release(project_id, turn_id)
+  → finally: canvas_turn_lock.release(episode_id, turn_id)
 
 cancel / 异常 / worker 崩溃：
   → TTL（CANVAS_TURN_LOCK_TTL_SEC，默认 1800s）到期自动释放，避免死锁
-  → 可选：force_cancel(project_id) 供用户「停止生成」API（同 Chat force_cancel）
+  → 可选：force_cancel(episode_id) 供用户「停止生成」API（同 Chat force_cancel）
 ```
 
 **续期**：若 turn 超过 TTL 仍在跑（长工具链），orchestrator heartbeat 路径可 `EXPIRE` 续期（与 Chat 若已有续期逻辑对齐；若无，Phase 3 补）。
@@ -1078,7 +1078,7 @@ canvas.summarize     triggered=true|false, summary_tokens, messages_summarized
 - LangGraph：`summarize` + agent + tools
 - 工具：`query_canvas_nodes`、`apply_canvas_patch`
 - SummarizationNode 接入 + 单测（摘要后 tool 成对）
-- `ProjectTurnLock`（Redis，复用 Chat lock 模式）+ `CANVAS_PROJECT_BUSY`
+- `CanvasTurnLock`（Redis，复用 Chat lock 模式）+ `CANVAS_EPISODE_BUSY`
 - patch 工具 L1 行级事务（revision CAS + operations + delta SSE）
 - `client_turn_id` 幂等（messages.metadata）
 - 验收：checkpoint 不可用时，已落库画布与 Feed 仍正确；可重试 turn

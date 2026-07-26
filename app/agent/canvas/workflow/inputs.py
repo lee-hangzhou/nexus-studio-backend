@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from uuid import UUID
-
 from app.agent.canvas.node_submit.collect_refs import pick_connected_reference_asset_ids
 from app.agent.canvas.node_submit.labels import assign_media_label, node_kind_to_media_kind
+from app.agent.runtime.ports import get_canvas_port
 from app.server.canvas.domain.enums import (
     CanvasNodeKind,
     CanvasNodeStatus,
@@ -18,77 +17,71 @@ from app.server.canvas.domain.models import (
     ResolvedCanvasInputs,
     UpstreamText,
 )
-from app.server.canvas.persistence.edges import CanvasEdges
-from app.server.canvas.persistence.nodes import CanvasNodes
+from app.server.exceptions.base import AppError
+from app.server.exceptions.codes import ErrorCode
+from app.server.ports.product import CanvasEdgeDTO, CanvasNodeDTO
 
 
-def _asset_ids(row: CanvasNodes) -> list[int]:
-    """从节点行解析 output_asset_ids 整数列表"""
-    raw = row.output_asset_ids
-    return [int(item) for item in raw] if isinstance(raw, list) else []
+def _asset_ids(node: CanvasNodeDTO) -> list[int]:
+    return list(node.output_asset_ids)
 
 
-def _node_row_to_graph(row: CanvasNodes) -> dict:
+def _node_to_graph(node: CanvasNodeDTO) -> dict:
     return {
-        "id": str(row.id),
+        "id": node.id,
         "data": {
-            "status": row.status,
-            "output_text": row.output_text,
-            "output_asset_ids": _asset_ids(row),
+            "status": node.status.value,
+            "output_text": node.output_text,
+            "output_asset_ids": _asset_ids(node),
         },
     }
 
 
-def _edge_row_to_graph(edge: CanvasEdges) -> dict:
+def _edge_to_graph(edge: CanvasEdgeDTO) -> dict:
     return {
-        "source": str(edge.source_node_id),
-        "target": str(edge.target_node_id),
-        "data": {"source_port": edge.source_port, "target_port": edge.target_port},
+        "source": edge.source_node_id,
+        "target": edge.target_node_id,
+        "data": {"source_port": edge.source_port.value, "target_port": edge.target_port.value},
     }
 
 
-async def resolve_node_inputs(project_id: int, node_id: str) -> ResolvedCanvasInputs:
+async def resolve_node_inputs(episode_id: int, node_id: str) -> ResolvedCanvasInputs:
     """沿依赖边解析结构化事实：local_prompt、upstream_texts、refs、waiting_on。"""
-    target = await CanvasNodes.get(id=UUID(node_id), project_id=project_id, deleted_at__isnull=True)
+    graph = await get_canvas_port().get_incoming_graph(episode_id, node_id)
+    nodes_by_id = {node.id: node for node in graph.nodes}
+    target = nodes_by_id.get(node_id)
+    if target is None:
+        raise AppError(ErrorCode.RESOURCE_NOT_FOUND, f"node {node_id} not found")
+
     local_prompt = target.input_prompt.strip()
     waiting_on: list[CanvasInputWait] = []
     sources: list[CanvasInputSource] = []
-
-    edges = await CanvasEdges.filter(
-        project_id=project_id,
-        target_node_id=UUID(node_id),
-        deleted_at__isnull=True,
-    ).all()
-    graph_nodes: list[dict] = [_node_row_to_graph(target)]
+    graph_nodes: list[dict] = [_node_to_graph(target)]
     graph_edges: list[dict] = []
-    source_rows: dict[str, CanvasNodes] = {}
+    source_rows: dict[str, CanvasNodeDTO] = {}
 
-    for edge in edges:
-        graph_edges.append(_edge_row_to_graph(edge))
-        source = await CanvasNodes.get_or_none(
-            id=edge.source_node_id,
-            project_id=project_id,
-            deleted_at__isnull=True,
-        )
+    for edge in graph.edges:
+        graph_edges.append(_edge_to_graph(edge))
+        source = nodes_by_id.get(edge.source_node_id)
         if source is None:
             waiting_on.append(
                 CanvasInputWait(
                     reason=CanvasInputWaitReason.SOURCE_MISSING,
-                    source_node_id=str(edge.source_node_id),
+                    source_node_id=edge.source_node_id,
                 )
             )
             continue
 
-        source_rows[str(source.id)] = source
-        if all(str(node["id"]) != str(source.id) for node in graph_nodes):
-            graph_nodes.append(_node_row_to_graph(source))
+        source_rows[source.id] = source
+        if all(str(node["id"]) != source.id for node in graph_nodes):
+            graph_nodes.append(_node_to_graph(source))
 
         source_info = CanvasInputSource(
-            node_id=str(source.id),
-            kind=CanvasNodeKind(source.kind),
-            status=CanvasNodeStatus(source.status),
-            source_port=CanvasSourcePort(edge.source_port),
-            target_port=CanvasTargetPort(edge.target_port),
+            node_id=source.id,
+            kind=source.kind,
+            status=source.status,
+            source_port=edge.source_port,
+            target_port=edge.target_port,
         )
         sources.append(source_info)
 
@@ -96,7 +89,7 @@ async def resolve_node_inputs(project_id: int, node_id: str) -> ResolvedCanvasIn
             waiting_on.append(
                 CanvasInputWait(
                     reason=CanvasInputWaitReason.SOURCE_FAILED,
-                    source_node_id=str(source.id),
+                    source_node_id=source.id,
                     source=source_info,
                 )
             )
@@ -107,7 +100,7 @@ async def resolve_node_inputs(project_id: int, node_id: str) -> ResolvedCanvasIn
                 waiting_on.append(
                     CanvasInputWait(
                         reason=CanvasInputWaitReason.TEXT_NOT_READY,
-                        source_node_id=str(source.id),
+                        source_node_id=source.id,
                         source=source_info,
                     )
                 )
@@ -122,13 +115,12 @@ async def resolve_node_inputs(project_id: int, node_id: str) -> ResolvedCanvasIn
                 waiting_on.append(
                     CanvasInputWait(
                         reason=CanvasInputWaitReason.ASSET_NOT_READY,
-                        source_node_id=str(source.id),
+                        source_node_id=source.id,
                         source=source_info,
                     )
                 )
 
     upstream_texts = _collect_upstream_texts(node_id, graph_nodes, graph_edges)
-
     connected_asset_ids = pick_connected_reference_asset_ids(node_id, graph_nodes, graph_edges)
     refs: list[RefSlot] = []
     media_slot = 0
@@ -182,7 +174,7 @@ def _collect_upstream_texts(
 
 def _find_ref_source(
     edges: list[dict],
-    source_rows: dict[str, CanvasNodes],
+    source_rows: dict[str, CanvasNodeDTO],
     node_id: str,
     asset_id: int,
 ) -> tuple[str, CanvasNodeKind]:
@@ -197,5 +189,5 @@ def _find_ref_source(
         if source is None:
             continue
         if asset_id in _asset_ids(source):
-            return source_id, CanvasNodeKind(source.kind)
+            return source_id, source.kind
     return "", CanvasNodeKind.IMAGE

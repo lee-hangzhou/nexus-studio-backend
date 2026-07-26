@@ -8,11 +8,11 @@ from uuid import uuid4
 from fastapi import UploadFile
 
 from app.contracts.gateway import GatewayGenerateMaterial
-from app.server.infra.object_storage import TosObjectStorage, safe_filename
-from app.server.generation.domain.enums import MaterialType
+from app.server.assets.persistence.assets import Assets
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
-from app.server.assets.persistence.assets import Assets
+from app.server.generation.domain.enums import MaterialType
+from app.server.infra.object_storage import TosObjectStorage, safe_filename
 
 ASSET_SOURCE_CHAT_UPLOAD = "chat_upload"
 ASSET_SOURCE_GENERATE_RESULT = "generate_result"

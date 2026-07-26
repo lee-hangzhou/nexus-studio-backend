@@ -32,6 +32,7 @@ ResolveHeartbeatFn = Callable[[Any], int]
 ResolveRepairFn = Callable[[Any], CheckpointRepairFn | None]
 ResolveModeFn = Callable[[Any], str | None]
 ResolveClientTurnIdFn = Callable[[Any], str | None]
+ResolveRuntimeScopeIdFn = Callable[[Any], int | str]
 
 
 @dataclass(frozen=True)
@@ -54,3 +55,4 @@ class AgentMountSpec:
     resolve_on_turn_cleanup_repair: ResolveRepairFn | None = None
     resolve_mode: ResolveModeFn | None = None
     resolve_client_turn_id: ResolveClientTurnIdFn | None = None
+    resolve_runtime_scope_id: ResolveRuntimeScopeIdFn | None = None

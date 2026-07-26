@@ -141,6 +141,8 @@ class CanvasEdgeView(CanvasContract):
 
 
 class CanvasSnapshot(CanvasContract):
+    project_id: int
+    episode_id: int
     revision: int
     nodes: list[CanvasNodeView]
     edges: list[CanvasEdgeView]
