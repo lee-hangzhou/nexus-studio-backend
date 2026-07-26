@@ -15,7 +15,6 @@ class ProjectEpisodes(BaseModel):
         table = "project_episodes"
         abstract = False
         indexes = [
-            ("project_id", "episode_no", "id"),
             ("project_id", "updated_at", "id"),
             ("creator_id", "created_at", "id"),
             ("cover_asset_id",),

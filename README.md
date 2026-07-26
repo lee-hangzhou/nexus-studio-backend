@@ -35,9 +35,9 @@ make type-check
 make contracts-check
 ```
 
-Database DDL is maintained in `db/schema.sql` and `db/migrations/`. Production
-migrations are manual maintenance-window operations; deployment does not run
-`make db-schema` or `make db-reset` automatically.
+Database DDL is maintained in `db/schema.sql` (greenfield source of truth).
+Local reset: `make db-reset`. Production DDL is a manual maintenance-window
+operation; deployment does not run `make db-schema` or `make db-reset`.
 
 ## Typed Contracts
 
@@ -137,8 +137,8 @@ because child containers are created through the host Docker daemon.
 ```text
 app/                    FastAPI application and agents
 contracts/schema/       Generated public JSON Schemas
-db/                     Final schema and ordered migrations
+db/                     Greenfield DDL (`schema.sql`)
 deploy/                 Compose and runtime image definitions
-scripts/                Migrations, repair tools, contract exporter
+scripts/                Contract exporter (`export_contracts.py`)
 Dockerfile              Backend production image
 ```

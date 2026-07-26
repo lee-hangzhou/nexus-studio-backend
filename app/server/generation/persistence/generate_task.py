@@ -31,8 +31,7 @@ class GenerateTask(BaseModel):
     class Meta(BaseModel.Meta):
         table = "generate_task"
         abstract = False
-        # 索引在 scripts/migrate_generate_task.sql 中以 SQL DDL 定义，
-        # 此处仅作文档说明用
+        # 查询索引以 db/schema.sql 为准
         indexes = [
             ("user_id", "union_task_id"),
         ]

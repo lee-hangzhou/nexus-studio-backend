@@ -4,7 +4,7 @@
 
 ## 前置
 
-1. 执行 DB 迁移：`psql ... -f scripts/migrate_drop_chat_retrieval_pipeline.sql`
+1. 本地库已按 `db/schema.sql` 建好（`make db-reset` 或 `make db-schema`）
 2. 重建 sandbox 镜像：`docker build -t dream-drama-chat-sandbox:latest -f deploy/chat-sandbox/Dockerfile deploy/chat-sandbox`
 3. 重启后端（SkillRegistry 启动时加载）
 

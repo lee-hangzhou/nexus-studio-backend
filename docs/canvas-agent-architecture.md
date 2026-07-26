@@ -997,7 +997,7 @@ CoT / think：**不透传**到 Feed（与 Chat 一致）；若调试需要可走
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------- |
 | **Chat**     | 同构 Agent 范式；不同 thread_id、tools、skills；记忆 namespace 隔离；Chat 短期记忆后续应对齐 SummarizationNode                                       |
 | **Generate** | 共用 `generate_task` 表与 `GenerateService`；画布节点是任务的 UI 锚点；进度经 SSE，非前端轮询写节点                                                      |
-| **projects** | 画布绑定 `project_id`；Supervisor / Screenwriter 栈与 `sessions` 等表已拆除（见 `db/migrations/20250602_drop_supervisor_screenwriter.sql`） |
+| **projects** | 画布绑定 `episode_id`（经 `project_episodes`）；DDL 见 `db/schema.sql` |
 
 
 ---
