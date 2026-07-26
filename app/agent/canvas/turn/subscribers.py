@@ -107,6 +107,7 @@ class CanvasPersistenceSubscriber:
         content: str,
         client_turn_id: str | None,
         enable_tools: bool,
+        model_key: str = "",
         persist_user: bool = True,
         schedule_memory: bool = True,
     ) -> None:
@@ -116,6 +117,7 @@ class CanvasPersistenceSubscriber:
         self._content = content
         self._client_turn_id = client_turn_id
         self._enable_tools = enable_tools
+        self._model_key = model_key
         self._persist_user = persist_user
         self._schedule_memory = schedule_memory
 
@@ -177,6 +179,7 @@ class CanvasPersistenceSubscriber:
                     user_id=self._user_id,
                     project_id=self._project_id,
                     turn_id=event.turn_id,
+                    turn_model_key=self._model_key,
                 )
 
 

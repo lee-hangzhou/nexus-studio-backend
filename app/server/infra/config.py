@@ -154,9 +154,11 @@ class Settings(BaseSettings):
     MEMORY_STORE_ENABLED: bool = Field(default=True)
     MEMORY_EMBEDDING_MODEL: str = Field(default="qwen/qwen3-embedding-8b")
     MEMORY_VECTOR_DIMENSION: int = Field(default=3072)
-    MEMORY_TOOL_TIMEOUT_SEC: int = Field(default=30, ge=5, le=120)
-    MEMORY_INJECTION_TIMEOUT_SEC: int = Field(default=2, ge=1, le=30)
-    MEMORY_EXTRACTION_TIMEOUT_SEC: int = Field(default=60, ge=5, le=300)
+    MEMORY_TOOL_TIMEOUT_SEC: int = Field(default=60, ge=5, le=180)
+    # 覆盖网关 embedding 慢请求与排队；过短会导致 project 语义注入每轮 timeout
+    MEMORY_INJECTION_TIMEOUT_SEC: int = Field(default=60, ge=1, le=180)
+    MEMORY_EXTRACTION_TIMEOUT_SEC: int = Field(default=120, ge=5, le=300)
+    # 空=回落到本轮 turn 模型；非空必须在 gateway model catalog
     MEMORY_EXTRACT_MODEL: str = Field(default="")
     MEMORY_USER_INJECT_FETCH_LIMIT: int = Field(default=32, ge=1, le=200)
     MEMORY_PROJECT_INJECT_LIMIT: int = Field(default=5, ge=1, le=50)

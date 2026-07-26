@@ -222,3 +222,41 @@ async def test_store_failure_does_not_raise(monkeypatch: pytest.MonkeyPatch) -> 
         )
     )
     assert result.memory_blocks_text == ""
+
+
+@pytest.mark.asyncio
+async def test_project_timeout_keeps_user_block(monkeypatch: pytest.MonkeyPatch) -> None:
+    """project semantic 超时不得丢弃已完成的 user queryless 结果"""
+    import asyncio
+
+    store = MagicMock()
+
+    async def asearch(ns, query=None, limit=5):
+        if "user" in ns:
+            return [
+                _item(
+                    "u1",
+                    {"content": UserMemory(statement="Lee 是开发者", context="").model_dump()},
+                )
+            ]
+        await asyncio.sleep(5)
+        return []
+
+    store.asearch = AsyncMock(side_effect=asearch)
+    monkeypatch.setattr(
+        "app.agent.runtime.memory.inject.settings.MEMORY_INJECTION_TIMEOUT_SEC",
+        0.2,
+    )
+    result = await build_memory_injection(
+        MemoryInjectionRequest(
+            domain="canvas",
+            user_id=1,
+            project_id=4,
+            user_message="我是谁",
+            is_resume=False,
+            memory_tools_enabled=False,
+            store=store,
+        )
+    )
+    assert "Lee 是开发者" in result.memory_blocks_text
+    assert "project_facts" not in result.memory_blocks_text

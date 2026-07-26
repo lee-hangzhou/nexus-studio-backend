@@ -179,12 +179,18 @@ async def _fetch_queryless_block(
             error=str(exc),
         )
         return ""
-    lines, _, _, _ = _render_lines(
+    lines, kept, _, _ = _render_lines(
         items,
         schema=scope_spec.schema,
         domain=domain,
         scope=scope_spec.scope,
         min_score=None,
+    )
+    logger.info(
+        "memory.inject.user",
+        domain=domain,
+        user_id=user_id,
+        hit_count=kept,
     )
     return _block(
         scope=f"{domain}.{scope_spec.scope}",
@@ -301,16 +307,27 @@ async def build_memory_injection(request: MemoryInjectionRequest) -> MemoryInjec
     store = request.store
 
     async def scope_task(scope_spec: MemoryScopeSpec) -> str:
-        """拉取单个 registry scope 的记忆块"""
-        return await _inject_scope_block(store, request=request, scope_spec=scope_spec)
+        """单 scope 独立超时, 避免 project embed 卡住拖掉已完成的 user 注入"""
+        try:
+            return await asyncio.wait_for(
+                _inject_scope_block(store, request=request, scope_spec=scope_spec),
+                timeout=timeout,
+            )
+        except TimeoutError:
+            logger.warning(
+                "memory.inject.failed",
+                domain=request.domain,
+                scope=scope_spec.scope,
+                reason="timeout",
+                user_id=request.user_id,
+                project_id=request.project_id,
+            )
+            return ""
 
     try:
-        results = await asyncio.wait_for(
-            asyncio.gather(
-                *[scope_task(s) for s in domain_spec.scopes],
-                return_exceptions=True,
-            ),
-            timeout=timeout,
+        results = await asyncio.gather(
+            *[scope_task(s) for s in domain_spec.scopes],
+            return_exceptions=True,
         )
         for result in results:
             if isinstance(result, BaseException):
@@ -324,13 +341,6 @@ async def build_memory_injection(request: MemoryInjectionRequest) -> MemoryInjec
                 continue
             if result:
                 blocks.append(result)
-    except TimeoutError:
-        logger.warning(
-            "memory.inject.failed",
-            domain=request.domain,
-            reason="timeout",
-            user_id=request.user_id,
-        )
     except Exception as exc:
         logger.warning(
             "memory.inject.failed",

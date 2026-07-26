@@ -118,6 +118,7 @@ def _build_subscribers(ctx: CanvasMountContext) -> list:
             content=ctx.content,
             client_turn_id=ctx.client_turn_id,
             enable_tools=ctx.enable_tools,
+            model_key=ctx.resolved_model_key,
         ),
     ]
 

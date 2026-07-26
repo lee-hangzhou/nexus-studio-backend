@@ -34,16 +34,19 @@ def require_extract_model_key(model_key: str) -> str:
     return key
 
 
-def _extract_model_or_none() -> str | None:
-    """返回已配置的抽取模型 key；空字符串表示关闭"""
+def resolve_extract_model_key(*, turn_model_key: str | None = None) -> str | None:
+    """优先 MEMORY_EXTRACT_MODEL；空则回落到本轮 turn 模型；皆空则关闭"""
     preferred = (settings.MEMORY_EXTRACT_MODEL or "").strip()
-    if not preferred:
+    if preferred:
+        return require_extract_model_key(preferred)
+    fallback = (turn_model_key or "").strip()
+    if not fallback:
         return None
-    return require_extract_model_key(preferred)
+    return require_extract_model_key(fallback)
 
 
 def validate_memory_extract_config() -> None:
-    """启动期硬校验：已配置则必须命中 gateway model catalog"""
+    """启动期硬校验：显式配置了 MEMORY_EXTRACT_MODEL 则必须命中 catalog"""
     preferred = (settings.MEMORY_EXTRACT_MODEL or "").strip()
     if not preferred:
         return
@@ -57,18 +60,20 @@ def schedule_canvas_memory_extract(
     user_id: int,
     project_id: int,
     turn_id: str | None = None,
+    turn_model_key: str | None = None,
 ) -> None:
     """仅用本轮 Human/AI 对入队项目记忆抽取；配置错误不拖垮 turn"""
     store = get_memory_store()
     if store is None or not settings.MEMORY_STORE_ENABLED:
         return
     try:
-        model_key = _extract_model_or_none()
+        model_key = resolve_extract_model_key(turn_model_key=turn_model_key)
     except MemoryExtractModelError as exc:
         logger.error(
             "canvas.memory.extract_config_invalid",
             error=str(exc),
             preferred=settings.MEMORY_EXTRACT_MODEL,
+            turn_model_key=turn_model_key,
             turn_id=turn_id,
             user_id=user_id,
             project_id=project_id,
@@ -104,7 +109,6 @@ def schedule_canvas_memory_extract(
         """执行一次项目记忆抽取"""
         try:
             async with asyncio.timeout(float(settings.MEMORY_EXTRACTION_TIMEOUT_SEC)):
-                # catalog 已在调度边界校验；此处再取 spec 供 GatewayChatModel
                 spec = get_model_spec(model_key)
                 llm = GatewayChatModel(model_key=model_key, spec=spec)
                 manager = create_memory_store_manager(
@@ -134,6 +138,7 @@ def schedule_canvas_memory_extract(
                     user_id=user_id,
                     project_id=project_id,
                     turn_id=turn_id,
+                    model_key=model_key,
                 )
         except TimeoutError:
             logger.warning(
