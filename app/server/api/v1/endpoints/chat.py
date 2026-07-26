@@ -13,11 +13,11 @@ from app.agent.chat.gate.qr_verify import GateCaptureError
 from app.agent.chat.turn.lock import conversation_turn_lock
 from app.agent.chat.turn.replay_execution import run_chat_replay_execution
 from app.agent.chat.workspace import conversation_workspace
+from app.agent.runtime.background import background_supervisor
 from app.agent.runtime.stream.replay import (
     ReplayMeta,
     ReplayRequestKind,
     build_request_fingerprint,
-    execution_supervisor,
     replay_store,
     stream_replay,
     validate_replay_cursor,
@@ -175,7 +175,7 @@ async def stream_message(request: Request, body: MessageStreamRequest) -> Stream
         except Exception:
             await replay_store.discard_starting(request_id)
             raise
-        execution_supervisor.start(
+        background_supervisor.start(
             run_chat_replay_execution(
                 request_id=request_id,
                 conversation_id=body.conversation_id,
@@ -250,7 +250,7 @@ async def resume_turn(request: Request, body: TurnResumeRequest) -> StreamingRes
         except Exception:
             await replay_store.discard_starting(request_id)
             raise
-        execution_supervisor.start(
+        background_supervisor.start(
             run_chat_replay_execution(
                 request_id=request_id,
                 conversation_id=body.conversation_id,

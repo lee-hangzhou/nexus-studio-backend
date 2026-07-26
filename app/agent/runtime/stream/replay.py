@@ -677,33 +677,6 @@ def decode_encoded_sse_frame(chunk: str) -> StreamFrame:
     return STREAM_FRAME_ADAPTER.validate_python(payload)
 
 
-class ExecutionSupervisor:
-    def __init__(self) -> None:
-        self._tasks: set[asyncio.Task[None]] = set()
-
-    def start(self, coroutine: Awaitable[None]) -> None:
-        task = asyncio.create_task(coroutine)
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
-        task.add_done_callback(self._log_failure)
-
-    async def close(self) -> None:
-        tasks = list(self._tasks)
-        for task in tasks:
-            task.cancel()
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
-        self._tasks.clear()
-
-    @staticmethod
-    def _log_failure(task: asyncio.Task[None]) -> None:
-        if task.cancelled():
-            return
-        exc = task.exception()
-        if exc is not None:
-            logger.error("turn.replay.background_failed", error=str(exc))
-
-
 async def stream_replay(
     store: ReplayStore,
     meta: ReplayMeta,
@@ -804,7 +777,6 @@ async def stream_replay(
 
 
 replay_store = ReplayStore()
-execution_supervisor = ExecutionSupervisor()
 
 
 def new_lease_owner() -> str:

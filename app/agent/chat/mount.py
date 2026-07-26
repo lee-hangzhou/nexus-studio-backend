@@ -41,6 +41,7 @@ from app.agent.chat.vision.gate import assert_vision_turn_allowed, is_image_mime
 from app.agent.chat.workspace import conversation_workspace
 from app.agent.chat.workspace.session import ensure_workspace_session
 from app.agent.runtime.checkpointer import get_chat_checkpointer
+from app.agent.runtime.memory.inject import MemoryInjectionRequest, build_memory_injection
 from app.agent.runtime.memory_store import get_memory_store
 from app.agent.runtime.mounts.spec import AgentMountSpec
 from app.agent.runtime.turn.tool_loop_guard import TurnToolLoopGuard
@@ -206,7 +207,24 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
         tool_names=[tool.name for tool in tools],
         has_vision_images=bool(image_attachment_ids),
     )
-    system_prompt = PromptComposer.build_turn_system(prompt_ctx)
+    memory_tools_enabled = any(
+        name in {"manage_user_memory", "recall_user_memory"} for name in prompt_ctx.tool_names
+    )
+    injection = await build_memory_injection(
+        MemoryInjectionRequest(
+            domain="chat",
+            user_id=ctx.user_id,
+            user_message=ctx.content,
+            is_resume=False,
+            memory_tools_enabled=memory_tools_enabled,
+            store=get_memory_store(),
+        )
+    )
+    system_prompt = PromptComposer.build_turn_system(
+        prompt_ctx,
+        memory_blocks_text=injection.memory_blocks_text,
+        memory_ops_brief=injection.ops_brief_text,
+    )
     turn_human = build_turn_human_message(
         ctx.content,
         attachments=attachment_briefs,

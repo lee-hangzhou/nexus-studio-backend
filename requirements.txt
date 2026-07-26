@@ -79,6 +79,7 @@ pillow==12.2.0
 pluggy==1.6.0
 playwright==1.51.0
 propcache==0.5.2
+detect-secrets==1.5.0
 psycopg==3.3.4
 psycopg-binary==3.3.4
 psycopg-pool==3.3.1

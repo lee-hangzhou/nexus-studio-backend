@@ -20,6 +20,7 @@ INTERNAL = "internal"
 TURN_INTERRUPTED = "turn_interrupted"
 WEB_UNAVAILABLE = "web_unavailable"
 MEMORY_UNAVAILABLE = "memory_unavailable"
+MEMORY_SENSITIVE_REJECTED = "memory_sensitive_rejected"
 INVALID_URL = "invalid_url"
 BROWSER_ERROR = "browser_error"
 BROWSER_TIMEOUT = "browser_timeout"
@@ -69,6 +70,7 @@ __all__ = [
     "LOGIN_FAILED",
     "LOGIN_METHOD_REQUIRED",
     "MEMORY_UNAVAILABLE",
+    "MEMORY_SENSITIVE_REJECTED",
     "MISSING_SELECTOR",
     "OTP_ALREADY_SENT",
     "POINTER_DISPATCH_FAILED",

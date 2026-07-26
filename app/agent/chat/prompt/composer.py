@@ -5,18 +5,12 @@ from zoneinfo import ZoneInfo
 from app.agent.chat.prompt.types import TurnPromptContext
 from app.agent.chat.skills.registry import SkillRegistry
 from app.server.infra.config import settings
-from app.agent.runtime.memory_store import get_memory_store
 
 _CORE_POLICY_PATH = Path(__file__).resolve().parent.parent / "prompts" / "core_policy.md"
-_MEMORY_GUIDE_PATH = Path(__file__).resolve().parent.parent / "prompts" / "memory_guide.md"
 
 
 def load_core_policy() -> str:
     return _CORE_POLICY_PATH.read_text(encoding="utf-8").strip()
-
-
-def load_memory_guide() -> str:
-    return _MEMORY_GUIDE_PATH.read_text(encoding="utf-8").strip()
 
 
 class PromptComposer:
@@ -73,8 +67,13 @@ class PromptComposer:
         )
 
     @staticmethod
-    def build_turn_system(ctx: TurnPromptContext) -> str:
-        """Static system prompt; per-turn attachment context is in HumanMessage prefix."""
+    def build_turn_system(
+        ctx: TurnPromptContext,
+        *,
+        memory_blocks_text: str = "",
+        memory_ops_brief: str | None = None,
+    ) -> str:
+        """组装本轮静态 system prompt；记忆块由 mount 侧注入"""
         parts = [
             load_core_policy(),
             PromptComposer.build_capability_brief(ctx),
@@ -82,13 +81,10 @@ class PromptComposer:
         browser_brief = PromptComposer.build_browser_brief(ctx)
         if browser_brief:
             parts.append(browser_brief)
-        if get_memory_store() is not None:
-            parts.append(
-                "## 长期记忆\n"
-                "本回合已启用用户级与会话级结构化长期记忆。"
-                "下文为操作手册，仅供你决策读/写时机，不得复述给用户。"
-            )
-            parts.append(load_memory_guide())
+        if memory_ops_brief:
+            parts.append(memory_ops_brief)
+        if memory_blocks_text.strip():
+            parts.append(memory_blocks_text.strip())
         vision_brief = PromptComposer.build_vision_brief(ctx)
         if vision_brief:
             parts.append(vision_brief)

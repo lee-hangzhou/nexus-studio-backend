@@ -7,13 +7,12 @@ from app.agent.chat.tools.result import ToolResult, ToolResultProtocolError
 MEMORY_RECALL_TOOLS = frozenset(
     {
         "recall_user_memory",
-        "recall_conversation_memory",
         "recall_project_memory",
     }
 )
-MEMORY_LIST_TOOLS = frozenset({"list_user_memories", "list_conversation_memories"})
-MEMORY_MANAGE_TOOLS = frozenset({"manage_user_memory", "manage_conversation_memory"})
-MEMORY_TOOL_NAMES = MEMORY_RECALL_TOOLS | MEMORY_LIST_TOOLS | MEMORY_MANAGE_TOOLS
+MEMORY_LIST_TOOLS = frozenset()
+MEMORY_MANAGE_TOOLS = frozenset({"manage_user_memory", "manage_project_memory"})
+MEMORY_TOOL_NAMES = MEMORY_RECALL_TOOLS | MEMORY_MANAGE_TOOLS
 BROWSER_TOOL_NAMES = frozenset(
     {
         "browser_exec_script",

@@ -1,17 +1,13 @@
-"""Shared LangGraph store namespace templates for Chat and Canvas memories."""
-
 from __future__ import annotations
 
-CHAT_USER_MEMORY_NAMESPACE = ("chat_memories", "{langgraph_user_id}")
-CHAT_CONVERSATION_MEMORY_NAMESPACE = (
-    "chat_memories",
-    "{langgraph_user_id}",
-    "{conversation_id}",
-)
-
+# 末段 records 终止 Postgres LIKE 前缀，避免 id "1" 命中 "10"/"100"
+CHAT_USER_MEMORY_NAMESPACE = ("chat", "memory", "user", "{langgraph_user_id}", "records")
+CANVAS_USER_MEMORY_NAMESPACE = ("canvas", "memory", "user", "{langgraph_user_id}", "records")
 CANVAS_PROJECT_MEMORY_NAMESPACE = (
-    "canvas_memories",
+    "canvas",
+    "memory",
+    "project",
     "{langgraph_user_id}",
     "{project_id}",
+    "records",
 )
-CANVAS_USER_MEMORY_NAMESPACE = ("canvas_memories", "{langgraph_user_id}")

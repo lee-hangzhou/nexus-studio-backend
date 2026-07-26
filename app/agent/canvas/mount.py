@@ -90,6 +90,8 @@ async def _build_agent(ctx: CanvasMountContext) -> CompiledStateGraph:
         mode=ctx.mode,
         turn_id_holder=ctx._turn_id_holder,
         loop_guard=loop_guard,
+        user_message=ctx.content,
+        is_resume=ctx.is_resume,
     )
     ctx.agent = agent
     return agent

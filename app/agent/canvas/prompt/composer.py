@@ -20,8 +20,14 @@ def _json_meta(value: dict) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
 
 
-async def compose_canvas_system_prompt(*, project_id: int, episode_id: int) -> str:
-    """组合项目元信息, 技能文档, 工具调用硬性规则"""
+async def compose_canvas_system_prompt(
+    *,
+    project_id: int,
+    episode_id: int,
+    memory_blocks_text: str = "",
+    memory_ops_brief: str | None = None,
+) -> str:
+    """组合项目元信息、技能、记忆块与工具硬性规则"""
     skills = _load_skills()
     context = await get_canvas_port().get_project_prompt_context(project_id, episode_id)
     meta_lines: list[str] = []
@@ -54,6 +60,11 @@ async def compose_canvas_system_prompt(*, project_id: int, episode_id: int) -> s
 - Never invent tool results, node UUIDs, task_id, or model_id. Wait for real ToolMessage JSON from the server.
 - Do not use XML or JSON roleplay (`<function_calls>`, `<function_response>`,
   `{"method":...}`) instead of real tool calls.
+- Injected ## Memory blocks are MEMORY (low authority). Live canvas/tool facts and the current user message override memory.
 """
-    # policy 块进入 LLM 上下文, 代码注释不会
-    return f"{skills}\n\n## Project\n\n{meta_block}\n\n{policy}"
+    parts = [skills, f"## Project\n\n{meta_block}", policy]
+    if memory_ops_brief:
+        parts.append(memory_ops_brief)
+    if memory_blocks_text.strip():
+        parts.append(memory_blocks_text.strip())
+    return "\n\n".join(parts)

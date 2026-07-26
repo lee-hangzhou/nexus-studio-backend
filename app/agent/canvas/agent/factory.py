@@ -8,6 +8,7 @@ from app.agent.canvas.agent.graph import build_canvas_agent_graph
 from app.agent.canvas.prompt.composer import compose_canvas_system_prompt
 from app.agent.canvas.tools.build import build_canvas_tools
 from app.agent.chat.llm.gateway_chat_model import GatewayChatModel
+from app.agent.runtime.memory.inject import MemoryInjectionRequest, build_memory_injection
 from app.agent.runtime.memory_store import get_memory_store
 from app.agent.runtime.turn.tool_loop_guard import TurnToolLoopGuard
 
@@ -24,10 +25,10 @@ async def build_canvas_agent(
     turn_id: str | None = None,
     turn_id_holder: dict[str, str | None] | None = None,
     loop_guard: TurnToolLoopGuard | None = None,
+    user_message: str = "",
+    is_resume: bool = False,
 ) -> tuple[CompiledStateGraph, str]:
     """组装 LLM, 工具, system prompt, checkpointer, store 为可运行图"""
-    system_prompt = await compose_canvas_system_prompt(project_id=project_id, episode_id=episode_id)
-    # turn_id_holder 可变容器, SSE turn 创建后工具执行可读最新 turn_id
     turn_id_holder = turn_id_holder if turn_id_holder is not None else {"turn_id": turn_id}
     if turn_id and not turn_id_holder.get("turn_id"):
         turn_id_holder["turn_id"] = turn_id
@@ -42,7 +43,33 @@ async def build_canvas_agent(
         if enable_tools
         else []
     )
-    # 记忆走 LangGraph store, namespace 与读写生命周期由框架管理
+    memory_tools_enabled = any(
+        name
+        in {
+            "manage_user_memory",
+            "recall_user_memory",
+            "manage_project_memory",
+            "recall_project_memory",
+        }
+        for name in (t.name for t in tools)
+    )
+    injection = await build_memory_injection(
+        MemoryInjectionRequest(
+            domain="canvas",
+            user_id=user_id,
+            project_id=project_id,
+            user_message=user_message,
+            is_resume=is_resume,
+            memory_tools_enabled=memory_tools_enabled,
+            store=get_memory_store(),
+        )
+    )
+    system_prompt = await compose_canvas_system_prompt(
+        project_id=project_id,
+        episode_id=episode_id,
+        memory_blocks_text=injection.memory_blocks_text,
+        memory_ops_brief=injection.ops_brief_text,
+    )
     store = get_memory_store()
     graph = build_canvas_agent_graph(
         llm,

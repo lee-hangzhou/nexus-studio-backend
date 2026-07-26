@@ -172,9 +172,11 @@ class CanvasPersistenceSubscriber:
             await _touch_episode(self._episode_id)
             if self._schedule_memory:
                 schedule_canvas_memory_extract(
-                    messages=list(event.messages),
+                    user_text=self._content,
+                    answer_text=answer_text,
                     user_id=self._user_id,
                     project_id=self._project_id,
+                    turn_id=event.turn_id,
                 )
 
 

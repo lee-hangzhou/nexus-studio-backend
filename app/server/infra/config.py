@@ -151,7 +151,17 @@ class Settings(BaseSettings):
     CHAT_COMPLETION_MAX_TOKENS: int = Field(default=8192)
     CHAT_TURN_LOCK_TTL_SEC: int = Field(default=1800)
     CHAT_HEARTBEAT_INTERVAL_SEC: int = Field(default=15)
+    MEMORY_STORE_ENABLED: bool = Field(default=True)
+    MEMORY_EMBEDDING_MODEL: str = Field(default="qwen/qwen3-embedding-8b")
+    MEMORY_VECTOR_DIMENSION: int = Field(default=3072)
     MEMORY_TOOL_TIMEOUT_SEC: int = Field(default=30, ge=5, le=120)
+    MEMORY_INJECTION_TIMEOUT_SEC: int = Field(default=2, ge=1, le=30)
+    MEMORY_EXTRACTION_TIMEOUT_SEC: int = Field(default=60, ge=5, le=300)
+    MEMORY_EXTRACT_MODEL: str = Field(default="")
+    MEMORY_USER_INJECT_FETCH_LIMIT: int = Field(default=32, ge=1, le=200)
+    MEMORY_PROJECT_INJECT_LIMIT: int = Field(default=5, ge=1, le=50)
+    # 2026-07-26 Store asearch 校准（fields=["content"] JSON）：min_pos≈0.660, max_neg≈0.476 → 中点 0.5678
+    MEMORY_PROJECT_INJECT_MIN_SCORE: float = Field(default=0.5678)
     CHAT_MAX_TOOL_CALLS: int = Field(default=80)
     CHAT_TURN_WALL_CLOCK_SEC: int = Field(default=900)
     CHAT_TOOL_REPEAT_GUARD: int = Field(default=3)
@@ -214,10 +224,6 @@ class Settings(BaseSettings):
     CANVAS_MANUAL_CONFIRM_TOOLS: str = Field(
         default="apply_canvas_patch,submit_node_generation",
     )
-    CANVAS_MEMORY_STORE_ENABLED: bool = Field(default=True)
-    CANVAS_MEMORY_EMBEDDING_MODEL: str = Field(default="qwen/qwen3-embedding-8b")
-    CANVAS_MEMORY_EXTRACT_MODEL: str = Field(default="")
-
     # SSE Last-Event-ID replay (Redis Streams; disconnect ≠ cancel)
     SSE_REDIS_SUBSCRIBER_MAX_CONNECTIONS: int = Field(default=512, gt=0)
     SSE_REDIS_CONTROL_MAX_CONNECTIONS: int = Field(default=64, gt=0)

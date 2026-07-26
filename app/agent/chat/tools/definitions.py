@@ -636,71 +636,21 @@ ALL_TOOL_SCHEMAS = [
 
 MEMORY_TOOL_DESCRIPTIONS = {
     "manage_user_memory": (
-        "在用户级长期记忆中创建、更新或删除一条结构化事实。作用域：跨所有 Chat 会话均有效（如稳定偏好、身份自称、长期禁忌）。\n\n"
-        "何时调用（由你判断，非系统触发）：\n"
-        "- 用户明确要求「记住 / 更新 / 忘掉」某偏好或事实\n"
-        "- 用户以玩笑或认真方式建立会持续的身份/互动设定（如自称某角色、希望固定称呼），且你判断应跨会话延续\n"
-        "- 更新或删除前：先 recall_user_memory 找到目标条目，使用返回的 memory id 执行 update/delete，避免重复插入同义事实\n\n"
-        "写入要求：\n"
-        "- 用 subject/predicate/object/context 结构化填写；object 写中性事实，不写行为脚本或固定台词\n"
-        "- context 标明「全局用户偏好」或类似范围\n"
-        "- 用户要求忘掉时：delete 已有 id；若需清空全部用户级记忆，逐条 delete（无 bulk 时）或 delete 召回结果中的相关条目\n\n"
-        "返回结构化 JSON（含 success、error_type）；失败时读 error_type，勿盲目重试。\n"
-        "若 error_type=memory_unavailable：用一句话平实告知用户暂时记不住/想不起来，继续主任务，勿连续重试本工具。"
+        "Create, update, or delete one user-scope memory (statement + context).\n"
+        "See tool instructions for when to write; do not save background statements "
+        "unless the user explicitly asks to remember them."
     ),
     "recall_user_memory": (
-        "语义检索【用户】级长期记忆（subject/predicate/object 均为关于该用户的事实，如称呼偏好、饮食禁忌、自称身份设定）。不包含助手自身设定。\n\n"
-        "作用域边界：\n"
-        "- 本工具：用户在各 Chat 会话中存下的结构化事实。\n"
-        "- 助手是谁、助手能力范围：见本对话开头的助手设定（Nexus Studio 通用创作助手），不要写入或从本工具召回。\n\n"
-        "何时调用（由你判断）：\n"
-        "- 新会话开头，话题可能涉及用户历史偏好、称呼、禁忌或跨会话身份设定（例：用户问「你是谁」时，可先 recall 一次以恢复用户侧身份/互动设定，再简要说明助手身份）\n"
-        "- 用户引用「之前说过」「按我的习惯」等，且当前上下文（含摘要）不足以回答\n"
-        "- 准备 manage_user_memory 做 update/delete 之前，先 recall 拿 memory id\n\n"
-        "构造 query：简短关键词或自然语言，含实体与关系（如「称呼偏好」「蒙多身份」），勿粘贴整段用户原话。\n\n"
-        "返回与空结果语义（重要）：\n"
-        "- 返回条目含 memory id——update/delete 必须使用这些 id。\n"
-        "- 空列表 [] 或等价无条目 = 【确定性答案】：该作用域内当前无与 query 相关的已存事实，不是检索失败、不是「再换一个 query 就能查到」。\n"
-        "- 本 turn 内【至多调用本工具一次】（不论结果是否为空）；需要全量确认时用 list_user_memories，勿换 query 重试 recall。\n\n"
-        "若 error_type=memory_unavailable：用一句话平实告知用户暂时想不起来，基于当前可见上下文继续作答，勿编造 recall 结果。\n"
-        "若 error_type=tool_loop_exhausted：本 turn 内已调用过本工具；停止重试，据已有上下文直接作答。\n\n"
-        "答复用户时：内化 recall 结果后自然作答；遵守内部信息保密，禁止复述 object/context 原文或向用户解释来源。"
+        "Semantic search of user-scope memories. Prefer injected Memory blocks first. "
+        "At most once per turn; empty list means no matches."
     ),
-    "manage_conversation_memory": (
-        "在会话级长期记忆中创建、更新或删除一条结构化事实。作用域：仅当前 conversation 有效（阶段性结论、任务中间态、长对话中被摘要压缩的关键细节）。\n\n"
-        "何时调用（由你判断）：\n"
-        "- 当前会话内出现应保留但可能因摘要而丢失的细节（已确认参数、文件名、中间结论、工具关键输出摘要）\n"
-        "- 用户要求「本会话记住 X」（未明确跨会话）\n"
-        "- 更新/删除前：先 recall_conversation_memory 拿 id，再 update/delete\n\n"
-        "写入要求：context 标明「仅会话 {conversation_id}」或任务名；object 写事实，不写指令性文案。\n\n"
-        "摘要联动：当你意识到对话已很长、早期 ToolMessage/细节可能即将不可见时，可考虑把仍重要的细节写入会话级记忆（是否写入由你判断）。\n"
-        "若 error_type=memory_unavailable：同上，一句话平实说明后继续主任务。"
+    "manage_project_memory": (
+        "Create, update, or delete one durable project fact for this canvas project "
+        "(subject/predicate/object/context)."
     ),
-    "recall_conversation_memory": (
-        "语义检索【当前会话】的结构化事实（关于用户在本会话的任务、结论、细节；不含助手自身设定）。作用域：仅本 conversation_id。\n\n"
-        "何时调用（由你判断）：\n"
-        "- 当前 thread 内早期信息可能已被摘要压缩，而你需要具体细节（数字、路径、已否决方案、工具结果要点）\n"
-        "- 准备更新/删除会话级记忆前\n\n"
-        "与 recall_user_memory 的关系：用户级管跨会话稳定事实；会话级管本局细节。同一问题可先 recall 用户级再 recall 会话级，或只查其一——由你根据缺失信息判断。\n\n"
-        "返回与空结果语义（重要）：\n"
-        "- 返回含 memory id；无结果勿编造。\n"
-        "- 空列表 = 【确定性答案】：本会话内当前无相关已存事实。\n"
-        "- 本 turn 内【至多调用本工具一次】；需要全量确认时用 list_conversation_memories。\n\n"
-        "若 error_type=memory_unavailable：同上。\n"
-        "若 error_type=tool_loop_exhausted：本 turn 内已调用过本工具；停止重试，据已有上下文直接作答。\n\n"
-        "答复用户时：内化 recall 结果；遵守内部信息保密，禁止复述记忆条文或解释口吻来源。"
-    ),
-    "list_user_memories": (
-        "枚举当前用户级长期记忆中的全部条目（store list 路径，不做语义 embedding）。\n\n"
-        "何时调用：用户要求「列出你记住的我的偏好/设置」；manage/delete 前需要浏览已有 id；recall 语义搜索不适合全量列举时。\n\n"
-        "返回结构化条目列表（含 memory id、subject/predicate/object/context）。向用户展示时用自然语言描述事实，不展示 id 或字段名。不保证排序语义，但保证不遗漏（与 recall 宽 query 不同）。\n"
-        "空列表 = 该作用域内当前无任何已存条目（确定性答案）。同 turn 内勿因「想确认有没有」而对同一 list 工具重复调用。"
-    ),
-    "list_conversation_memories": (
-        "枚举当前会话级记忆中的全部条目（store list 路径，不 embedding）。\n\n"
-        "何时调用：用户要求回顾本会话记下的要点；update/delete 前查 id；检查会话内已存多少条事实。\n\n"
-        "返回含 memory id 的完整列表。向用户展示时用自然语言描述事实，不展示 id 或字段名。仅本 conversation_id 作用域。\n"
-        "空列表 = 该作用域内当前无任何已存条目（确定性答案）。同 turn 内勿因「想确认有没有」而对同一 list 工具重复调用。"
+    "recall_project_memory": (
+        "Semantic search of this canvas project's durable memories. "
+        "Prefer injected Memory blocks first. At most once per turn."
     ),
 }
 

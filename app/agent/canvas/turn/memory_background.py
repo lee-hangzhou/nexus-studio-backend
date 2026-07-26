@@ -2,68 +2,165 @@ from __future__ import annotations
 
 import asyncio
 
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langmem import create_memory_store_manager
 
-from app.agent.canvas.memory.model_resolve import resolve_memory_extract_model_key
-from app.agent.canvas.memory.schemas import CanvasMemory
-from app.agent.canvas.memory.store import PROJECT_MEMORY_NAMESPACE
 from app.agent.chat.llm.gateway_chat_model import GatewayChatModel
+from app.agent.chat.llm.model_catalog import model_catalog
 from app.agent.chat.llm.registry import get_model_spec
+from app.agent.runtime.background import background_supervisor
+from app.agent.runtime.memory.instructions import FIXED_PROJECT_EXTRACT_INSTRUCTIONS
+from app.agent.runtime.memory.registry import get_memory_domain
+from app.agent.runtime.memory.schemas import ProjectFactMemory
+from app.agent.runtime.memory.secrets import scan_text_for_secrets
+from app.agent.runtime.memory_store import get_memory_store
 from app.server.infra.config import settings
 from app.server.infra.logger import logger
-from app.agent.runtime.memory_store import get_canvas_memory_store
+
+
+class MemoryExtractModelError(ValueError):
+    """MEMORY_EXTRACT_MODEL 未在 gateway model catalog 中"""
+
+
+def require_extract_model_key(model_key: str) -> str:
+    """非空且在 gateway model catalog 才合法；禁止 synthetic 合成"""
+    key = (model_key or "").strip()
+    if not key:
+        raise MemoryExtractModelError("MEMORY_EXTRACT_MODEL is empty")
+    if not model_catalog.has(key):
+        raise MemoryExtractModelError(
+            f"MEMORY_EXTRACT_MODEL not in model catalog: {key}"
+        )
+    return key
+
+
+def _extract_model_or_none() -> str | None:
+    """返回已配置的抽取模型 key；空字符串表示关闭"""
+    preferred = (settings.MEMORY_EXTRACT_MODEL or "").strip()
+    if not preferred:
+        return None
+    return require_extract_model_key(preferred)
+
+
+def validate_memory_extract_config() -> None:
+    """启动期硬校验：已配置则必须命中 gateway model catalog"""
+    preferred = (settings.MEMORY_EXTRACT_MODEL or "").strip()
+    if not preferred:
+        return
+    require_extract_model_key(preferred)
 
 
 def schedule_canvas_memory_extract(
     *,
-    messages: list[BaseMessage],
+    user_text: str,
+    answer_text: str,
     user_id: int,
     project_id: int,
+    turn_id: str | None = None,
 ) -> None:
-    """调度一次异步记忆抽取, 失败不影响主流程"""
-    store = get_canvas_memory_store()
-    if store is None or not settings.CANVAS_MEMORY_STORE_ENABLED:
+    """仅用本轮 Human/AI 对入队项目记忆抽取；配置错误不拖垮 turn"""
+    store = get_memory_store()
+    if store is None or not settings.MEMORY_STORE_ENABLED:
+        return
+    try:
+        model_key = _extract_model_or_none()
+    except MemoryExtractModelError as exc:
+        logger.error(
+            "canvas.memory.extract_config_invalid",
+            error=str(exc),
+            preferred=settings.MEMORY_EXTRACT_MODEL,
+            turn_id=turn_id,
+            user_id=user_id,
+            project_id=project_id,
+        )
+        return
+    if model_key is None:
+        logger.info("canvas.memory.extract_skipped", reason="extract_model_empty")
         return
 
-    async def _run() -> None:
-        """后台调用 langmem, 把对话写入项目级长期记忆"""
-        try:
-            model_key = resolve_memory_extract_model_key()
-            if not model_key:
-                # 目录无可用抽取模型时只记日志
-                logger.warning(
-                    "canvas.memory.extract_skipped",
-                    reason="no_chat_model_in_catalog",
-                    preferred=settings.CANVAS_MEMORY_EXTRACT_MODEL,
-                )
-                return
-            spec = get_model_spec(model_key)
-            llm = GatewayChatModel(model_key=model_key, spec=spec)
-            manager = create_memory_store_manager(
-                llm,
-                store=store,
-                namespace=PROJECT_MEMORY_NAMESPACE,
-                schemas=[CanvasMemory],
-                enable_inserts=True,
-                enable_deletes=True,
-            )
-            config = {
-                "configurable": {
-                    # langmem 用 configurable 定位用户与项目命名空间
-                    "langgraph_user_id": str(user_id),
-                    "project_id": str(project_id),
-                }
-            }
-            await manager.ainvoke({"messages": messages}, config=config)
-            logger.info(
-                "canvas.memory.write",
-                source="background_extract",
-                namespace=str(PROJECT_MEMORY_NAMESPACE),
-                project_id=project_id,
-                user_id=user_id,
-            )
-        except Exception as exc:
-            logger.exception("canvas.memory.background_failed", error=str(exc))
+    if not get_memory_domain("canvas").scope_spec("project").extract_enabled:
+        return
 
-    asyncio.create_task(_run())
+    user_text = (user_text or "").strip()
+    answer_text = (answer_text or "").strip()
+    if not answer_text:
+        return
+    hits = scan_text_for_secrets(f"{user_text}\n{answer_text}")
+    if hits:
+        logger.info(
+            "canvas.memory.extract_skipped",
+            reason="detect_secrets",
+            turn_id=turn_id,
+            user_id=user_id,
+            project_id=project_id,
+            secret_types=[h.secret_type for h in hits],
+        )
+        return
+
+    serial_key = f"canvas.project:{user_id}:{project_id}"
+    namespace = get_memory_domain("canvas").scope_spec("project").namespace
+
+    async def _run() -> None:
+        """执行一次项目记忆抽取"""
+        try:
+            async with asyncio.timeout(float(settings.MEMORY_EXTRACTION_TIMEOUT_SEC)):
+                # catalog 已在调度边界校验；此处再取 spec 供 GatewayChatModel
+                spec = get_model_spec(model_key)
+                llm = GatewayChatModel(model_key=model_key, spec=spec)
+                manager = create_memory_store_manager(
+                    llm,
+                    store=store,
+                    namespace=namespace,
+                    schemas=[ProjectFactMemory],
+                    enable_inserts=True,
+                    enable_deletes=True,
+                    query_limit=5,
+                    instructions=FIXED_PROJECT_EXTRACT_INSTRUCTIONS,
+                )
+                config = {
+                    "configurable": {
+                        "langgraph_user_id": str(user_id),
+                        "project_id": str(project_id),
+                    }
+                }
+                messages = [
+                    HumanMessage(content=user_text),
+                    AIMessage(content=answer_text),
+                ]
+                await manager.ainvoke({"messages": messages}, config=config)
+                logger.info(
+                    "canvas.memory.write",
+                    source="background_extract",
+                    user_id=user_id,
+                    project_id=project_id,
+                    turn_id=turn_id,
+                )
+        except TimeoutError:
+            logger.warning(
+                "canvas.memory.extract_timeout",
+                user_id=user_id,
+                project_id=project_id,
+                turn_id=turn_id,
+            )
+        except asyncio.CancelledError:
+            logger.info(
+                "canvas.memory.extract_cancelled",
+                user_id=user_id,
+                project_id=project_id,
+                turn_id=turn_id,
+            )
+            raise
+        except Exception as exc:
+            logger.exception(
+                "canvas.memory.background_failed",
+                error=str(exc),
+                user_id=user_id,
+                project_id=project_id,
+                turn_id=turn_id,
+            )
+
+    background_supervisor.start(
+        _run(),
+        name=f"canvas-memory-extract-{project_id}-{turn_id or 'na'}",
+        serial_key=serial_key,
+    )

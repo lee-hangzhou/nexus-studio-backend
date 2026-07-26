@@ -25,10 +25,7 @@ class ToolLoopPolicy:
 
 TOOL_LOOP_POLICIES: dict[str, ToolLoopPolicy] = {
     "recall_user_memory": ToolLoopPolicy(track=ToolLoopTrack.ONCE_PER_TURN),
-    "recall_conversation_memory": ToolLoopPolicy(track=ToolLoopTrack.ONCE_PER_TURN),
     "recall_project_memory": ToolLoopPolicy(track=ToolLoopTrack.ONCE_PER_TURN),
-    "list_user_memories": ToolLoopPolicy(track=ToolLoopTrack.EMPTY_STREAK),
-    "list_conversation_memories": ToolLoopPolicy(track=ToolLoopTrack.EMPTY_STREAK),
     "list_generate_models": ToolLoopPolicy(track=ToolLoopTrack.DUPLICATE_ARGS),
 }
 

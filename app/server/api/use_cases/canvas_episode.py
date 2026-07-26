@@ -12,11 +12,11 @@ from app.agent.canvas.turn.lock import ActiveCanvasTurn, canvas_turn_lock
 from app.agent.canvas.turn.orchestrator import stream_canvas_resume, stream_canvas_turn
 from app.agent.canvas.turn.persistence import canvas_turn_already_completed
 from app.agent.canvas.turn.replay_execution import run_canvas_replay_execution
+from app.agent.runtime.background import background_supervisor
 from app.agent.runtime.stream.replay import (
     ReplayMeta,
     ReplayRequestKind,
     build_request_fingerprint,
-    execution_supervisor,
     replay_store,
     validate_replay_cursor,
 )
@@ -149,7 +149,7 @@ class CanvasEpisodeUseCases:
             except Exception:
                 await replay_store.discard_starting(request_id)
                 raise
-            execution_supervisor.start(
+            background_supervisor.start(
                 run_canvas_replay_execution(
                     request_id=request_id,
                     project_id=scope.project_id,
@@ -225,7 +225,7 @@ class CanvasEpisodeUseCases:
             except Exception:
                 await replay_store.discard_starting(request_id)
                 raise
-            execution_supervisor.start(
+            background_supervisor.start(
                 run_canvas_replay_execution(
                     request_id=request_id,
                     project_id=scope.project_id,
