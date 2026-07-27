@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request
 
-from app.server.api.use_cases import canvas_episode_use_cases
 from app.server.api.schemas import Response
+from app.server.api.use_cases import canvas_episode_use_cases
 from app.server.projects.domain.models import NameAndCoverUpdate, UpdateField
 from app.server.projects.schemas import (
     EpisodeCreateRequest,

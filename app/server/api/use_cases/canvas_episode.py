@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from app.agent.canvas.node_execution.manual_generate import run_manual_node_generate
 from app.agent.canvas.services.session_checkpoint import delete_canvas_session_checkpoint
-from app.agent.canvas.turn.lock import ActiveCanvasTurn
+from app.agent.canvas.turn.lock import ActiveCanvasTurn, canvas_turn_lock
 from app.agent.canvas.turn.orchestrator import stream_canvas_resume, stream_canvas_turn
 from app.agent.canvas.turn.persistence import canvas_turn_already_completed
 from app.agent.canvas.turn.replay_execution import run_canvas_replay_execution
@@ -43,10 +43,12 @@ from app.contracts.turn_content import (
     extract_skill_paths,
     validate_turn_user_input,
 )
+from app.server.ports.adapters import UserSkillPortAdapter
 from app.server.ports.product import UserSkillPort
 from app.server.projects.services.scope import CanvasScopeService
-from app.server.projects.services.service import EpisodeService
+from app.server.projects.services.service import EpisodeService, canvas_scope_service, episode_service
 from app.server.skills.domain.enums import SkillSurface
+from app.server.skills.services import user_skill_service
 
 
 class CanvasSessionLock(Protocol):
@@ -457,3 +459,11 @@ class CanvasEpisodeUseCases:
                 turn_id=active,
             )
         return CanvasTurnCancelResult(cancelled=active is not None, active_turn_id=active)
+
+
+canvas_episode_use_cases = CanvasEpisodeUseCases(
+    scopes=canvas_scope_service,
+    episodes=episode_service,
+    lock=canvas_turn_lock,
+    user_skills=UserSkillPortAdapter(user_skill_service),
+)
