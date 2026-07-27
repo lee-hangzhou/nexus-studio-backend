@@ -16,6 +16,7 @@ from app.contracts.canvas import (
     CanvasPatchOp,
     CanvasPatchRequest,
     CanvasPatchResponse,
+    CanvasRevisionConflictItem,
     CanvasSnapshot,
     GenerationProgress,
 )
@@ -60,6 +61,7 @@ CanvasContracts = Annotated[
     CanvasSnapshot
     | CanvasPatchRequest
     | CanvasPatchResponse
+    | CanvasRevisionConflictItem
     | GenerationProgress
     | CanvasPatchOp,
     Field(union_mode="left_to_right"),

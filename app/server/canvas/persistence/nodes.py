@@ -11,6 +11,7 @@ class CanvasNodes(Model):
     id = fields.UUIDField(pk=True)
     episode_id = fields.BigIntField(null=False)
     kind = fields.CharField(max_length=16, null=False)
+    revision = fields.BigIntField(null=False, default=1)
     position_x = fields.FloatField(null=False)
     position_y = fields.FloatField(null=False)
     title = fields.CharField(max_length=512, null=False, default="")

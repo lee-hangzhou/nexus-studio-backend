@@ -184,8 +184,9 @@ async def browser_challenge_wait_probe(
             timeout_ms=timeout_ms,
             attempt_id=aid,
         )
-        payload["attempt_id"] = aid
-        result = _probe_tool_result(payload)
+        body = payload.model_dump(mode="json")
+        body["attempt_id"] = aid
+        result = _probe_tool_result(body)
         if not result.success:
             artifacts.cleanup_attempt(workspace, aid)
         else:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.agent.chat.contracts.interaction import ScaleFacts
 from app.server.infra.config import settings
 
 BBox = dict[str, float]
@@ -90,14 +91,15 @@ def build_scale_facts(
     track: BBox,
     *,
     content_width_px: float | None,
-) -> dict[str, Any]:
+) -> ScaleFacts:
+    """根据轨道宽度与内容宽度计算缩放事实"""
     track_w = float(track["width"])
     css_per: float | None = None
     if content_width_px is not None and content_width_px > 0:
         css_per = track_w / content_width_px
-    return {
-        "content_space": "intrinsic_pixels" if content_width_px else "css_viewport",
-        "track_width_css": track_w,
-        "content_width_px": content_width_px,
-        "css_per_intrinsic_x": css_per,
-    }
+    return ScaleFacts(
+        content_space="intrinsic_pixels" if content_width_px else "css_viewport",
+        track_width_css=track_w,
+        content_width_px=content_width_px,
+        css_per_intrinsic_x=css_per,
+    )

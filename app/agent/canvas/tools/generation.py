@@ -86,9 +86,10 @@ async def submit_node_generation_for_episode(
             expected_revision=rev,
         )
         delta = {
-            "revision": rev,
             "nodes": [node_view.model_dump(mode="json")],
             "edges": [],
+            "deleted_node_ids": [],
+            "deleted_edge_ids": [],
         }
         out = {
             "task_id": submitted.task_id,

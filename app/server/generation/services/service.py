@@ -655,7 +655,7 @@ class GenerationService:
             updated = await self._tasks.update_if_status(
                 task.id,
                 expected_status=current,
-                fields=result.update_fields(callback_sent=callback_sent),
+                fields=result.update_fields(callback_sent=callback_sent).model_dump(exclude_none=True),
             )
             if updated != 1:
                 return await self._tasks.get_by_id_required(task.id), False

@@ -8,6 +8,7 @@ from typing import Any
 
 from app.agent.chat.browser.challenge import artifacts, geometry
 from app.agent.chat.browser.session_lock import session_page_lock
+from app.agent.chat.contracts.interaction import ChallengeProbeResult
 from app.server.infra.logger import logger
 
 
@@ -52,7 +53,7 @@ async def read_geometry(
         "entities": geometry.build_entities_payload(container=container, track=track, handle=handle),
         "travel": geometry.compute_handle_travel_bounds(track, handle),
         "instruction_text": instruction_text,
-        "scale": geometry.build_scale_facts(track, content_width_px=intrinsic),
+        "scale": geometry.build_scale_facts(track, content_width_px=intrinsic).model_dump(mode="json"),
     }
     resolved = data.get("resolved_index")
     if isinstance(resolved, dict):
@@ -158,7 +159,8 @@ async def wait_probe(
     scope_selector: str | None = None,
     timeout_ms: int,
     attempt_id: str | None = None,
-) -> dict[str, Any]:
+) -> ChallengeProbeResult:
+    """等待挑战探测结果"""
     from app.agent.chat.browser.challenge import runtime as challenge_runtime
 
     async with session_page_lock(conversation_id):
@@ -173,5 +175,5 @@ async def wait_probe(
             scope_selector=scope_selector,
             timeout_ms=timeout_ms,
         )
-    artifacts.write_step(workspace, attempt_id or "", "07_verify", result)
+    artifacts.write_step(workspace, attempt_id or "", "07_verify", result.model_dump(mode="json"))
     return result

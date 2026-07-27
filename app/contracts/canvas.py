@@ -87,12 +87,14 @@ class CreateNodeOp(CanvasContract):
 class UpdateNodeOp(CanvasContract):
     op: Literal[CanvasPatchOperation.UPDATE_NODE]
     node_id: UUID
+    expected_revision: int
     patch: UpdateNodePatch
 
 
 class DeleteNodeOp(CanvasContract):
     op: Literal[CanvasPatchOperation.DELETE_NODE]
     node_id: UUID
+    expected_revision: int
 
 
 class ConnectNodesOp(CanvasContract):
@@ -103,6 +105,7 @@ class ConnectNodesOp(CanvasContract):
 class DisconnectNodesOp(CanvasContract):
     op: Literal[CanvasPatchOperation.DISCONNECT]
     edge_id: UUID
+    expected_revision: int
 
 
 CanvasPatchOp = Annotated[
@@ -114,6 +117,7 @@ CanvasPatchOp = Annotated[
 class CanvasNodeView(CanvasContract):
     id: UUID
     kind: CanvasNodeKind
+    revision: int
     position: CanvasPosition
     title: str = ""
     input_prompt: str = ""
@@ -132,6 +136,7 @@ class CanvasNodeView(CanvasContract):
 
 class CanvasEdgeView(CanvasContract):
     id: UUID
+    revision: int
     source: UUID
     target: UUID
     source_port: CanvasSourcePort
@@ -143,18 +148,15 @@ class CanvasEdgeView(CanvasContract):
 class CanvasSnapshot(CanvasContract):
     project_id: int
     episode_id: int
-    revision: int
     nodes: list[CanvasNodeView]
     edges: list[CanvasEdgeView]
 
 
 class CanvasPatchRequest(CanvasContract):
-    expected_revision: int
     ops: list[CanvasPatchOp] = Field(min_length=1)
 
 
 class CanvasPatchResponse(CanvasContract):
-    revision: int
     op_id: UUID | None = None
     nodes: list[CanvasNodeView] = Field(default_factory=list)
     edges: list[CanvasEdgeView] = Field(default_factory=list)
@@ -167,3 +169,10 @@ class GenerationProgress(CanvasContract):
     task_id: int | None = None
     status: CanvasNodeStatus
     revision: int
+
+
+class CanvasRevisionConflictItem(CanvasContract):
+    kind: Literal["node", "edge"]
+    id: UUID
+    expected_revision: int
+    actual_revision: int

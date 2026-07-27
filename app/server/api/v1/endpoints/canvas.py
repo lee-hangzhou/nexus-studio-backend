@@ -61,21 +61,20 @@ def _stream_response(meta: ReplayMeta, request: Request) -> StreamingResponse:
     )
 
 
-@router.get("/episodes/{episode_id}")
+@router.post("/episodes/{episode_id}/get")
 async def get_canvas_snapshot(episode_id: int, request: Request) -> Response[CanvasSnapshot]:
     scope = await canvas_scope_service.require_read_scope(request.state.user_id, episode_id)
     snapshot = await canvas_service.get_snapshot(scope)
     return Response(data=snapshot)
 
 
-@router.patch("/episodes/{episode_id}")
+@router.post("/episodes/{episode_id}/patch")
 async def patch_canvas(episode_id: int, request: Request, body: CanvasPatchRequest) -> Response:
     scope = await canvas_scope_service.require_write_scope(request.state.user_id, episode_id)
     try:
         result = await canvas_service.apply_patch(
             scope,
             body.ops,
-            body.expected_revision,
         )
         return Response(data=result.model_dump())
     except CanvasRevisionConflictError as exc:

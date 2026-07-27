@@ -127,8 +127,9 @@ async def execute_text_node_generation(
         output_chars=len(output_text),
     )
     delta = {
-        "revision": rev,
         "nodes": [node_view.model_dump(mode="json")],
         "edges": [],
+        "deleted_node_ids": [],
+        "deleted_edge_ids": [],
     }
     return rev, delta

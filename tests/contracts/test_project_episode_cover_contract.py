@@ -88,7 +88,7 @@ async def test_canvas_snapshot_presigns_only_scope_owned_project_assets(monkeypa
     try:
         project = await _project(user_id=1)
         episode = await _episode(int(project.id), user_id=1)
-        await CanvasEpisodeMeta.create(episode_id=int(episode.id), revision=1)
+        await CanvasEpisodeMeta.create(episode_id=int(episode.id))
         allowed = await _asset(user_id=1, project_id=int(project.id))
         foreign_user = await _asset(user_id=2, project_id=int(project.id))
         other_project = await _asset(user_id=1, project_id=999)
@@ -97,6 +97,7 @@ async def test_canvas_snapshot_presigns_only_scope_owned_project_assets(monkeypa
             id=node_id,
             episode_id=int(episode.id),
             kind="image",
+            revision=1,
             position_x=0,
             position_y=0,
             title="",

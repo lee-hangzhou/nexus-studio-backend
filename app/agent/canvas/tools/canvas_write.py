@@ -18,9 +18,11 @@ class ApplyCanvasPatchInput(BaseModel):
 
     ops: list[CanvasPatchOp] = Field(
         min_length=1,
-        description="画布补丁操作列表，例如 create_node、update_node、connect、disconnect",
+        description=(
+            "画布补丁操作列表；update_node/delete_node/disconnect 必须带 expected_revision，"
+            "来自 query_canvas_nodes 返回的实体 revision"
+        ),
     )
-    expected_revision: int = Field(description="来自 query_canvas_nodes 的当前 revision，用于并发冲突保护")
 
 
 async def _apply_patch(
@@ -38,7 +40,6 @@ async def _apply_patch(
             episode_id=episode_id,
             user_id=user_id,
             ops=args.ops,
-            expected_revision=args.expected_revision,
             turn_id=turn_id,
         )
         return ToolResult.ok(
@@ -59,9 +60,9 @@ def build_apply_canvas_patch_tool(
     turn_id_holder: dict[str, str | None],
 ) -> StructuredTool:
     """构建 apply_canvas_patch 结构化工具"""
-    async def _run(ops: list[dict], expected_revision: int) -> str:
+    async def _run(ops: list[dict]) -> str:
         """工具入口, 校验参数后调用 _apply_patch"""
-        args = ApplyCanvasPatchInput(ops=ops, expected_revision=expected_revision)
+        args = ApplyCanvasPatchInput(ops=ops)
         return (
             await _apply_patch(
                 project_id,
@@ -76,14 +77,16 @@ def build_apply_canvas_patch_tool(
         coroutine=_run,
         name="apply_canvas_patch",
         description=(
-            "Apply canvas patch ops. Required: expected_revision, ops[]. "
+            "Apply canvas patch ops. Required: ops[]. "
+            "update_node/delete_node/disconnect must include expected_revision from "
+            "query_canvas_nodes entity revision. "
             "create_node: {\"op\":\"create_node\",\"node\":{\"kind\":\"video\",\"position\":{\"x\":100,\"y\":100},"
             "\"input_prompt\":\"...\"}}. "
             "connect: edge.source and edge.target must be existing nodes[].id from a prior "
             "query_canvas_nodes or apply_canvas_patch result — never invented ids. "
             "Do not connect in the same patch as create_node; create first, read returned ids, "
             "then connect in a follow-up patch. "
-            "disconnect: {\"op\":\"disconnect\",\"edge_id\":\"<from edges[].id>\"}."
+            "disconnect: {\"op\":\"disconnect\",\"edge_id\":\"<from edges[].id>\",\"expected_revision\":1}."
         ),
         args_schema=ApplyCanvasPatchInput,
     )

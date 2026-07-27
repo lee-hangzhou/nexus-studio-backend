@@ -98,7 +98,6 @@ class CanvasWorkflowRunner:
             episode_id,
             {
                 "canvas_patch": {
-                    "revision": rev,
                     "nodes": [node_view.model_dump(mode="json")],
                     "edges": [],
                     "deleted_node_ids": [],
@@ -193,7 +192,6 @@ class CanvasWorkflowRunner:
             error_message=error_message if error_message is not None else row.error_message,
         )
         payload = {
-            "revision": rev,
             "nodes": [node_view.model_dump(mode="json")],
             "edges": [],
             "deleted_node_ids": [],
@@ -250,7 +248,6 @@ class CanvasWorkflowRunner:
             error_message=error_message,
         )
         payload = {
-            "revision": rev,
             "nodes": [node_view.model_dump(mode="json")],
             "edges": [],
             "deleted_node_ids": [],

@@ -71,14 +71,13 @@ async def _emit_canvas_patch_from_tool(event: ToolFinished, emit: TurnEmit) -> N
             )
         return
     delta = {
-        "revision": data.get("revision"),
         "op_id": data.get("op_id"),
         "nodes": data.get("nodes", []),
         "edges": data.get("edges", []),
         "deleted_node_ids": data.get("deleted_node_ids", []),
         "deleted_edge_ids": data.get("deleted_edge_ids", []),
     }
-    if delta.get("revision") is not None:
+    if delta["nodes"] or delta["edges"] or delta["deleted_node_ids"] or delta["deleted_edge_ids"]:
         await emit(create_stream_frame(type=StreamFrameType.CANVAS_PATCH, data=delta))
 
 

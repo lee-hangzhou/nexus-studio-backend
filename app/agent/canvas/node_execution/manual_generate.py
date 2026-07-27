@@ -22,12 +22,12 @@ async def run_manual_node_generate(
     user_id: int,
     body: SubmitNodeExecuteInput,
 ) -> CanvasNodeGenerateResponse:
-    """用户手动节点生成：入口持有集级锁，不依赖 expected_revision"""
+    """用户手动节点生成：入口持有集级锁, 不依赖 expected_revision"""
     node_id = body.node_id
     if body.kind == "text":
         if not body.model_key:
             raise AppError(ErrorCode.INVALID_PARAMS, "text 节点需要 model_key")
-        rev, delta = await execute_text_node_generation(
+        _, delta = await execute_text_node_generation(
             project_id=project_id,
             episode_id=episode_id,
             user_id=user_id,
@@ -42,7 +42,6 @@ async def run_manual_node_generate(
             kind="text",
             status=node_view.status,
             task_id=node_view.task_id,
-            revision=rev,
             node=node_view,
             error_message=node_view.error_message,
         )
@@ -108,7 +107,6 @@ async def run_manual_node_generate(
         kind=body.kind,
         status=CanvasNodeStatus.RUNNING,
         task_id=task_id,
-        revision=int(delta["revision"]),
         node=node_view,
         error_message=None,
     )

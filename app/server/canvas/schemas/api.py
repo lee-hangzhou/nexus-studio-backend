@@ -77,13 +77,12 @@ class CanvasMessagesListRequest(BaseModel):
 
 
 class CanvasNodeGenerateResponse(BaseModel):
-    """用户手动节点生成 JSON 响应。"""
+    """用户手动节点生成 JSON 响应"""
 
     node_id: str
     kind: NodeExecuteKind
     status: CanvasNodeStatus
     task_id: int | None = None
-    revision: int
     node: CanvasNodeView
     error_message: str | None = None
 

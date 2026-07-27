@@ -6,7 +6,7 @@ import asyncio
 import time
 from typing import Any
 
-from app.agent.chat.contracts.interaction import ProbeOutcome
+from app.agent.chat.contracts.interaction import ChallengeProbeResult, ProbeOutcome
 
 
 async def _is_visible(page: Any, selector: str | None, *, scope_selector: str | None = None) -> bool:
@@ -62,8 +62,8 @@ async def observe_challenge_probe(
     scope_selector: str | None = None,
     timeout_ms: int,
     poll_interval_ms: int = 200,
-) -> dict[str, Any]:
-    """Poll page until outcome is determined or timeout."""
+) -> ChallengeProbeResult:
+    """轮询页面直到判定 outcome 或超时"""
     url_before = page.url
     deadline = time.monotonic() + max(timeout_ms, 0) / 1000.0
     last_observations: dict[str, Any] = {
@@ -145,14 +145,15 @@ def _build_probe_result(
     url_after: str,
     selector: str,
     error: str | None,
-) -> dict[str, Any]:
-    return {
-        "outcome": outcome,
-        "verified": verified,
-        "visible": observations.get("success_visible", False),
-        "observations": observations,
-        "url_before": url_before,
-        "url_after": url_after,
-        "selector": selector,
-        "error": error,
-    }
+) -> ChallengeProbeResult:
+    """组装挑战探测结果模型"""
+    return ChallengeProbeResult(
+        outcome=outcome,
+        verified=verified,
+        visible=bool(observations.get("success_visible", False)),
+        observations=observations,
+        url_before=url_before,
+        url_after=url_after,
+        selector=selector,
+        error=error,
+    )

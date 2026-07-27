@@ -18,7 +18,7 @@ class CanvasEpisodeDeleteState:
 
 class CanvasEpisodeLifecycleRepository:
     async def create_empty(self, episode_id: int) -> None:
-        await CanvasEpisodeMeta.create(episode_id=episode_id, revision=0)
+        await CanvasEpisodeMeta.create(episode_id=episode_id)
 
     async def get_delete_state(self, episode_id: int) -> CanvasEpisodeDeleteState:
         # Include soft-deleted nodes: DeleteNodeOp can leave RUNNING + in-flight tasks

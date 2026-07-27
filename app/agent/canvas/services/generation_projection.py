@@ -5,6 +5,8 @@ from app.agent.canvas.turn.generation_hub import canvas_generation_hub
 from app.agent.runtime.ports import get_canvas_port
 from app.contracts.canvas import CanvasPatchResponse, GenerationProgress
 from app.server.canvas.domain.enums import CanvasNodeStatus
+from app.server.exceptions.base import AppError
+from app.server.exceptions.codes import ErrorCode
 from app.server.ports.product import CanvasTaskProjectionDTO
 
 
@@ -27,14 +29,29 @@ async def project_from_task(task_id: int, user_id: int) -> CanvasPatchResponse |
 
 
 async def publish_canvas_node_result(projection: CanvasTaskProjectionDTO) -> None:
+    """发布节点投影到 generation hub, 并在终态推进下游"""
     payload = projection.patch
     if payload is None:
         return
+    if not payload.nodes:
+        raise AppError(
+            ErrorCode.INTERNAL_ERROR,
+            "canvas patch missing node for generation progress",
+        )
+    node_view = next(
+        (n for n in payload.nodes if str(n.id) == str(projection.node_id)),
+        None,
+    )
+    if node_view is None:
+        raise AppError(
+            ErrorCode.INTERNAL_ERROR,
+            f"canvas patch missing node {projection.node_id} for generation progress",
+        )
     progress = GenerationProgress(
         node_id=projection.node_id,
         task_id=projection.task_id,
         status=projection.status,
-        revision=payload.revision,
+        revision=node_view.revision,
     )
     await canvas_generation_hub.publish(
         projection.episode_id,

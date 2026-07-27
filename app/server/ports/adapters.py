@@ -134,6 +134,7 @@ def _node_dto(row: CanvasNodes, *, view: CanvasNodeView | None = None) -> Canvas
         episode_id=int(row.episode_id),
         kind=CanvasNodeKind(row.kind),
         status=CanvasNodeStatus(row.status),
+        revision=row.revision,
         position_x=float(row.position_x),
         position_y=float(row.position_y),
         title=row.title,
@@ -154,6 +155,7 @@ def _node_dto(row: CanvasNodes, *, view: CanvasNodeView | None = None) -> Canvas
 def _edge_dto(row: CanvasEdges) -> CanvasEdgeDTO:
     return CanvasEdgeDTO(
         id=str(row.id),
+        revision=row.revision,
         source_node_id=str(row.source_node_id),
         target_node_id=str(row.target_node_id),
         source_port=CanvasSourcePort(row.source_port),
@@ -263,7 +265,6 @@ class CanvasPortAdapter(CanvasPort, object):
             else []
         )
         return CanvasGraphDTO(
-            revision=int(meta.revision),
             nodes=tuple(_node_dto(row, view=views_by_id.get(str(row.id))) for row in rows),
             edges=tuple(_edge_dto(row) for row in edges),
         )
@@ -292,7 +293,6 @@ class CanvasPortAdapter(CanvasPort, object):
         if meta is None:
             raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "canvas episode meta not found")
         return CanvasGraphDTO(
-            revision=int(meta.revision),
             nodes=tuple([_node_dto(target), *(_node_dto(row) for row in sources)]),
             edges=tuple(_edge_dto(row) for row in edges),
         )
@@ -343,13 +343,11 @@ class CanvasPortAdapter(CanvasPort, object):
         episode_id: int,
         user_id: int,
         ops: list[CanvasPatchOp],
-        expected_revision: int,
         turn_id: str | None,
     ) -> CanvasPatchResponse:
         return await canvas_service.apply_patch(
             CanvasScope(project_id=project_id, episode_id=episode_id, user_id=user_id),
             ops,
-            expected_revision,
             turn_id=turn_id,
         )
 
@@ -361,6 +359,7 @@ class CanvasPortAdapter(CanvasPort, object):
             ).first()
             if episode is None:
                 raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "episode not found")
+            # meta 无字段变更; 仍加锁以保持与 apply_patch 一致的锁顺序
             meta = await CanvasEpisodeMeta.select_for_update().filter(episode_id=episode_id).first()
             if meta is None:
                 raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "canvas episode meta not found")
@@ -375,17 +374,16 @@ class CanvasPortAdapter(CanvasPort, object):
             if row.task_id is not None:
                 task = await GenerateTask.filter(id=row.task_id, deleted_at__isnull=True).first()
                 if task is not None and GatewayTaskStatus(task.status).is_non_terminal:
-                    active_task_id = int(task.id)
+                    active_task_id = task.id
             if row.status == CanvasNodeStatus.RUNNING.value or active_task_id is not None:
                 return CanvasNodeClaimDTO(claimed=False, active_task_id=active_task_id)
             row.status = CanvasNodeStatus.RUNNING.value
             row.error_message = ""
+            row.revision = row.revision + 1
             await row.save()
-            meta.revision = int(meta.revision) + 1
-            await meta.save()
             return CanvasNodeClaimDTO(
                 claimed=True,
-                revision=int(meta.revision),
+                revision=row.revision,
                 node=node_view_from_row(row),
             )
 
@@ -402,11 +400,12 @@ class CanvasPortAdapter(CanvasPort, object):
                 deleted_at__isnull=True,
             ).first()
             if episode is None:
-                # Episode gone (e.g. deleted): quiet skip, same as lost race.
+                # episode 已删除等: 静默跳过, 与抢占失败同语义
                 return None
+            # meta 无字段变更; 仍加锁以保持与 apply_patch 一致的锁顺序
             meta = await CanvasEpisodeMeta.select_for_update().filter(episode_id=episode_id).first()
             if meta is None:
-                # Meta missing while episode exists is corruption, not a claim race.
+                # episode 在而 meta 缺失属于数据损坏, 不是 claim 竞态
                 raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "canvas episode meta not found")
             row = await CanvasNodes.select_for_update().filter(
                 episode_id=episode_id,
@@ -419,10 +418,9 @@ class CanvasPortAdapter(CanvasPort, object):
                 return None
             row.status = CanvasNodeStatus.RUNNING.value
             row.error_message = ""
+            row.revision = row.revision + 1
             await row.save()
-            meta.revision = int(meta.revision) + 1
-            await meta.save()
-            return int(meta.revision), node_view_from_row(row)
+            return row.revision, node_view_from_row(row)
 
     async def list_episode_node_task_ids(self, episode_id: int, *, limit: int) -> list[int]:
         rows = await CanvasNodes.filter(

@@ -245,7 +245,6 @@ CREATE INDEX IF NOT EXISTS idx_chat_attachments_asset_id
 
 CREATE TABLE IF NOT EXISTS canvas_episode_meta (
   episode_id BIGINT PRIMARY KEY,
-  revision BIGINT NOT NULL DEFAULT 0,
   node_count INTEGER NOT NULL DEFAULT 0,
   edge_count INTEGER NOT NULL DEFAULT 0,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -255,6 +254,7 @@ CREATE TABLE IF NOT EXISTS canvas_nodes (
   id UUID PRIMARY KEY,
   episode_id BIGINT NOT NULL,
   kind VARCHAR(16) NOT NULL,
+  revision BIGINT NOT NULL DEFAULT 1,
   position_x DOUBLE PRECISION NOT NULL,
   position_y DOUBLE PRECISION NOT NULL,
   title VARCHAR(512) NOT NULL DEFAULT '',
@@ -277,6 +277,7 @@ CREATE TABLE IF NOT EXISTS canvas_nodes (
 CREATE TABLE IF NOT EXISTS canvas_edges (
   id UUID PRIMARY KEY,
   episode_id BIGINT NOT NULL,
+  revision BIGINT NOT NULL DEFAULT 1,
   source_node_id UUID NOT NULL,
   target_node_id UUID NOT NULL,
   source_port VARCHAR(64) NOT NULL,
@@ -305,8 +306,6 @@ CREATE TABLE IF NOT EXISTS canvas_operations (
   op_type VARCHAR(32) NOT NULL,
   payload JSONB NOT NULL,
   status VARCHAR(16) NOT NULL,
-  revision_before BIGINT,
-  revision_after BIGINT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

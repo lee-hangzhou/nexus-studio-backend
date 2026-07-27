@@ -138,6 +138,10 @@
           "title": "Metadata",
           "type": "object"
         },
+        "revision": {
+          "title": "Revision",
+          "type": "integer"
+        },
         "source": {
           "format": "uuid",
           "title": "Source",
@@ -157,6 +161,7 @@
       },
       "required": [
         "id",
+        "revision",
         "source",
         "target",
         "source_port",
@@ -303,6 +308,10 @@
           "default": null,
           "title": "Resolution"
         },
+        "revision": {
+          "title": "Revision",
+          "type": "integer"
+        },
         "status": {
           "$ref": "#/$defs/CanvasNodeStatus",
           "default": "idle"
@@ -340,6 +349,7 @@
       "required": [
         "id",
         "kind",
+        "revision",
         "position"
       ],
       "title": "CanvasNodeView",
@@ -427,15 +437,8 @@
           ],
           "default": null,
           "title": "Op Id"
-        },
-        "revision": {
-          "title": "Revision",
-          "type": "integer"
         }
       },
-      "required": [
-        "revision"
-      ],
       "title": "CanvasPatchResponse",
       "type": "object"
     },

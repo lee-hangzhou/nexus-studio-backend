@@ -8,6 +8,7 @@ from typing import Any
 
 from app.agent.chat.browser import container_client, inprocess_session, runtime as browser_runtime, session_manager
 from app.agent.chat.browser.challenge import locators, probe
+from app.agent.chat.contracts.interaction import ChallengeProbeResult
 
 
 async def _get_page(conversation_id: int, workspace: Path):
@@ -171,7 +172,8 @@ async def wait_probe(
     panel_selector: str | None = None,
     scope_selector: str | None = None,
     timeout_ms: int,
-) -> dict[str, Any]:
+) -> ChallengeProbeResult:
+    """观察挑战结果, 统一返回 ChallengeProbeResult"""
     resolved_success = success_selector or selector
     if not resolved_success:
         raise ValueError("wait_probe requires success_selector or selector")
@@ -188,7 +190,7 @@ async def wait_probe(
             timeout_ms=timeout_ms,
         )
     record = await session_manager.ensure_session(conversation_id, workspace)
-    return await container_client.challenge_wait_probe(
+    raw = await container_client.challenge_wait_probe(
         record,
         selector=resolved_success,
         success_selector=resolved_success,
@@ -198,3 +200,4 @@ async def wait_probe(
         scope_selector=scope_selector,
         timeout_ms=timeout_ms,
     )
+    return ChallengeProbeResult.model_validate(raw)

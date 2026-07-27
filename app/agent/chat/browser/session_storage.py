@@ -9,6 +9,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from app.agent.chat.browser import container_client, inprocess_session, session_manager
+from app.agent.chat.contracts.interaction import AuthProbeFacts
 from app.agent.chat.gate import site_auth
 from app.agent.chat.tools.result import BROWSER_ERROR, INVALID_ARGUMENTS, ToolResult
 from app.server.infra.config import settings
@@ -181,14 +182,14 @@ async def restore_session(
                 domain = None
 
     if not settings.CHAT_BROWSER_STORAGE_ENABLED:
-        payload = {
-            "restored": False,
-            "logged_in": False,
-            "need_login": True,
-            "domain": domain,
-            "reason": "storage_disabled",
-        }
-        return ToolResult.ok(json.dumps(payload))
+        payload = AuthProbeFacts(
+            restored=False,
+            logged_in=False,
+            need_login=True,
+            domain=domain,
+            reason="storage_disabled",
+        )
+        return ToolResult.ok(json.dumps(payload.model_dump(mode="json"), ensure_ascii=False))
 
     if domain is None:
         return ToolResult.fail(
@@ -204,13 +205,13 @@ async def restore_session(
                 conversation_id=conversation_id,
                 domain=domain,
             )
-        payload = {
-            "restored": False,
-            "logged_in": False,
-            "need_login": True,
-            "domain": domain,
-        }
-        return ToolResult.ok(json.dumps(payload))
+        payload = AuthProbeFacts(
+            restored=False,
+            logged_in=False,
+            need_login=True,
+            domain=domain,
+        )
+        return ToolResult.ok(json.dumps(payload.model_dump(mode="json"), ensure_ascii=False))
 
     try:
         if settings.CHAT_BROWSER_INPROCESS:
@@ -237,17 +238,17 @@ async def restore_session(
         "credentials_submitted": bool(site_state and site_state.get("credentials_submitted")),
         "phone_otp_flow_started": bool(site_state and site_state.get("phone_otp_flow_started")),
     }
-    payload = {
-        "restored": True,
-        "logged_in": logged_in,
-        "need_login": (not logged_in) if logged_in is not None else None,
-        "domain": domain,
-        "auth_flags": auth_flags,
-    }
+    payload = AuthProbeFacts(
+        restored=True,
+        logged_in=logged_in,
+        need_login=(not logged_in) if logged_in is not None else None,
+        domain=domain,
+        auth_flags=auth_flags,
+    )
     logger.info(
         "browser_session_restored",
         conversation_id=conversation_id,
         domain=domain,
         logged_in=logged_in,
     )
-    return ToolResult.ok(json.dumps(payload))
+    return ToolResult.ok(json.dumps(payload.model_dump(mode="json"), ensure_ascii=False))

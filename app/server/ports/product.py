@@ -43,6 +43,7 @@ class CanvasNodeDTO:
     episode_id: int
     kind: CanvasNodeKind
     status: CanvasNodeStatus
+    revision: int
     position_x: float
     position_y: float
     title: str
@@ -62,6 +63,7 @@ class CanvasNodeDTO:
 @dataclass(frozen=True)
 class CanvasEdgeDTO:
     id: str
+    revision: int
     source_node_id: str
     target_node_id: str
     source_port: CanvasSourcePort
@@ -72,7 +74,6 @@ class CanvasEdgeDTO:
 
 @dataclass(frozen=True)
 class CanvasGraphDTO:
-    revision: int
     nodes: tuple[CanvasNodeDTO, ...]
     edges: tuple[CanvasEdgeDTO, ...]
 
@@ -197,7 +198,6 @@ class CanvasPort(Protocol):
         episode_id: int,
         user_id: int,
         ops: list[CanvasPatchOp],
-        expected_revision: int,
         turn_id: str | None,
     ) -> CanvasPatchResponse: ...
 

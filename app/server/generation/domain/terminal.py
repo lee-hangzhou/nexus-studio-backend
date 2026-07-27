@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, NotRequired, TypedDict
+from typing import Any
+
+from pydantic import BaseModel
 
 from app.contracts.gateway import GatewayResultItem
 from app.server.exceptions.base import AppError
@@ -9,11 +11,13 @@ from app.server.exceptions.codes import ErrorCode
 from app.server.generation.domain.gateway_status import GatewayTaskStatus
 
 
-class GenerationTerminalUpdate(TypedDict):
+class GenerationTerminalUpdate(BaseModel):
+    """生成任务终态写库字段"""
+
     status: int
     callback_sent: bool
-    result_keys: NotRequired[list[dict[str, Any]]]
-    error_message: NotRequired[str]
+    result_keys: list[dict[str, Any]] | None = None
+    error_message: str | None = None
 
 
 @dataclass(frozen=True)
@@ -23,15 +27,13 @@ class GenerationTerminal:
     error_message: str | None
 
     def update_fields(self, *, callback_sent: bool) -> GenerationTerminalUpdate:
-        fields: GenerationTerminalUpdate = {
-            "status": int(self.status),
-            "callback_sent": callback_sent,
-        }
-        if self.result_keys is not None:
-            fields["result_keys"] = self.result_keys
-        if self.error_message is not None:
-            fields["error_message"] = self.error_message
-        return fields
+        """组装终态持久化字段"""
+        return GenerationTerminalUpdate(
+            status=int(self.status),
+            callback_sent=callback_sent,
+            result_keys=self.result_keys,
+            error_message=self.error_message,
+        )
 
 
 def normalize_gateway_terminal(
@@ -39,6 +41,7 @@ def normalize_gateway_terminal(
     urls: list[GatewayResultItem] | None,
     reason: str | None,
 ) -> GenerationTerminal:
+    """把网关终态归一成 GenerationTerminal"""
     normalized_status = GatewayTaskStatus(status)
     result_keys = None
     error_message = reason

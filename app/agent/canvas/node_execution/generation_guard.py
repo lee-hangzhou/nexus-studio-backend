@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 from app.agent.canvas.errors import NODE_GENERATION_IN_PROGRESS
+from app.agent.canvas.turn.generation_hub import canvas_generation_hub
 from app.agent.runtime.ports import get_canvas_port
 from app.contracts.canvas import CanvasNodeView
+from app.server.canvas.domain.enums import CanvasNodeStatus
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
 from app.server.infra.logger import logger
 
 
 def node_generation_in_progress_detail(*, task_id: int | None = None) -> str:
-    """给模型与用户统一的占用说明文案。"""
+    """给模型与用户统一的占用说明文案"""
     if task_id is not None:
         return (
             f"该节点已有生成任务进行中(task_id={task_id})。"
@@ -19,7 +21,7 @@ def node_generation_in_progress_detail(*, task_id: int | None = None) -> str:
 
 
 class NodeGenerationInProgressError(AppError):
-    """节点已有在途生成，拒绝重复提交。"""
+    """节点已有在途生成, 拒绝重复提交"""
 
     def __init__(self, *, node_id: str, task_id: int | None = None) -> None:
         super().__init__(
@@ -34,7 +36,7 @@ class NodeGenerationInProgressError(AppError):
 
 
 async def claim_node_for_generation(episode_id: int, node_id: str) -> tuple[int, CanvasNodeView]:
-    """经 CanvasPort 占坑：检查在途 + 标 running + 推进 revision。"""
+    """经 CanvasPort 占坑: 检查在途 + 标 running + 推进 revision, 并立刻推 SSE"""
     claim = await get_canvas_port().claim_node_for_generation(episode_id, node_id)
     if not claim.claimed or claim.revision is None or claim.node is None:
         logger.info(
@@ -46,4 +48,22 @@ async def claim_node_for_generation(episode_id: int, node_id: str) -> tuple[int,
             reason="claim_rejected",
         )
         raise NodeGenerationInProgressError(node_id=node_id, task_id=claim.active_task_id)
+    # claim 已 bump revision; 先推送, 避免 claim→写回窗口前端仍持旧 revision
+    await canvas_generation_hub.publish(
+        episode_id,
+        {
+            "canvas_patch": {
+                "nodes": [claim.node.model_dump(mode="json")],
+                "edges": [],
+                "deleted_node_ids": [],
+                "deleted_edge_ids": [],
+            },
+            "progress": {
+                "node_id": node_id,
+                "task_id": claim.node.task_id,
+                "status": CanvasNodeStatus.RUNNING.value,
+                "revision": claim.revision,
+            },
+        },
+    )
     return claim.revision, claim.node

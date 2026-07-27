@@ -102,7 +102,7 @@ async def sync_canvas_node_from_generate_task(
         else None
     )
 
-    rev, node_view = await canvas_service.update_node_generation(
+    _, node_view = await canvas_service.update_node_generation(
         node.episode_id,
         str(node.id),
         task_id=task.id,
@@ -111,4 +111,4 @@ async def sync_canvas_node_from_generate_task(
         error_message=task.error_message,
         scope=scope,
     )
-    return CanvasPatchResponse(revision=rev, nodes=[node_view])
+    return CanvasPatchResponse(nodes=[node_view])

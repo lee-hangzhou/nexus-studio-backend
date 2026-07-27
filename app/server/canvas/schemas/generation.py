@@ -24,5 +24,5 @@ class SubmitNodeGenerationInput(BaseModel):
     ref_asset_ids: list[int] = Field(default_factory=list)
     expected_revision: int | None = Field(
         default=None,
-        description="可选 revision CAS；提交生成并更新节点时用于防止旧状态覆盖",
+        description="可选节点 revision CAS；提交生成并更新节点时用于防止旧状态覆盖",
     )

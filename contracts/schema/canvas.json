@@ -23,6 +23,10 @@
           "title": "Metadata",
           "type": "object"
         },
+        "revision": {
+          "title": "Revision",
+          "type": "integer"
+        },
         "source": {
           "format": "uuid",
           "title": "Source",
@@ -42,6 +46,7 @@
       },
       "required": [
         "id",
+        "revision",
         "source",
         "target",
         "source_port",
@@ -188,6 +193,10 @@
           "default": null,
           "title": "Resolution"
         },
+        "revision": {
+          "title": "Revision",
+          "type": "integer"
+        },
         "status": {
           "$ref": "#/$defs/CanvasNodeStatus",
           "default": "idle"
@@ -225,6 +234,7 @@
       "required": [
         "id",
         "kind",
+        "revision",
         "position"
       ],
       "title": "CanvasNodeView",
@@ -233,10 +243,6 @@
     "CanvasPatchRequest": {
       "additionalProperties": false,
       "properties": {
-        "expected_revision": {
-          "title": "Expected Revision",
-          "type": "integer"
-        },
         "ops": {
           "items": {
             "discriminator": {
@@ -273,7 +279,6 @@
         }
       },
       "required": [
-        "expected_revision",
         "ops"
       ],
       "title": "CanvasPatchRequest",
@@ -324,15 +329,8 @@
           ],
           "default": null,
           "title": "Op Id"
-        },
-        "revision": {
-          "title": "Revision",
-          "type": "integer"
         }
       },
-      "required": [
-        "revision"
-      ],
       "title": "CanvasPatchResponse",
       "type": "object"
     },
@@ -353,6 +351,40 @@
         "y"
       ],
       "title": "CanvasPosition",
+      "type": "object"
+    },
+    "CanvasRevisionConflictItem": {
+      "additionalProperties": false,
+      "properties": {
+        "actual_revision": {
+          "title": "Actual Revision",
+          "type": "integer"
+        },
+        "expected_revision": {
+          "title": "Expected Revision",
+          "type": "integer"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "node",
+            "edge"
+          ],
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "expected_revision",
+        "actual_revision"
+      ],
+      "title": "CanvasRevisionConflictItem",
       "type": "object"
     },
     "CanvasSnapshot": {
@@ -379,16 +411,11 @@
         "project_id": {
           "title": "Project Id",
           "type": "integer"
-        },
-        "revision": {
-          "title": "Revision",
-          "type": "integer"
         }
       },
       "required": [
         "project_id",
         "episode_id",
-        "revision",
         "nodes",
         "edges"
       ],
@@ -678,6 +705,10 @@
     "DeleteNodeOp": {
       "additionalProperties": false,
       "properties": {
+        "expected_revision": {
+          "title": "Expected Revision",
+          "type": "integer"
+        },
         "node_id": {
           "format": "uuid",
           "title": "Node Id",
@@ -691,7 +722,8 @@
       },
       "required": [
         "op",
-        "node_id"
+        "node_id",
+        "expected_revision"
       ],
       "title": "DeleteNodeOp",
       "type": "object"
@@ -704,6 +736,10 @@
           "title": "Edge Id",
           "type": "string"
         },
+        "expected_revision": {
+          "title": "Expected Revision",
+          "type": "integer"
+        },
         "op": {
           "const": "disconnect",
           "title": "Op",
@@ -712,7 +748,8 @@
       },
       "required": [
         "op",
-        "edge_id"
+        "edge_id",
+        "expected_revision"
       ],
       "title": "DisconnectNodesOp",
       "type": "object"
@@ -756,6 +793,10 @@
     "UpdateNodeOp": {
       "additionalProperties": false,
       "properties": {
+        "expected_revision": {
+          "title": "Expected Revision",
+          "type": "integer"
+        },
         "node_id": {
           "format": "uuid",
           "title": "Node Id",
@@ -773,6 +814,7 @@
       "required": [
         "op",
         "node_id",
+        "expected_revision",
         "patch"
       ],
       "title": "UpdateNodeOp",
@@ -963,6 +1005,9 @@
     },
     {
       "$ref": "#/$defs/CanvasPatchResponse"
+    },
+    {
+      "$ref": "#/$defs/CanvasRevisionConflictItem"
     },
     {
       "$ref": "#/$defs/GenerationProgress"
