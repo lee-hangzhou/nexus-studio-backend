@@ -10,6 +10,7 @@ from app.server.infra.config_models import (
     GatewayTimeoutConfig,
     ObjectStorageTimeoutConfig,
 )
+from app.server.skills.domain.protocol import WRITE_USER_SKILL_FILE
 
 
 def _locate_project_root(start: Path) -> Path:
@@ -231,7 +232,7 @@ class Settings(BaseSettings):
     CANVAS_HEARTBEAT_INTERVAL_SEC: int = Field(default=15)
     CANVAS_DEFAULT_VIDEO_DURATION_SEC: int = Field(default=5, ge=3, le=15)
     CANVAS_MANUAL_CONFIRM_TOOLS: str = Field(
-        default="apply_canvas_patch,submit_node_generation",
+        default=f"apply_canvas_patch,submit_node_generation,{WRITE_USER_SKILL_FILE}",
     )
     # SSE Last-Event-ID replay (Redis Streams; disconnect ≠ cancel)
     SSE_REDIS_SUBSCRIBER_MAX_CONNECTIONS: int = Field(default=512, gt=0)

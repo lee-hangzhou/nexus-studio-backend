@@ -95,6 +95,7 @@ async def stream_agent_turn(
             on_turn_cleanup_repair=cleanup_repair,
             terminal_policy=terminal_policy,
             preview_tool_result=preview,
+            surface=mount.name,
         )
         async for chunk in stream_prepared_turn(prepared):
             yield chunk

@@ -13,6 +13,7 @@ TORTOISE_ORM_MODEL_MODULES = [
     "app.server.projects.persistence.episodes",
     "app.server.projects.persistence.projects",
     "app.server.auth.persistence.user",
+    "app.server.skills.persistence.entries",
 ]
 
 __all__ = ["TORTOISE_ORM_MODEL_MODULES"]

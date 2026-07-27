@@ -22,8 +22,14 @@ from app.agent.runtime.stream.replay import (
     stream_replay,
     validate_replay_cursor,
 )
-from app.composition import chat_service
+from app.composition import chat_service, user_skill_port
+from app.contracts.turn_content import (
+    TurnUserInput,
+    extract_skill_paths,
+    validate_turn_user_input,
+)
 from app.server.api.schemas import Response
+from app.server.skills.domain.enums import SkillSurface
 from app.server.chat.persistence.attachments import ChatAttachments
 from app.server.chat.schemas import (
     AttachmentIdRequest,
@@ -165,6 +171,25 @@ async def stream_message(request: Request, body: MessageStreamRequest) -> Stream
         raise
 
     if claim.created:
+        try:
+            user_input = validate_turn_user_input(
+                TurnUserInput(content=body.content, materials=[])
+            )
+            selected_skills = await user_skill_port.resolve_selected(
+                surface=SkillSurface.CHAT,
+                user_id=user_id,
+                project_id=body.project_id,
+                paths=extract_skill_paths(user_input.content),
+            )
+        except ValueError as exc:
+            await replay_store.discard_starting(request_id)
+            raise AppError(ErrorCode.INVALID_PARAMS, str(exc)) from exc
+        except AppError:
+            await replay_store.discard_starting(request_id)
+            raise
+        except Exception:
+            await replay_store.discard_starting(request_id)
+            raise
         cancel_event = asyncio.Event()
         try:
             await conversation_turn_lock.acquire(
@@ -188,10 +213,12 @@ async def stream_message(request: Request, body: MessageStreamRequest) -> Stream
                     user_id=user_id,
                     conversation_id=body.conversation_id,
                     content=body.content,
+                    project_id=body.project_id,
                     attachment_ids=body.attachment_ids,
                     enable_tools=body.enable_tools,
                     client_turn_id=body.client_turn_id,
                     cancel_event=cancel_event,
+                    selected_skills=selected_skills,
                 ),
             )
         )

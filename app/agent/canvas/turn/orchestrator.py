@@ -11,11 +11,18 @@ from app.agent.canvas.turn.lock import canvas_turn_lock
 from app.agent.chat.stream.encoder import encode_sse_frame
 from app.agent.chat.stream.frames import StreamFrameType, create_stream_frame
 from app.agent.runtime.checkpointer import get_chat_checkpointer
+from app.agent.runtime.tools.skill_write_pending import parse_skill_revision
+from app.agent.runtime.tools.user_skill_protocol import (
+    SKILL_WRITE_OPERATION_TYPE,
+    WRITE_USER_SKILL_FILE,
+)
 from app.agent.runtime.turn.runner import stream_agent_turn
+from app.contracts.turn_content import TurnUserInput
 from app.server.chat.domain.stream_enums import StreamErrorCode
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
 from app.server.infra.logger import bind_context, log_exception, logger
+from app.server.ports.product import SelectedSkillDTO
 
 
 async def stream_canvas_turn(
@@ -24,7 +31,9 @@ async def stream_canvas_turn(
     episode_id: int,
     session_id: int,
     user_id: int,
-    content: str,
+    content_text: str,
+    user_input: TurnUserInput,
+    selected_skills: tuple[SelectedSkillDTO, ...],
     model_key: str,
     client_turn_id: str | None,
     mode: str = "auto",
@@ -56,7 +65,9 @@ async def stream_canvas_turn(
             cancel_event=cancel_event,
             checkpointer=get_chat_checkpointer(),
             model_key=model_key,
-            content=content,
+            content_text=content_text,
+            user_input=user_input,
+            selected_skills=selected_skills,
             client_turn_id=client_turn_id,
             mode=mode,
             enable_tools=enable_tools,
@@ -123,7 +134,9 @@ async def stream_canvas_resume(
     cancel_event: asyncio.Event,
     lock_held: bool = False,
     model_key: str = "",
+    operation: dict | None = None,
 ) -> AsyncIterator[str]:
+    """恢复画布 turn, skill_write 可带编辑后的 operation"""
     del tool_call_id
     acquired = False
     try:
@@ -131,11 +144,11 @@ async def stream_canvas_resume(
             await canvas_turn_lock.acquire(session_id, turn_id)
             acquired = True
 
-        decision = (
-            {"type": "approve"}
-            if action == "confirm"
-            else {"type": "reject", "message": "user rejected tool execution"}
-        )
+        decision: dict
+        if action == "confirm":
+            decision = _confirm_decision(operation)
+        else:
+            decision = {"type": "reject", "message": "user rejected tool execution"}
         ctx = CanvasMountContext(
             user_id=user_id,
             project_id=project_id,
@@ -148,6 +161,7 @@ async def stream_canvas_resume(
             mode="manual",
             enable_tools=True,
             is_resume=True,
+            client_turn_id=turn_id,
         )
         async for chunk in stream_agent_turn(
             CANVAS_MOUNT,
@@ -159,3 +173,35 @@ async def stream_canvas_resume(
     finally:
         if acquired:
             await canvas_turn_lock.release(session_id, turn_id)
+
+
+def _confirm_decision(operation: dict | None) -> dict:
+    """构建确认决策, skill_write 用 edited_action 回传可编辑字段"""
+    if not isinstance(operation, dict) or operation.get("type") != SKILL_WRITE_OPERATION_TYPE:
+        return {"type": "approve"}
+    path = str(operation.get("path") or "").strip()
+    if not path:
+        return {"type": "reject", "message": "invalid skill write path"}
+    if operation.get("revision_invalid"):
+        return {"type": "reject", "message": "invalid skill write revision"}
+    try:
+        revision = parse_skill_revision(operation.get("revision"))
+    except ValueError:
+        return {"type": "reject", "message": "invalid skill write revision"}
+    args: dict = {
+        "path": path,
+        "name": str(operation.get("name") or ""),
+        "content": str(operation.get("content") or ""),
+    }
+    if "description" in operation:
+        raw_desc = operation.get("description")
+        args["description"] = None if raw_desc is None else str(raw_desc)
+    if revision is not None:
+        args["revision"] = revision
+    return {
+        "type": "approve",
+        "edited_action": {
+            "name": WRITE_USER_SKILL_FILE,
+            "args": args,
+        },
+    }

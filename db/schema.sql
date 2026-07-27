@@ -373,3 +373,30 @@ CREATE TRIGGER trg_canvas_nodes_updated_at
 BEFORE UPDATE ON canvas_nodes
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
+
+CREATE TABLE IF NOT EXISTS user_skill_entries (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  surface VARCHAR(16) NOT NULL,
+  scope VARCHAR(16) NOT NULL,
+  biz_key BIGINT NOT NULL,
+  path VARCHAR(1024) NOT NULL,
+  is_dir BOOLEAN NOT NULL,
+  content TEXT NULL,
+  name VARCHAR(256) NULL,
+  description VARCHAR(512) NULL,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  revision BIGINT NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (surface, scope, biz_key, path)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_skill_entries_surface_scope_biz_key
+  ON user_skill_entries (surface, scope, biz_key);
+
+DROP TRIGGER IF EXISTS trg_user_skill_entries_updated_at ON user_skill_entries;
+CREATE TRIGGER trg_user_skill_entries_updated_at
+BEFORE UPDATE ON user_skill_entries
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();

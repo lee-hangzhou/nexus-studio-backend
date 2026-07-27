@@ -869,6 +869,19 @@
           "title": "Name",
           "type": "string"
         },
+        "operation": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Operation"
+        },
         "protocol_version": {
           "default": 2,
           "minimum": 1,

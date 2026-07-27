@@ -102,6 +102,7 @@ class ToolPendingFrame(StreamContract):
     name: str
     summary: str | None = None
     turn_id: str
+    operation: dict[str, Any] | None = None
 
 
 class UserGateRequiredFrame(StreamContract):

@@ -99,6 +99,7 @@ class UserMessageMetadata(MetadataContract):
     turn_id: str
     client_turn_id: str | None = None
     attachment_ids: list[int] = Field(default_factory=list)
+    input: dict[str, Any] | None = None
 
 
 class CanvasToolStepMetadata(MetadataContract):
@@ -115,6 +116,7 @@ class CanvasMessageMetadata(MetadataContract):
     phase: str | None = None
     tool_calls_count: int | None = Field(default=None, ge=0)
     tool_step: CanvasToolStepMetadata | None = None
+    input: dict[str, Any] | None = None
 
 
 class TurnUsageRecord(MetadataContract):

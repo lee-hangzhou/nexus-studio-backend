@@ -21,8 +21,8 @@ from app.agent.chat.gate.pending import clear_gate_pending, get_gate_pending
 from app.agent.chat.llm.gateway_chat_model import GatewayChatModel
 from app.agent.chat.llm.registry import get_model_spec
 from app.agent.chat.memory.store import chat_runnable_config
-from app.agent.chat.mcp.client import load_mcp_tools
-from app.agent.chat.tools.lc_tools import ChatToolContext, build_langchain_tools
+from app.agent.chat.tools.build_turn_tools import build_chat_turn_tools
+from app.agent.chat.tools.lc_tools import ChatToolContext
 from app.agent.chat.turn.cancel_signal import turn_cancel_signal
 from app.agent.chat.turn.checkpoint import (
     capture_turn_checkpoint_messages,
@@ -47,6 +47,7 @@ from app.server.chat.persistence.conversations import ChatConversations
 from app.server.chat.services.constants import CHAT_CHECKPOINT_THREAD_PREFIX
 from app.server.infra.config import settings
 from app.server.infra.logger import logger
+from app.server.skills.domain.enums import SkillSurface
 
 _GATE_CANCEL_TOOL = "request_user_gate"
 _GATE_RESOLVE_TIMEOUT_SEC = 60
@@ -151,7 +152,7 @@ async def resolve_gate_interrupt(
     """Bounded LangGraph resume(action=cancel) + checkpoint trim. Does not persist DB close."""
     workspace = conversation_workspace(user_id, conversation_id)
     ensure_workspace_session(workspace)
-    loop_guard = TurnToolLoopGuard(surface="chat")
+    loop_guard = TurnToolLoopGuard(surface=SkillSurface.CHAT)
     ctx = ChatToolContext(
         user_id=user_id,
         conversation_id=conversation_id,
@@ -159,8 +160,7 @@ async def resolve_gate_interrupt(
         audit=[],
         loop_guard=loop_guard,
     )
-    tools = build_langchain_tools(ctx, enable_tools=True)
-    tools.extend(load_mcp_tools())
+    tools = build_chat_turn_tools(ctx, enable_tools=True, user_id=user_id)
     spec = get_model_spec(model_key)
     llm = GatewayChatModel(model_key=model_key, spec=spec)
     agent = build_chat_agent(
@@ -212,6 +212,7 @@ async def resolve_gate_interrupt(
                     emit_done_on_completed=False,
                     emit_done_after_failure=False,
                 ),
+                surface=SkillSurface.CHAT,
             )
             async for _chunk in stream_prepared_turn(prepared):
                 pass

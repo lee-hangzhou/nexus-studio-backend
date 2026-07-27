@@ -196,16 +196,21 @@ class CanvasService:
         if before_id is not None:
             query = query.filter(id__lt=before_id)
         rows = await query.limit(limit)
-        return [
-            CanvasMessageView(
-                id=row.id,
-                role=row.role,
-                content=row.content,
-                metadata=row.metadata or {},
-                created_at=row.created_at.isoformat() if row.created_at else "",
+        views: list[CanvasMessageView] = []
+        for row in reversed(rows):
+            metadata = row.metadata or {}
+            raw_input = metadata.get("input")
+            views.append(
+                CanvasMessageView(
+                    id=row.id,
+                    role=row.role,
+                    content=row.content,
+                    input=raw_input if isinstance(raw_input, dict) else None,
+                    metadata=metadata,
+                    created_at=row.created_at.isoformat() if row.created_at else "",
+                )
             )
-            for row in reversed(rows)
-        ]
+        return views
 
     async def refresh_node_asset_urls(self, nodes: list[CanvasNodeView], *, scope: CanvasScope) -> None:
         """服务入口包装 refresh_node_asset_urls"""

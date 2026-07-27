@@ -180,11 +180,13 @@ async def persist_user_message(
     attachment_ids: list[int],
     turn_id: str,
     client_turn_id: str | None,
+    input_snapshot: dict | None = None,
 ) -> ChatMessages:
     metadata = UserMessageMetadata(
         turn_id=turn_id,
         client_turn_id=client_turn_id,
         attachment_ids=attachment_ids,
+        input=input_snapshot,
     )
     row = await ChatMessages.create(
         conversation_id=conversation_id,

@@ -3,7 +3,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from app.agent.runtime.ports import get_canvas_port
+from app.agent.runtime.ports import get_canvas_port, get_user_skill_port
+from app.agent.runtime.skills.prompt_format import (
+    format_selected_skill_bodies_text,
+    format_user_skill_index_text,
+)
+from app.agent.runtime.tools.user_skill_protocol import WRITE_USER_SKILL_FILE
+from app.server.ports.product import SelectedSkillDTO
+from app.server.skills.domain.enums import SkillSurface
 
 _SKILLS_DIR = Path(__file__).resolve().parent.parent / "skills"
 
@@ -24,10 +31,14 @@ async def compose_canvas_system_prompt(
     *,
     project_id: int,
     episode_id: int,
+    user_id: int,
+    selected_skills: tuple[SelectedSkillDTO, ...] = (),
+    is_resume: bool = False,
     memory_blocks_text: str = "",
     memory_ops_brief: str | None = None,
 ) -> str:
     """组合项目元信息、技能、记忆块与工具硬性规则"""
+    _ = is_resume
     skills = _load_skills()
     context = await get_canvas_port().get_project_prompt_context(project_id, episode_id)
     meta_lines: list[str] = []
@@ -61,8 +72,21 @@ async def compose_canvas_system_prompt(
 - Do not use XML or JSON roleplay (`<function_calls>`, `<function_response>`,
   `{"method":...}`) instead of real tool calls.
 - Injected ## Memory blocks are MEMORY (low authority). Live canvas/tool facts and the current user message override memory.
+- """ + WRITE_USER_SKILL_FILE + """ creates user-scoped skills for the canvas surface only.
 """
     parts = [skills, f"## Project\n\n{meta_block}", policy]
+    selected_paths = {item.path for item in selected_skills}
+    index_items = await get_user_skill_port().list_enabled_for_index(
+        surface=SkillSurface.CANVAS,
+        user_id=user_id,
+        project_id=project_id,
+    )
+    index_text = format_user_skill_index_text(index_items, selected_paths)
+    bodies_text = format_selected_skill_bodies_text(selected_skills)
+    if index_text:
+        parts.append(index_text)
+    if bodies_text:
+        parts.append(bodies_text)
     if memory_ops_brief:
         parts.append(memory_ops_brief)
     if memory_blocks_text.strip():

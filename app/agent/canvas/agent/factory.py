@@ -11,6 +11,8 @@ from app.agent.chat.llm.gateway_chat_model import GatewayChatModel
 from app.agent.runtime.memory.inject import MemoryInjectionRequest, build_memory_injection
 from app.agent.runtime.memory_store import get_memory_store
 from app.agent.runtime.turn.tool_loop_guard import TurnToolLoopGuard
+from app.server.ports.product import SelectedSkillDTO
+from app.server.skills.domain.enums import SkillSurface
 
 
 async def build_canvas_agent(
@@ -27,6 +29,7 @@ async def build_canvas_agent(
     loop_guard: TurnToolLoopGuard | None = None,
     user_message: str = "",
     is_resume: bool = False,
+    selected_skills: tuple[SelectedSkillDTO, ...] = (),
 ) -> tuple[CompiledStateGraph, str]:
     """组装 LLM, 工具, system prompt, checkpointer, store 为可运行图"""
     turn_id_holder = turn_id_holder if turn_id_holder is not None else {"turn_id": turn_id}
@@ -39,6 +42,7 @@ async def build_canvas_agent(
             user_id=user_id,
             turn_id_holder=turn_id_holder,
             loop_guard=loop_guard,
+            surface=SkillSurface.CANVAS,
         )
         if enable_tools
         else []
@@ -67,6 +71,9 @@ async def build_canvas_agent(
     system_prompt = await compose_canvas_system_prompt(
         project_id=project_id,
         episode_id=episode_id,
+        user_id=user_id,
+        selected_skills=selected_skills,
+        is_resume=is_resume,
         memory_blocks_text=injection.memory_blocks_text,
         memory_ops_brief=injection.ops_brief_text,
     )

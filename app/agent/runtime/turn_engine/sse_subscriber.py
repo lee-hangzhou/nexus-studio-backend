@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 from app.agent.runtime.stream.frames import StreamFrameType, create_stream_frame
 from app.agent.runtime.tools.result import summarize_tool_result
+from app.agent.runtime.tools.skill_write_pending import build_skill_write_operation
 from app.agent.runtime.turn.enums import TurnTerminatedBy
 from app.agent.runtime.turn_engine.constants import TERMINATION_ERROR_MESSAGES
 from app.agent.runtime.turn_engine.events import (
@@ -21,6 +22,7 @@ from app.agent.runtime.turn_engine.subscribers import TurnEmit
 from app.agent.runtime.turn_engine.terminal_policy import SseTerminalPolicy
 from app.server.chat.domain.stream_enums import StreamErrorCode, TokenChannel, normalize_stream_error_code
 from app.server.infra.config import settings
+from app.server.skills.domain.enums import SkillSurface
 
 ToolPreviewFn = Callable[[str, str, bool], str]
 
@@ -45,9 +47,11 @@ class SseTurnSubscriber:
         *,
         policy: SseTerminalPolicy | None = None,
         preview_tool_result: ToolPreviewFn | None = None,
+        surface: str = SkillSurface.CHAT,
     ) -> None:
         self._policy = policy or SseTerminalPolicy()
         self._preview = preview_tool_result or _default_preview
+        self._surface = surface
         self._failed_emitted = False
         self._done_emitted = False
 
@@ -105,6 +109,11 @@ class SseTurnSubscriber:
             for action in actions:
                 if not action.call_id or not action.name:
                     continue
+                operation = build_skill_write_operation(
+                    action.name,
+                    action.args,
+                    surface=self._surface,
+                )
                 await emit(
                     create_stream_frame(
                         type=StreamFrameType.TOOL_PENDING,
@@ -112,6 +121,7 @@ class SseTurnSubscriber:
                         call_id=action.call_id,
                         name=action.name,
                         summary=action.summary or None,
+                        operation=operation,
                     )
                 )
             return

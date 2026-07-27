@@ -1,5 +1,7 @@
+from app.agent.canvas.turn.lock import canvas_turn_lock
 from app.agent.chat.service import ChatService
 from app.agent.runtime.ports import configure_ports
+from app.server.api.use_cases.canvas_episode import CanvasEpisodeUseCases
 from app.server.assets.services.service import asset_service
 from app.server.chat.services.attachments.service import chat_attachment_service
 from app.server.generation.binding import bind_generation_service
@@ -12,11 +14,14 @@ from app.server.ports.adapters import (
     CanvasPortAdapter,
     ChatPortAdapter,
     GenerationPortAdapter,
+    UserSkillPortAdapter,
 )
-from app.server.ports.product import AssetsPort, CanvasPort, ChatPort, GenerationPort
+from app.server.ports.product import AssetsPort, CanvasPort, ChatPort, GenerationPort, UserSkillPort
 from app.server.assets.persistence.repository import AssetRepository
 from app.server.chat.persistence.attachment_repository import ChatAttachmentRepository
 from app.server.generation.persistence.repository import GenerateTaskRepository
+from app.server.projects.services.service import canvas_scope_service, episode_service
+from app.server.skills.services import user_skill_service
 
 chat_service = ChatService()
 generation_service = GenerationService(
@@ -35,19 +40,30 @@ generation_port: GenerationPort = GenerationPortAdapter(generation_service)
 canvas_port: CanvasPort = CanvasPortAdapter()
 chat_port: ChatPort = ChatPortAdapter(ChatAttachmentRepository())
 assets_port: AssetsPort = AssetsPortAdapter(asset_service, AssetRepository())
+user_skill_port: UserSkillPort = UserSkillPortAdapter(user_skill_service)
 
 configure_ports(
     generation=generation_port,
     canvas=canvas_port,
     chat=chat_port,
     assets=assets_port,
+    user_skills=user_skill_port,
+)
+
+canvas_episode_use_cases = CanvasEpisodeUseCases(
+    scopes=canvas_scope_service,
+    episodes=episode_service,
+    lock=canvas_turn_lock,
+    user_skills=user_skill_port,
 )
 
 __all__ = [
     "assets_port",
+    "canvas_episode_use_cases",
     "canvas_port",
     "chat_port",
     "chat_service",
     "generation_port",
     "generation_service",
+    "user_skill_port",
 ]

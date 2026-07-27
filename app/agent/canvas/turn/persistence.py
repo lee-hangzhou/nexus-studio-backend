@@ -20,6 +20,7 @@ async def persist_canvas_user_message(
     content: str,
     client_turn_id: str | None,
     turn_id: str,
+    input_snapshot: dict | None = None,
 ) -> bool:
     """持久化用户消息, 返回是否新建；重复 client_turn_id 已完成则抛错。"""
     canvas = get_canvas_port()
@@ -35,6 +36,7 @@ async def persist_canvas_user_message(
     meta = CanvasMessageMetadata(
         turn_id=turn_id,
         client_turn_id=client_turn_id,
+        input=input_snapshot,
     )
     await canvas.append_canvas_message(
         episode_id=episode_id,

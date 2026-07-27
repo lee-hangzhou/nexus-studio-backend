@@ -20,6 +20,7 @@ from app.agent.runtime.turn_engine.handlers import RecoveryHook
 from app.agent.runtime.turn_engine.sse_subscriber import SseTurnSubscriber, ToolPreviewFn
 from app.agent.runtime.turn_engine.subscribers import TurnSubscriber
 from app.agent.runtime.turn_engine.terminal_policy import SseTerminalPolicy
+from app.server.skills.domain.enums import SkillSurface
 
 
 async def stream_prepared_turn(prepared: PreparedTurn) -> AsyncIterator[str]:
@@ -46,6 +47,7 @@ async def stream_prepared_turn(prepared: PreparedTurn) -> AsyncIterator[str]:
         terminal_policy=prepared.terminal_policy,
         preview_tool_result=prepared.preview_tool_result or default_preview,
         heal_invalid_tool_calls=prepared.heal_invalid_tool_calls,
+        surface=prepared.surface,
     ):
         yield chunk
 
@@ -73,12 +75,14 @@ async def stream_agent_turn(
     terminal_policy: SseTerminalPolicy | None = None,
     preview_tool_result: ToolPreviewFn | None = None,
     heal_invalid_tool_calls: bool = True,
+    surface: str = SkillSurface.CHAT,
 ) -> AsyncIterator[str]:
     """Low-level turn orchestration; prefer stream_prepared_turn / mount runner."""
     merged_subscribers: list[TurnSubscriber] = [
         SseTurnSubscriber(
             policy=terminal_policy or SseTerminalPolicy(),
             preview_tool_result=preview_tool_result or default_preview,
+            surface=surface,
         ),
         *list(subscribers),
     ]

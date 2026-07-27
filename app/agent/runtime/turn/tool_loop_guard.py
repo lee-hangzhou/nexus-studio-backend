@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Any
 
 from app.server.infra.logger import logger
+from app.server.skills.domain.enums import SkillSurface
 
 TOOL_LOOP_EXHAUSTED = "tool_loop_exhausted"
 
@@ -57,7 +58,7 @@ class LoopBlockInfo:
 class TurnToolLoopGuard:
     """Per-turn tool loop guard; create a new instance each turn."""
 
-    surface: str = "chat"
+    surface: str = SkillSurface.CHAT
     _empty_streaks: dict[str, int] = field(default_factory=dict)
     _successful_calls: dict[str, int] = field(default_factory=dict)
     _successful_fingerprints: set[str] = field(default_factory=set)

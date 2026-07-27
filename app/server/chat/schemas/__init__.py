@@ -1,7 +1,11 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, UUID4
+from pydantic import BaseModel, Field, UUID4, model_validator
+
+from app.contracts.turn_content import TurnContentBlock, TurnUserInput, validate_turn_user_input
 
 
 class ChatModelItem(BaseModel):
@@ -53,11 +57,21 @@ class MessageListRequest(BaseModel):
 class MessageStreamRequest(BaseModel):
     request_id: UUID4
     conversation_id: int
-    content: str = Field(min_length=1)
+    content: List[TurnContentBlock] = Field(min_length=1)
     model: str = Field(min_length=1)
     attachment_ids: List[int] = Field(default_factory=list)
     enable_tools: bool = True
     client_turn_id: Optional[str] = None
+    project_id: Optional[int] = None
+
+    @model_validator(mode="after")
+    def _validate_turn_input(self) -> MessageStreamRequest:
+        """校验文本必填"""
+        try:
+            validate_turn_user_input(TurnUserInput(content=self.content, materials=[]))
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        return self
 
 
 class ToolStepView(BaseModel):
@@ -75,6 +89,7 @@ class ChatMessageView(BaseModel):
     id: int
     role: str
     content: str
+    input: Optional[Dict[str, Any]] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
 

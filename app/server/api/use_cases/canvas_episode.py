@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from app.agent.canvas.node_execution.manual_generate import run_manual_node_generate
 from app.agent.canvas.services.session_checkpoint import delete_canvas_session_checkpoint
-from app.agent.canvas.turn.lock import ActiveCanvasTurn, canvas_turn_lock
+from app.agent.canvas.turn.lock import ActiveCanvasTurn
 from app.agent.canvas.turn.orchestrator import stream_canvas_resume, stream_canvas_turn
 from app.agent.canvas.turn.persistence import canvas_turn_already_completed
 from app.agent.canvas.turn.replay_execution import run_canvas_replay_execution
@@ -37,8 +37,16 @@ from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
 from app.server.infra.config import settings
 from app.server.infra.logger import logger
+from app.contracts.turn_content import (
+    TurnUserInput,
+    compile_human_text,
+    extract_skill_paths,
+    validate_turn_user_input,
+)
+from app.server.ports.product import UserSkillPort
 from app.server.projects.services.scope import CanvasScopeService
-from app.server.projects.services.service import EpisodeService, canvas_scope_service, episode_service
+from app.server.projects.services.service import EpisodeService
+from app.server.skills.domain.enums import SkillSurface
 
 
 class CanvasSessionLock(Protocol):
@@ -74,11 +82,13 @@ class CanvasEpisodeUseCases:
         scopes: CanvasScopeService,
         episodes: EpisodeService,
         lock: CanvasSessionLock,
+        user_skills: UserSkillPort,
     ) -> None:
-        """注入 scope、episode 与 session turn 锁"""
+        """注入 scope、episode、session turn 锁与用户技能 Port"""
         self._scopes = scopes
         self._episodes = episodes
         self._lock = lock
+        self._user_skills = user_skills
 
     @asynccontextmanager
     async def _episode_mutex(self, episode_id: int, owner_prefix: str) -> AsyncIterator[None]:
@@ -251,6 +261,27 @@ class CanvasEpisodeUseCases:
             raise
 
         if claim.created:
+            try:
+                user_input = validate_turn_user_input(
+                    TurnUserInput(content=body.content, materials=body.materials)
+                )
+                content_text = compile_human_text(user_input.content)
+                skill_paths = extract_skill_paths(user_input.content)
+                selected_skills = await self._user_skills.resolve_selected(
+                    surface=SkillSurface.CANVAS,
+                    user_id=user_id,
+                    project_id=scope.project_id,
+                    paths=skill_paths,
+                )
+            except ValueError as exc:
+                await replay_store.discard_starting(request_id)
+                raise AppError(ErrorCode.INVALID_PARAMS, str(exc)) from exc
+            except AppError:
+                await replay_store.discard_starting(request_id)
+                raise
+            except Exception:
+                await replay_store.discard_starting(request_id)
+                raise
             cancel_event = asyncio.Event()
             try:
                 await self._lock.acquire(
@@ -274,7 +305,9 @@ class CanvasEpisodeUseCases:
                         episode_id=scope.episode_id,
                         session_id=session_id,
                         user_id=user_id,
-                        content=body.content,
+                        content_text=content_text,
+                        user_input=user_input,
+                        selected_skills=selected_skills,
                         model_key=body.model_key or "",
                         client_turn_id=body.client_turn_id,
                         mode=body.mode,
@@ -365,6 +398,7 @@ class CanvasEpisodeUseCases:
                         cancel_event=cancel_event,
                         lock_held=True,
                         model_key=body.model_key or "",
+                        operation=body.operation,
                     ),
                 )
             )
@@ -423,10 +457,3 @@ class CanvasEpisodeUseCases:
                 turn_id=active,
             )
         return CanvasTurnCancelResult(cancelled=active is not None, active_turn_id=active)
-
-
-canvas_episode_use_cases = CanvasEpisodeUseCases(
-    scopes=canvas_scope_service,
-    episodes=episode_service,
-    lock=canvas_turn_lock,
-)

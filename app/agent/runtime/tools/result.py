@@ -10,6 +10,7 @@ from app.agent.runtime.turn.tool_loop_guard import TOOL_LOOP_EXHAUSTED
 
 # Stable error_type values (also used as error_class in runner/guards).
 INVALID_ARGUMENTS = "invalid_arguments"
+REVISION_CONFLICT = "revision_conflict"
 FILE_NOT_READY = "file_not_ready"
 FILE_NOT_FOUND = "file_not_found"
 SANDBOX_ERROR = "sandbox_error"
@@ -78,6 +79,7 @@ __all__ = [
     "QR_ASSET_INVALID",
     "QR_ELEMENT_NOT_VISIBLE",
     "QR_NOT_DECODABLE",
+    "REVISION_CONFLICT",
     "SANDBOX_ERROR",
     "SANDBOX_TIMEOUT",
     "SANDBOX_UNAVAILABLE",

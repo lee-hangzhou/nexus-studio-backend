@@ -22,6 +22,7 @@ from app.agent.runtime.turn_engine.events import (
 )
 from app.agent.runtime.turn_engine.subscribers import TurnEmit
 from app.contracts.metadata import CanvasToolStepMetadata
+from app.contracts.turn_content import TurnUserInput, input_snapshot_dict
 
 
 async def _touch_episode(episode_id: int) -> None:
@@ -52,6 +53,7 @@ class CanvasPersistenceSubscriber:
         client_turn_id: str | None,
         enable_tools: bool,
         model_key: str = "",
+        user_input: TurnUserInput | None = None,
         persist_user: bool = True,
         schedule_memory: bool = True,
     ) -> None:
@@ -61,6 +63,7 @@ class CanvasPersistenceSubscriber:
         self._user_id = user_id
         self._content = content
         self._client_turn_id = client_turn_id
+        self._user_input = user_input
         self._enable_tools = enable_tools
         self._model_key = model_key
         self._persist_user = persist_user
@@ -76,6 +79,9 @@ class CanvasPersistenceSubscriber:
                 content=self._content,
                 client_turn_id=self._client_turn_id,
                 turn_id=event.turn_id,
+                input_snapshot=(
+                    input_snapshot_dict(self._user_input) if self._user_input is not None else None
+                ),
             )
             await get_canvas_port().touch_session(
                 episode_id=self._episode_id,

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, UUID4
+from pydantic import BaseModel, ConfigDict, Field, UUID4, model_validator
+
+from app.contracts.turn_content import TurnContentBlock, TurnUserInput, validate_turn_user_input
 
 from app.server.canvas.schemas.node_execute import NodeExecuteKind
 from app.contracts.canvas import (
@@ -37,11 +39,23 @@ class CanvasTurnRequest(BaseModel):
 
     session_id: int
     request_id: UUID4
-    content: str = Field(min_length=1)
+    content: list[TurnContentBlock] = Field(min_length=1)
+    materials: list[Any] = Field(default_factory=list)
     model_key: str | None = None
     client_turn_id: str | None = None
     mode: Literal["auto", "manual"] = "auto"
     enable_tools: bool = True
+
+    @model_validator(mode="after")
+    def _validate_turn_input(self) -> CanvasTurnRequest:
+        """校验文本必填且本阶段 materials 为空"""
+        if self.materials:
+            raise ValueError("materials must be empty in this phase")
+        try:
+            validate_turn_user_input(TurnUserInput(content=self.content, materials=self.materials))
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        return self
 
 
 class CanvasResumeRequest(BaseModel):
@@ -55,6 +69,7 @@ class CanvasResumeRequest(BaseModel):
     action: Literal["confirm", "reject"]
     client_turn_id: str = Field(min_length=1)
     model_key: str | None = None
+    operation: dict[str, Any] | None = None
 
 
 class CanvasReconnectRequest(BaseModel):
@@ -80,6 +95,7 @@ class CanvasMessageView(BaseModel):
     id: int
     role: int
     content: str
+    input: dict | None = None
     metadata: dict = Field(default_factory=dict)
     created_at: str
 

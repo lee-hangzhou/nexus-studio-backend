@@ -256,6 +256,10 @@ class CanvasPort(Protocol):
 
     async def find_user_turn_message(self, session_id: int, client_turn_id: str) -> bool: ...
 
+    async def get_user_turn_input(
+        self, session_id: int, client_turn_id: str
+    ) -> dict[str, Any] | None: ...
+
     async def touch_episode(self, episode_id: int) -> None: ...
 
     async def get_session_title(
@@ -325,3 +329,52 @@ class AssetsPort(Protocol):
     ) -> tuple[AssetDTO, ...]: ...
 
     async def get_asset(self, *, user_id: int, asset_id: int) -> AssetDTO | None: ...
+
+
+@dataclass(frozen=True)
+class SelectedSkillDTO:
+    path: str
+    scope: str
+    content: str
+    description: str
+    revision: int | None = None
+
+
+@runtime_checkable
+class UserSkillPort(Protocol):
+    async def list_enabled_for_index(
+        self,
+        *,
+        surface: str,
+        user_id: int,
+        project_id: int | None,
+    ) -> tuple[SelectedSkillDTO, ...]: ...
+
+    async def resolve_selected(
+        self,
+        *,
+        surface: str,
+        user_id: int,
+        project_id: int | None,
+        paths: list[str],
+    ) -> tuple[SelectedSkillDTO, ...]: ...
+
+    async def write_user_file(
+        self,
+        *,
+        surface: str,
+        user_id: int,
+        path: str,
+        name: str,
+        description: str | None,
+        content: str,
+        revision: int | None,
+    ) -> SelectedSkillDTO: ...
+
+    async def get_user_file(
+        self,
+        *,
+        surface: str,
+        user_id: int,
+        path: str,
+    ) -> SelectedSkillDTO | None: ...

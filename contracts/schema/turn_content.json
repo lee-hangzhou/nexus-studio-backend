@@ -1,0 +1,96 @@
+{
+  "$defs": {
+    "TurnSkillBlock": {
+      "additionalProperties": false,
+      "description": "技能引用内容块",
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "type": {
+          "const": "skill",
+          "default": "skill",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "TurnSkillBlock",
+      "type": "object"
+    },
+    "TurnTextBlock": {
+      "additionalProperties": false,
+      "description": "文本内容块",
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "text",
+          "default": "text",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TurnTextBlock",
+      "type": "object"
+    },
+    "TurnUserInput": {
+      "additionalProperties": false,
+      "description": "结构化 turn 用户输入",
+      "properties": {
+        "content": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "skill": "#/$defs/TurnSkillBlock",
+                "text": "#/$defs/TurnTextBlock"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TurnTextBlock"
+              },
+              {
+                "$ref": "#/$defs/TurnSkillBlock"
+              }
+            ]
+          },
+          "minItems": 1,
+          "title": "Content",
+          "type": "array"
+        },
+        "materials": {
+          "items": {},
+          "title": "Materials",
+          "type": "array"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "title": "TurnUserInput",
+      "type": "object"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/TurnUserInput"
+    },
+    {
+      "$ref": "#/$defs/TurnTextBlock"
+    },
+    {
+      "$ref": "#/$defs/TurnSkillBlock"
+    }
+  ]
+}

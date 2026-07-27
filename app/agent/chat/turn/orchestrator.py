@@ -19,9 +19,15 @@ from app.agent.chat.turn.trace import bind_turn_trace
 from app.agent.chat.turn.usage_finalize import finalize_observation_segment
 from app.agent.runtime.checkpointer import get_chat_checkpointer
 from app.agent.runtime.turn.runner import stream_agent_turn
+from app.contracts.turn_content import (
+    TurnUserInput,
+    compile_human_text,
+    validate_turn_user_input,
+)
 from app.server.chat.domain.stream_enums import StreamErrorCode
 from app.server.chat.persistence.conversations import ChatConversations
 from app.server.infra.logger import bind_context, log_exception, logger
+from app.server.ports.product import SelectedSkillDTO
 
 
 async def stream_turn(
@@ -29,14 +35,25 @@ async def stream_turn(
     conversation: ChatConversations,
     user_id: int,
     conversation_id: int,
-    content: str,
+    content: list,
+    project_id: int | None,
     model_key: str,
     attachment_ids: list[int],
     enable_tools: bool,
     client_turn_id: str | None,
     cancel_event: asyncio.Event,
     turn_id: str,
+    selected_skills: tuple[SelectedSkillDTO, ...] | None = None,
 ) -> AsyncIterator[str]:
+    from app.server.exceptions.base import AppError
+    from app.server.exceptions.codes import ErrorCode
+
+    try:
+        user_input = validate_turn_user_input(TurnUserInput(content=content, materials=[]))
+    except ValueError as exc:
+        raise AppError(ErrorCode.INVALID_PARAMS, str(exc)) from exc
+    content_text = compile_human_text(user_input.content)
+    resolved_skills = tuple(selected_skills) if selected_skills is not None else ()
     bind_context(
         user_id=user_id,
         conversation_id=conversation_id,
@@ -49,7 +66,10 @@ async def stream_turn(
         cancel_event=cancel_event,
         checkpointer=get_chat_checkpointer(),
         conversation=conversation,
-        content=content,
+        content=content_text,
+        user_input=user_input,
+        selected_skills=resolved_skills,
+        project_id=project_id,
         model_key=model_key,
         attachment_ids=attachment_ids,
         enable_tools=enable_tools,

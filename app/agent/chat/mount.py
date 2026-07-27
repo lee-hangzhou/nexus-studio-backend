@@ -15,12 +15,12 @@ from langgraph.graph.state import CompiledStateGraph
 from app.agent.chat.agent.factory import build_chat_agent
 from app.agent.chat.llm.gateway_chat_model import GatewayChatModel
 from app.agent.chat.llm.registry import get_model_spec
-from app.agent.chat.mcp.client import load_mcp_tools
 from app.agent.chat.memory.store import chat_runnable_config
 from app.agent.chat.memory.turn_input import build_turn_human_message
 from app.agent.chat.prompt.composer import PromptComposer
 from app.agent.chat.prompt.types import AttachmentBrief, TurnPromptContext
-from app.agent.chat.tools.lc_tools import ChatToolContext, build_langchain_tools
+from app.agent.chat.tools.build_turn_tools import build_chat_turn_tools
+from app.agent.chat.tools.lc_tools import ChatToolContext
 from app.agent.chat.tools.ui_preview import sanitize_tool_step_preview
 from app.agent.chat.turn.checkpoint import (
     capture_turn_checkpoint_messages,
@@ -44,16 +44,24 @@ from app.agent.runtime.checkpointer import get_chat_checkpointer
 from app.agent.runtime.memory.inject import MemoryInjectionRequest, build_memory_injection
 from app.agent.runtime.memory_store import get_memory_store
 from app.agent.runtime.mounts.spec import AgentMountSpec
+from app.agent.runtime.ports import get_user_skill_port
+from app.agent.runtime.skills.prompt_format import (
+    format_selected_skill_bodies_text,
+    format_user_skill_index_text,
+)
 from app.agent.runtime.turn.tool_loop_guard import TurnToolLoopGuard
 from app.agent.runtime.turn_engine.terminal_policy import SseTerminalPolicy
 from app.contracts.metadata import ToolAuditMetadata, TurnContextMetadata
+from app.contracts.turn_content import TurnUserInput
 from app.server.chat.persistence.attachments import ChatAttachments
 from app.server.chat.persistence.conversations import ChatConversations
 from app.server.chat.services.attachments.service import chat_attachment_service
+from app.server.skills.domain.enums import SkillSurface
 from app.server.chat.services.attachments.status import attachment_status_label
 from app.server.chat.services.attachments.turn_prep import apply_attachment_intent
 from app.server.chat.services.constants import CHAT_CHECKPOINT_THREAD_PREFIX
 from app.server.infra.config import settings
+from app.server.ports.product import SelectedSkillDTO
 
 
 @dataclass
@@ -68,6 +76,9 @@ class ChatMountContext:
     model_key: str
     attachment_ids: list[int]
     enable_tools: bool
+    user_input: TurnUserInput | None = None
+    selected_skills: tuple[SelectedSkillDTO, ...] = ()
+    project_id: int | None = None
     client_turn_id: str | None = None
     persistence: TurnPersistence | None = None
     guards: TurnGuards | None = None
@@ -166,7 +177,7 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
         limits=usage_collector.limits,
         attachments=usage_collector.attachments,
     )
-    loop_guard = TurnToolLoopGuard(surface="chat")
+    loop_guard = TurnToolLoopGuard(surface=SkillSurface.CHAT)
     tool_ctx = ChatToolContext(
         user_id=ctx.user_id,
         conversation_id=ctx.conversation_id,
@@ -177,8 +188,12 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
         loop_guard=loop_guard,
     )
     plan_enable_tools = ctx.enable_tools and turn_ctx.enable_tools
-    tools = build_langchain_tools(tool_ctx, enable_tools=plan_enable_tools)
-    tools = tools + load_mcp_tools()
+    # Chat 图无 HITL；技能写入与 MCP 同受 enable_tools 约束，直接执行
+    tools = build_chat_turn_tools(
+        tool_ctx,
+        enable_tools=plan_enable_tools,
+        user_id=ctx.user_id,
+    )
     attachment_briefs = [
         AttachmentBrief(
             attachment_id=row.id,
@@ -220,10 +235,20 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
             store=get_memory_store(),
         )
     )
+    selected_paths = {item.path for item in ctx.selected_skills}
+    index_items = await get_user_skill_port().list_enabled_for_index(
+        surface=SkillSurface.CHAT,
+        user_id=ctx.user_id,
+        project_id=ctx.project_id,
+    )
+    user_skill_index_text = format_user_skill_index_text(index_items, selected_paths)
+    selected_bodies_text = format_selected_skill_bodies_text(ctx.selected_skills)
     system_prompt = PromptComposer.build_turn_system(
         prompt_ctx,
         memory_blocks_text=injection.memory_blocks_text,
         memory_ops_brief=injection.ops_brief_text,
+        user_skill_index_text=user_skill_index_text,
+        selected_bodies_text=selected_bodies_text,
     )
     turn_human = build_turn_human_message(
         ctx.content,
@@ -239,6 +264,9 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
         attachment_ids=ctx.attachment_ids,
         turn_id=ctx.turn_id,
         client_turn_id=ctx.client_turn_id,
+        input_snapshot=(
+            ctx.user_input.model_dump(mode="json") if ctx.user_input is not None else None
+        ),
     )
     attachment_binary_paths = {
         item.attachment_id: item.workspace_path
@@ -380,7 +408,7 @@ def _cleanup_repair(ctx: ChatMountContext):
 
 
 CHAT_MOUNT = AgentMountSpec(
-    name="chat",
+    name=SkillSurface.CHAT,
     prepare_turn=_prepare_turn,
     resolve_thread_id=_thread_id,
     build_guards=_build_guards,

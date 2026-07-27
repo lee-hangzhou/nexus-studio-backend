@@ -29,6 +29,7 @@ from app.server.exceptions.codes import ErrorCode
 from app.server.chat.persistence.attachments import ChatAttachments
 from app.server.chat.persistence.conversations import ChatConversations
 from app.server.chat.persistence.messages import ChatMessages
+from app.server.ports.product import SelectedSkillDTO
 
 
 def require_turn_model(model: str | None) -> str:
@@ -288,11 +289,13 @@ class ChatService:
         turn_id: str,
         user_id: int,
         conversation_id: int,
-        content: str,
+        content: list,
+        project_id: int | None,
         attachment_ids: list[int],
         enable_tools: bool = True,
         client_turn_id: Optional[str] = None,
         cancel_event: asyncio.Event,
+        selected_skills: tuple[SelectedSkillDTO, ...] | None = None,
     ) -> AsyncIterator[str]:
         logger.info("chat.stream_turn.start", conversation_id=conversation_id, model=model_key, turn=turn_id)
         try:
@@ -301,12 +304,14 @@ class ChatService:
                 user_id=user_id,
                 conversation_id=conversation_id,
                 content=content,
+                project_id=project_id,
                 model_key=model_key,
                 attachment_ids=attachment_ids,
                 enable_tools=enable_tools,
                 client_turn_id=client_turn_id,
                 cancel_event=cancel_event,
                 turn_id=turn_id,
+                selected_skills=selected_skills,
             ):
                 yield chunk
         except Exception as exc:
@@ -417,10 +422,12 @@ class ChatService:
         metadata = dict(row.metadata or {})
         if attachments:
             metadata["attachments"] = attachments
+        input_snap = metadata.get("input")
         return ChatMessageView(
             id=row.id,
             role=role_map.get(row.role, "assistant"),
             content=row.content,
+            input=input_snap if isinstance(input_snap, dict) else None,
             metadata=metadata,
             created_at=row.created_at,
         )

@@ -25,9 +25,19 @@ from app.agent.chat.llm.registry import get_model_spec
 from app.agent.chat.tools.ui_preview import sanitize_tool_step_preview
 from app.agent.runtime.checkpointer import get_chat_checkpointer
 from app.agent.runtime.mounts.spec import AgentMountSpec
+from app.agent.runtime.ports import get_canvas_port, get_user_skill_port
 from app.agent.runtime.turn.tool_loop_guard import TurnToolLoopGuard
 from app.agent.runtime.turn_engine.terminal_policy import SseTerminalPolicy
+from app.contracts.turn_content import (
+    TurnUserInput,
+    extract_skill_paths,
+    parse_turn_content_blocks,
+)
+from app.server.exceptions.base import AppError
+from app.server.exceptions.codes import ErrorCode
 from app.server.infra.config import settings
+from app.server.ports.product import SelectedSkillDTO
+from app.server.skills.domain.enums import SkillSurface
 
 
 @dataclass
@@ -40,7 +50,9 @@ class CanvasMountContext:
     cancel_event: asyncio.Event
     checkpointer: BaseCheckpointSaver
     model_key: str = ""
-    content: str = ""
+    content_text: str = ""
+    user_input: TurnUserInput | None = None
+    selected_skills: tuple[SelectedSkillDTO, ...] = ()
     client_turn_id: str | None = None
     mode: str = "auto"
     enable_tools: bool = True
@@ -66,6 +78,28 @@ def _runtime_scope_id(ctx: CanvasMountContext) -> str:
 async def _prepare_turn(ctx: CanvasMountContext) -> CanvasMountContext:
     ctx.checkpointer = get_chat_checkpointer()
     ctx._turn_id_holder = {"turn_id": ctx.turn_id}
+    if ctx.is_resume and not ctx.selected_skills and ctx.client_turn_id:
+        snapshot = await get_canvas_port().get_user_turn_input(
+            ctx.session_id,
+            ctx.client_turn_id,
+        )
+        content_raw = snapshot.get("content") if isinstance(snapshot, dict) else None
+        if isinstance(content_raw, list):
+            try:
+                blocks = parse_turn_content_blocks(content_raw)
+            except Exception as exc:
+                raise AppError(
+                    ErrorCode.INVALID_PARAMS,
+                    "invalid turn skill input snapshot",
+                ) from exc
+            paths = extract_skill_paths(blocks)
+            if paths:
+                ctx.selected_skills = await get_user_skill_port().resolve_selected(
+                    surface=SkillSurface.CANVAS,
+                    user_id=ctx.user_id,
+                    project_id=ctx.project_id,
+                    paths=paths,
+                )
     return ctx
 
 
@@ -79,7 +113,7 @@ async def _build_agent(ctx: CanvasMountContext) -> CompiledStateGraph:
         spec=spec,
         cancel_event=ctx.cancel_event,
     )
-    loop_guard = TurnToolLoopGuard(surface="canvas")
+    loop_guard = TurnToolLoopGuard(surface=SkillSurface.CANVAS)
     agent, _ = await build_canvas_agent(
         llm,
         project_id=ctx.project_id,
@@ -90,8 +124,9 @@ async def _build_agent(ctx: CanvasMountContext) -> CompiledStateGraph:
         mode=ctx.mode,
         turn_id_holder=ctx._turn_id_holder,
         loop_guard=loop_guard,
-        user_message=ctx.content,
+        user_message=ctx.content_text,
         is_resume=ctx.is_resume,
+        selected_skills=ctx.selected_skills,
     )
     ctx.agent = agent
     return agent
@@ -121,10 +156,11 @@ def _build_subscribers(ctx: CanvasMountContext) -> list:
             episode_id=ctx.episode_id,
             session_id=ctx.session_id,
             user_id=ctx.user_id,
-            content=ctx.content,
+            content=ctx.content_text,
             client_turn_id=ctx.client_turn_id,
             enable_tools=ctx.enable_tools,
             model_key=ctx.resolved_model_key,
+            user_input=ctx.user_input,
         ),
     ]
 
@@ -156,7 +192,7 @@ def _recovery(ctx: CanvasMountContext):
 def _input_messages(ctx: CanvasMountContext):
     if ctx.is_resume:
         return None
-    return [HumanMessage(content=ctx.content)]
+    return [HumanMessage(content=ctx.content_text)]
 
 
 def _heartbeat(_ctx: CanvasMountContext) -> int:
@@ -186,7 +222,7 @@ def _preview(_ctx: CanvasMountContext):
 
 
 CANVAS_MOUNT = AgentMountSpec(
-    name="canvas",
+    name=SkillSurface.CANVAS,
     prepare_turn=_prepare_turn,
     resolve_thread_id=_thread_id,
     build_guards=_build_guards,

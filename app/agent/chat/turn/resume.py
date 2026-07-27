@@ -13,11 +13,11 @@ from langgraph.types import Command
 from app.agent.chat.agent.factory import build_chat_agent
 from app.agent.chat.llm.gateway_chat_model import GatewayChatModel
 from app.agent.chat.llm.registry import get_model_spec
-from app.agent.chat.mcp.client import load_mcp_tools
 from app.agent.chat.memory.store import chat_runnable_config
 from app.agent.chat.stream.encoder import encode_sse_frame
 from app.agent.chat.stream.frames import StreamFrameType, create_stream_frame
-from app.agent.chat.tools.lc_tools import ChatToolContext, build_langchain_tools
+from app.agent.chat.tools.build_turn_tools import build_chat_turn_tools
+from app.agent.chat.tools.lc_tools import ChatToolContext
 from app.agent.chat.turn.abort import finalize_inflight_turn_abort
 from app.agent.chat.turn.cancel_watch import watch_turn_cancel
 from app.agent.chat.turn.checkpoint import capture_turn_checkpoint_messages
@@ -44,6 +44,7 @@ from app.server.chat.persistence.conversations import ChatConversations
 from app.server.chat.services.constants import CHAT_CHECKPOINT_THREAD_PREFIX
 from app.server.infra.config import settings
 from app.server.infra.logger import logger
+from app.server.skills.domain.enums import SkillSurface
 
 
 async def stream_chat_resume(
@@ -108,7 +109,7 @@ async def stream_chat_resume(
             wall_clock_sec=settings.CHAT_TURN_WALL_CLOCK_SEC,
             tool_repeat_guard=settings.CHAT_TOOL_REPEAT_GUARD,
         )
-        loop_guard = TurnToolLoopGuard(surface="chat")
+        loop_guard = TurnToolLoopGuard(surface=SkillSurface.CHAT)
         ctx = ChatToolContext(
             user_id=user_id,
             conversation_id=conversation_id,
@@ -118,8 +119,7 @@ async def stream_chat_resume(
             loop_guard=loop_guard,
             cancel_event=cancel_event,
         )
-        tools = build_langchain_tools(ctx, enable_tools=True)
-        tools.extend(load_mcp_tools())
+        tools = build_chat_turn_tools(ctx, enable_tools=True, user_id=user_id)
         spec = get_model_spec(model_key)
         llm = GatewayChatModel(
             model_key=model_key,
@@ -188,6 +188,7 @@ async def stream_chat_resume(
                 emit_done_after_failure=True,
                 message_ids=lambda: persistence.message_ids,
             ),
+            surface=SkillSurface.CHAT,
         )
         async for chunk in stream_prepared_turn(prepared):
             yield chunk

@@ -1,6 +1,17 @@
 from fastapi import APIRouter
 
-from app.server.api.v1.endpoints import assets, auth, canvas, chat, episodes, generate, health, projects, users
+from app.server.api.v1.endpoints import (
+    assets,
+    auth,
+    canvas,
+    chat,
+    episodes,
+    generate,
+    health,
+    projects,
+    user_skills,
+    users,
+)
 
 api_router = APIRouter()
 
@@ -13,3 +24,4 @@ api_router.include_router(projects.router, prefix="/projects", tags=["projects"]
 api_router.include_router(episodes.router, prefix="/episodes", tags=["episodes"])
 api_router.include_router(canvas.router, prefix="/canvas", tags=["canvas"])
 api_router.include_router(assets.router, prefix="/assets", tags=["assets"])
+api_router.include_router(user_skills.router, prefix="/user-skills", tags=["user-skills"])

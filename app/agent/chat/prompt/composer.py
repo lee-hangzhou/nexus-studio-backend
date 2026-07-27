@@ -72,6 +72,8 @@ class PromptComposer:
         *,
         memory_blocks_text: str = "",
         memory_ops_brief: str | None = None,
+        user_skill_index_text: str = "",
+        selected_bodies_text: str = "",
     ) -> str:
         """组装本轮静态 system prompt；记忆块由 mount 侧注入"""
         parts = [
@@ -85,6 +87,10 @@ class PromptComposer:
             parts.append(memory_ops_brief)
         if memory_blocks_text.strip():
             parts.append(memory_blocks_text.strip())
+        if user_skill_index_text.strip():
+            parts.append(user_skill_index_text.strip())
+        if selected_bodies_text.strip():
+            parts.append(selected_bodies_text.strip())
         vision_brief = PromptComposer.build_vision_brief(ctx)
         if vision_brief:
             parts.append(vision_brief)

@@ -53,7 +53,12 @@ from app.server.ports.product import (
     GenerationPort,
     ObservedGenerationDTO,
     ProjectPromptContextDTO,
+    SelectedSkillDTO,
+    UserSkillPort,
 )
+from app.server.skills.domain.enums import SkillScope, SkillSurface
+from app.server.skills.domain.models import SelectedSkill
+from app.server.skills.services.service import UserSkillService
 from app.server.assets.persistence.repository import AssetRepository
 from app.server.chat.persistence.attachment_repository import ChatAttachmentRepository
 from app.server.generation.schemas import (
@@ -538,6 +543,17 @@ class CanvasPortAdapter(CanvasPort, object):
         ).first()
         return row is not None
 
+    async def get_user_turn_input(self, session_id: int, client_turn_id: str) -> dict | None:
+        row = await CanvasMessages.filter(
+            session_id=session_id,
+            role=ChatMessageRole.USER,
+            metadata__contains={"client_turn_id": client_turn_id},
+        ).first()
+        if row is None:
+            return None
+        raw = (row.metadata or {}).get("input")
+        return raw if isinstance(raw, dict) else None
+
     async def touch_episode(self, episode_id: int) -> None:
         await ProjectEpisodes.filter(id=episode_id, deleted_at__isnull=True).update(
             updated_at=datetime.now(timezone.utc)
@@ -686,3 +702,110 @@ class AssetsPortAdapter(AssetsPort, object):
             status=view.status,
             preview_url=view.preview_url,
         )
+
+
+class UserSkillPortAdapter:
+    """用户技能 Port 适配器"""
+
+    def __init__(self, service: UserSkillService) -> None:
+        self._service = service
+
+    async def list_enabled_for_index(
+        self,
+        *,
+        surface: str,
+        user_id: int,
+        project_id: int | None,
+    ) -> tuple[SelectedSkillDTO, ...]:
+        """列出启用技能索引"""
+        items = await self._service.list_enabled_files_for_index(
+            surface=SkillSurface(surface),
+            user_id=user_id,
+            project_id=project_id,
+        )
+        return tuple(_selected_skill_dto(item) for item in items)
+
+    async def resolve_selected(
+        self,
+        *,
+        surface: str,
+        user_id: int,
+        project_id: int | None,
+        paths: list[str],
+    ) -> tuple[SelectedSkillDTO, ...]:
+        """解析 turn 显式引用的技能"""
+        items = await self._service.resolve_selected_skills(
+            SkillSurface(surface),
+            user_id,
+            project_id,
+            paths,
+        )
+        return tuple(_selected_skill_dto(item) for item in items)
+
+    async def write_user_file(
+        self,
+        *,
+        surface: str,
+        user_id: int,
+        path: str,
+        name: str,
+        description: str | None,
+        content: str,
+        revision: int | None,
+    ) -> SelectedSkillDTO:
+        """写入 user 域技能文件并返回最新正文"""
+        detail = await self._service.write_user_file_detail(
+            user_id,
+            SkillSurface(surface),
+            path,
+            name,
+            content,
+            description,
+            revision,
+        )
+        return SelectedSkillDTO(
+            path=detail.meta.path,
+            scope=str(SkillScope.USER),
+            content=detail.content,
+            description=detail.meta.description,
+            revision=int(detail.meta.revision),
+        )
+
+    async def get_user_file(
+        self,
+        *,
+        surface: str,
+        user_id: int,
+        path: str,
+    ) -> SelectedSkillDTO | None:
+        """读取 user 域技能文件, 不存在返回 None"""
+        try:
+            detail = await self._service.get_file(
+                user_id,
+                SkillSurface(surface),
+                SkillScope.USER,
+                path,
+                None,
+            )
+        except AppError as exc:
+            if exc.code == int(ErrorCode.RESOURCE_NOT_FOUND):
+                return None
+            raise
+        return SelectedSkillDTO(
+            path=detail.meta.path,
+            scope=str(SkillScope.USER),
+            content=detail.content,
+            description=detail.meta.description,
+            revision=int(detail.meta.revision),
+        )
+
+
+def _selected_skill_dto(item: SelectedSkill) -> SelectedSkillDTO:
+    """领域 SelectedSkill 转为 Port DTO"""
+    return SelectedSkillDTO(
+        path=item.path,
+        scope=str(item.scope),
+        content=item.content,
+        description=item.description,
+        revision=item.revision,
+    )

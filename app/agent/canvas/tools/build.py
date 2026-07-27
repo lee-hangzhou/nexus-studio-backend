@@ -9,7 +9,9 @@ from app.agent.canvas.tools.generation import build_submit_node_generation_tool
 from app.agent.canvas.tools.inputs import build_resolve_node_inputs_tool
 from app.agent.canvas.tools.list_generations import build_list_node_generations_tool
 from app.agent.canvas.tools.memory_tools import build_canvas_memory_tools
+from app.agent.runtime.tools.user_skill_tools import build_write_user_skill_file_tool
 from app.agent.runtime.turn.tool_loop_guard import TurnToolLoopGuard
+from app.server.skills.domain.enums import SkillSurface
 
 
 def build_canvas_tools(
@@ -19,6 +21,7 @@ def build_canvas_tools(
     user_id: int,
     turn_id_holder: dict[str, str | None] | None = None,
     loop_guard: TurnToolLoopGuard | None = None,
+    surface: str = SkillSurface.CANVAS,
 ) -> list[StructuredTool]:
     """按固定顺序注册画布 Agent 全部工具"""
     holder = turn_id_holder if turn_id_holder is not None else {"turn_id": None}
@@ -33,4 +36,10 @@ def build_canvas_tools(
         build_get_asset_tool(user_id),
     ]
     tools.extend(build_canvas_memory_tools(loop_guard=loop_guard))
+    tools.append(
+        build_write_user_skill_file_tool(
+            surface=surface,
+            user_id=user_id,
+        )
+    )
     return [guard_canvas_tool(tool) for tool in tools]

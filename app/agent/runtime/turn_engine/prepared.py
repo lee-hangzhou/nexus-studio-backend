@@ -18,6 +18,7 @@ from app.agent.runtime.turn_engine.sse_subscriber import ToolPreviewFn
 from app.agent.runtime.turn_engine.subscribers import TurnSubscriber
 from app.agent.runtime.turn_engine.terminal_policy import SseTerminalPolicy
 from app.agent.runtime.tools.result import summarize_tool_result
+from app.server.skills.domain.enums import SkillSurface
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,7 @@ class PreparedTurn:
     terminal_policy: SseTerminalPolicy | None = None
     preview_tool_result: ToolPreviewFn | None = None
     heal_invalid_tool_calls: bool = True
+    surface: str = SkillSurface.CHAT
 
 
 def default_preview(tool_name: str, result: str, ok: bool) -> str:
