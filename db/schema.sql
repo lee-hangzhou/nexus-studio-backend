@@ -288,9 +288,21 @@ CREATE TABLE IF NOT EXISTS canvas_edges (
   deleted_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS canvas_sessions (
+  id BIGSERIAL PRIMARY KEY,
+  episode_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  status SMALLINT NOT NULL,
+  is_default BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS canvas_messages (
   id BIGSERIAL PRIMARY KEY,
   episode_id BIGINT NOT NULL,
+  session_id BIGINT NOT NULL,
   user_id BIGINT NOT NULL,
   role SMALLINT NOT NULL,
   content TEXT NOT NULL,
@@ -329,10 +341,26 @@ CREATE INDEX IF NOT EXISTS idx_canvas_edges_target_alive
   ON canvas_edges (episode_id, target_node_id)
   WHERE deleted_at IS NULL;
 
+CREATE INDEX IF NOT EXISTS idx_canvas_sessions_episode_user_updated
+  ON canvas_sessions (episode_id, user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_canvas_sessions_episode_user_status
+  ON canvas_sessions (episode_id, user_id, status);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_canvas_sessions_default_alive
+  ON canvas_sessions (episode_id, user_id)
+  WHERE status = 1 AND is_default = TRUE;
+
+CREATE INDEX IF NOT EXISTS idx_canvas_messages_session
+  ON canvas_messages (session_id, created_at, id);
 CREATE INDEX IF NOT EXISTS idx_canvas_messages_episode
   ON canvas_messages (episode_id, created_at, id);
 CREATE INDEX IF NOT EXISTS idx_canvas_operations_episode
   ON canvas_operations (episode_id, created_at DESC);
+
+DROP TRIGGER IF EXISTS trg_canvas_sessions_updated_at ON canvas_sessions;
+CREATE TRIGGER trg_canvas_sessions_updated_at
+BEFORE UPDATE ON canvas_sessions
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
 
 DROP TRIGGER IF EXISTS trg_canvas_episode_meta_updated_at ON canvas_episode_meta;
 CREATE TRIGGER trg_canvas_episode_meta_updated_at

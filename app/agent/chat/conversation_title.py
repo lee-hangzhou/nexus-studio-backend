@@ -1,5 +1,3 @@
-"""Conversation sidebar title via LLM on first turn (placeholder only)."""
-
 from __future__ import annotations
 
 import json
@@ -8,17 +6,17 @@ from dataclasses import dataclass
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field, ValidationError
 
-from app.server.chat.services.constants import CONVERSATION_TITLE_MAX_LEN, DEFAULT_CONVERSATION_TITLE
 from app.agent.chat.llm import get_adapter
 from app.agent.chat.llm.adapter import ModelAdapter
 from app.agent.chat.llm.registry import get_model_spec
-from app.server.infra.config import settings
-from app.server.infra.gateway import gateway_client
-from app.server.infra.logger import log_exception, logger
 from app.server.chat.domain.enums import ChatMessageRole
 from app.server.chat.persistence.attachments import ChatAttachments
 from app.server.chat.persistence.conversations import ChatConversations
 from app.server.chat.persistence.messages import ChatMessages
+from app.server.chat.services.constants import CONVERSATION_TITLE_MAX_LEN, DEFAULT_CONVERSATION_TITLE
+from app.server.infra.config import settings
+from app.server.infra.gateway import gateway_client
+from app.server.infra.logger import log_exception, logger
 
 _ZERO_WIDTH = ("\u200b", "\u200c", "\u200d", "\ufeff")
 
@@ -35,6 +33,7 @@ class ConversationTitleDecision(BaseModel):
 
 
 def normalize_title_text(text: str) -> str:
+    """规范化标题空白与包裹引号"""
     cleaned = text.strip()
     for ch in _ZERO_WIDTH:
         cleaned = cleaned.replace(ch, "")
@@ -45,13 +44,15 @@ def normalize_title_text(text: str) -> str:
 
 
 def clamp_title_length(text: str, max_len: int = CONVERSATION_TITLE_MAX_LEN) -> str:
+    """截断超长标题并加省略号"""
     if len(text) <= max_len:
         return text
     return text[: max_len - 1] + "…"
 
 
-def is_placeholder_title(title: str) -> bool:
-    return normalize_title_text(title) == DEFAULT_CONVERSATION_TITLE
+def is_placeholder_title(title: str, *, placeholder: str = DEFAULT_CONVERSATION_TITLE) -> bool:
+    """是否仍是未命名占位标题"""
+    return normalize_title_text(title) == normalize_title_text(placeholder)
 
 
 async def attachment_filenames(
@@ -60,6 +61,7 @@ async def attachment_filenames(
     conversation_id: int,
     attachment_ids: list[int],
 ) -> list[str]:
+    """按附件 id 取文件名列表"""
     if not attachment_ids:
         return []
     rows = await ChatAttachments.filter(
@@ -71,6 +73,7 @@ async def attachment_filenames(
 
 
 def _gateway_error_code(response: dict) -> int | None:
+    """解析网关业务错误码, 成功返回 None"""
     code = response.get("code")
     if code is None:
         return None
@@ -82,6 +85,7 @@ def _gateway_error_code(response: dict) -> int | None:
 
 
 def parse_title_decision(response: dict, *, adapter: ModelAdapter) -> ConversationTitleDecision:
+    """从 chat completion 响应解析标题 JSON"""
     parsed = adapter.parse_response(response)
     content = str(parsed.get("content") or "").strip()
     if not content:
@@ -93,29 +97,17 @@ def parse_title_decision(response: dict, *, adapter: ModelAdapter) -> Conversati
     return ConversationTitleDecision.model_validate(payload)
 
 
-async def generate_conversation_title_via_llm(
+async def propose_sidebar_title_via_llm(
     *,
-    user_id: int,
-    conversation_id: int,
     user_content: str,
-    attachment_ids: list[int],
+    attachment_filenames_list: list[str],
     model_key: str,
-) -> TitleApplyResult:
-    row = await ChatConversations.get(id=conversation_id, user_id=user_id)
-    if not is_placeholder_title(row.title):
-        logger.info(
-            "chat.conversation_title.llm_skipped",
-            conversation_id=conversation_id,
-            reason="not_placeholder",
-        )
-        return TitleApplyResult(applied=False)
-
-    expected_title = row.title
-    attachment_filenames_list = await attachment_filenames(
-        user_id=user_id,
-        conversation_id=conversation_id,
-        attachment_ids=attachment_ids,
-    )
+    placeholder_title: str,
+    log_event_prefix: str,
+    log_context: dict | None = None,
+) -> str | None:
+    """用首条用户消息经 LLM 提议侧栏标题, 失败返回 None"""
+    ctx = log_context or {}
     attachment_hint = "、".join(attachment_filenames_list) if attachment_filenames_list else "无"
     messages = [
         SystemMessage(
@@ -144,32 +136,69 @@ async def generate_conversation_title_via_llm(
         error_code = _gateway_error_code(response)
         if error_code is not None:
             logger.error(
-                "chat.conversation_title.gateway_error",
-                conversation_id=conversation_id,
+                f"{log_event_prefix}.gateway_error",
                 model_key=model_key,
                 gateway_model=spec.gateway_model,
                 code=error_code,
                 message=response.get("message"),
+                **ctx,
             )
-            return TitleApplyResult(applied=False)
+            return None
         decision = parse_title_decision(response, adapter=adapter)
     except (ValidationError, ValueError, Exception) as exc:
         log_exception(
-            "chat.conversation_title.llm_failed",
+            f"{log_event_prefix}.llm_failed",
             exc=exc,
-            conversation_id=conversation_id,
             model_key=model_key,
             gateway_model=spec.gateway_model,
+            **ctx,
         )
-        return TitleApplyResult(applied=False)
+        return None
 
     new_title = clamp_title_length(normalize_title_text(decision.title))
-    if not new_title or new_title == DEFAULT_CONVERSATION_TITLE:
+    if not new_title or is_placeholder_title(new_title, placeholder=placeholder_title):
+        logger.info(
+            f"{log_event_prefix}.llm_skipped",
+            reason="empty_or_placeholder",
+            **ctx,
+        )
+        return None
+    return new_title
+
+
+async def generate_conversation_title_via_llm(
+    *,
+    user_id: int,
+    conversation_id: int,
+    user_content: str,
+    attachment_ids: list[int],
+    model_key: str,
+) -> TitleApplyResult:
+    """首轮且仍为占位标题时生成并写回 Chat 会话标题"""
+    row = await ChatConversations.get(id=conversation_id, user_id=user_id)
+    if not is_placeholder_title(row.title):
         logger.info(
             "chat.conversation_title.llm_skipped",
             conversation_id=conversation_id,
-            reason="empty_or_placeholder",
+            reason="not_placeholder",
         )
+        return TitleApplyResult(applied=False)
+
+    expected_title = row.title
+    attachment_filenames_list = await attachment_filenames(
+        user_id=user_id,
+        conversation_id=conversation_id,
+        attachment_ids=attachment_ids,
+    )
+    new_title = await propose_sidebar_title_via_llm(
+        user_content=user_content,
+        attachment_filenames_list=attachment_filenames_list,
+        model_key=model_key,
+        placeholder_title=DEFAULT_CONVERSATION_TITLE,
+        log_event_prefix="chat.conversation_title",
+        log_context={"conversation_id": conversation_id},
+    )
+    if new_title is None:
         return TitleApplyResult(applied=False)
 
     row = await ChatConversations.get(id=conversation_id, user_id=user_id)
@@ -193,6 +222,7 @@ async def generate_conversation_title_via_llm(
 
 
 async def is_first_user_message(conversation_id: int) -> bool:
+    """会话是否仅有一条用户消息"""
     count = await ChatMessages.filter(
         conversation_id=conversation_id,
         role=int(ChatMessageRole.USER),

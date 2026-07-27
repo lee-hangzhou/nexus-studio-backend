@@ -17,7 +17,6 @@ from app.agent.canvas.turn.checkpoint import repair_canvas_checkpoint_if_needed
 from app.agent.canvas.turn.empty_hook import CanvasEmptyAnswerHook
 from app.agent.canvas.turn.guards import CanvasTurnGuards
 from app.agent.canvas.turn.subscribers import (
-    CanvasGenerationHubSubscriber,
     CanvasPersistenceSubscriber,
     CanvasResumeSubscriber,
 )
@@ -36,6 +35,7 @@ class CanvasMountContext:
     user_id: int
     project_id: int
     episode_id: int
+    session_id: int
     turn_id: str
     cancel_event: asyncio.Event
     checkpointer: BaseCheckpointSaver
@@ -56,11 +56,11 @@ class CanvasMountContext:
 
 
 def _thread_id(ctx: CanvasMountContext) -> str:
-    return f"{settings.CANVAS_CHECKPOINT_THREAD_PREFIX}:{ctx.episode_id}"
+    return f"{settings.CANVAS_CHECKPOINT_THREAD_PREFIX}:{ctx.episode_id}:{ctx.session_id}"
 
 
 def _runtime_scope_id(ctx: CanvasMountContext) -> str:
-    return f"canvas:{ctx.episode_id}"
+    return f"canvas:{ctx.episode_id}:{ctx.session_id}"
 
 
 async def _prepare_turn(ctx: CanvasMountContext) -> CanvasMountContext:
@@ -108,12 +108,18 @@ def _build_guards(ctx: CanvasMountContext) -> CanvasTurnGuards:
 
 def _build_subscribers(ctx: CanvasMountContext) -> list:
     if ctx.is_resume:
-        return [CanvasResumeSubscriber()]
+        return [
+            CanvasResumeSubscriber(
+                episode_id=ctx.episode_id,
+                session_id=ctx.session_id,
+                user_id=ctx.user_id,
+            )
+        ]
     return [
-        CanvasGenerationHubSubscriber(episode_id=ctx.episode_id),
         CanvasPersistenceSubscriber(
             project_id=ctx.project_id,
             episode_id=ctx.episode_id,
+            session_id=ctx.session_id,
             user_id=ctx.user_id,
             content=ctx.content,
             client_turn_id=ctx.client_turn_id,

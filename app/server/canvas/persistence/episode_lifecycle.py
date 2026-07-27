@@ -8,6 +8,7 @@ from app.server.canvas.persistence.episode_meta import CanvasEpisodeMeta
 from app.server.canvas.persistence.messages import CanvasMessages
 from app.server.canvas.persistence.nodes import CanvasNodes
 from app.server.canvas.persistence.operations import CanvasOperations
+from app.server.canvas.persistence.sessions import CanvasSessions
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +35,7 @@ class CanvasEpisodeLifecycleRepository:
     async def delete_all(self, episode_id: int) -> None:
         await CanvasOperations.filter(episode_id=episode_id).delete()
         await CanvasMessages.filter(episode_id=episode_id).delete()
+        await CanvasSessions.filter(episode_id=episode_id).delete()
         await CanvasEdges.filter(episode_id=episode_id).delete()
         await CanvasNodes.filter(episode_id=episode_id).delete()
         await CanvasEpisodeMeta.filter(episode_id=episode_id).delete()

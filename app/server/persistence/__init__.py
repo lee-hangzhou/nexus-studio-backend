@@ -9,6 +9,7 @@ TORTOISE_ORM_MODEL_MODULES = [
     "app.server.canvas.persistence.nodes",
     "app.server.canvas.persistence.operations",
     "app.server.canvas.persistence.episode_meta",
+    "app.server.canvas.persistence.sessions",
     "app.server.projects.persistence.episodes",
     "app.server.projects.persistence.projects",
     "app.server.auth.persistence.user",

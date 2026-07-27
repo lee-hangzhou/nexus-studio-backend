@@ -94,7 +94,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             return True
         # 画布 Agent turn / resume / 节点生成 SSE（与 chat/message/stream 同约束）
         if path.startswith("/api/v1/canvas/"):
-            if path.endswith("/turn") or path.endswith("/turn/resume"):
+            if path.endswith("/turn") or path.endswith("/turn/resume") or path.endswith("/events"):
                 return True
             if "/nodes/" in path and path.endswith("/generate"):
                 return True

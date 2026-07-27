@@ -22,7 +22,7 @@ async def run_manual_node_generate(
     user_id: int,
     body: SubmitNodeExecuteInput,
 ) -> CanvasNodeGenerateResponse:
-    """用户手动节点生成：入口持有集级锁, 不依赖 expected_revision"""
+    """用户手动节点生成入口; 不依赖 expected_revision, 不持集级 mutex"""
     node_id = body.node_id
     if body.kind == "text":
         if not body.model_key:

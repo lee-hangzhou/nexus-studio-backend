@@ -7,14 +7,15 @@ from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
 
 
-async def canvas_turn_already_completed(episode_id: int, client_turn_id: str) -> bool:
+async def canvas_turn_already_completed(session_id: int, client_turn_id: str) -> bool:
     """判断 client_turn_id 是否已有助手终态消息"""
-    return await get_canvas_port().is_turn_completed(episode_id, client_turn_id)
+    return await get_canvas_port().is_turn_completed(session_id, client_turn_id)
 
 
 async def persist_canvas_user_message(
     *,
     episode_id: int,
+    session_id: int,
     user_id: int,
     content: str,
     client_turn_id: str | None,
@@ -23,13 +24,13 @@ async def persist_canvas_user_message(
     """持久化用户消息, 返回是否新建；重复 client_turn_id 已完成则抛错。"""
     canvas = get_canvas_port()
     if client_turn_id:
-        if await canvas.is_turn_completed(episode_id, client_turn_id):
+        if await canvas.is_turn_completed(session_id, client_turn_id):
             raise AppError(
                 ErrorCode.CANVAS_DUPLICATE_TURN,
                 "canvas turn already completed",
                 details={"client_turn_id": client_turn_id},
             )
-        if await canvas.find_user_turn_message(episode_id, client_turn_id):
+        if await canvas.find_user_turn_message(session_id, client_turn_id):
             return False
     meta = CanvasMessageMetadata(
         turn_id=turn_id,
@@ -37,8 +38,9 @@ async def persist_canvas_user_message(
     )
     await canvas.append_canvas_message(
         episode_id=episode_id,
+        session_id=session_id,
         user_id=user_id,
-        role=int(ChatMessageRole.USER),
+        role=ChatMessageRole.USER,
         content=content,
         metadata=meta.model_dump(mode="json", exclude_none=True),
     )
@@ -48,6 +50,7 @@ async def persist_canvas_user_message(
 async def persist_canvas_assistant_message(
     *,
     episode_id: int,
+    session_id: int,
     user_id: int,
     content: str,
     turn_id: str,
@@ -62,8 +65,9 @@ async def persist_canvas_assistant_message(
     )
     await get_canvas_port().append_canvas_message(
         episode_id=episode_id,
+        session_id=session_id,
         user_id=user_id,
-        role=int(ChatMessageRole.ASSISTANT),
+        role=ChatMessageRole.ASSISTANT,
         content=content,
         metadata=meta.model_dump(mode="json", exclude_none=True),
     )
@@ -72,6 +76,7 @@ async def persist_canvas_assistant_message(
 async def persist_canvas_tool_step(
     *,
     episode_id: int,
+    session_id: int,
     user_id: int,
     turn_id: str,
     step: CanvasToolStepMetadata,
@@ -79,8 +84,9 @@ async def persist_canvas_tool_step(
     """持久化单个工具步骤, 供前端工具链时间线展示"""
     await get_canvas_port().append_canvas_message(
         episode_id=episode_id,
+        session_id=session_id,
         user_id=user_id,
-        role=int(ChatMessageRole.ASSISTANT),
+        role=ChatMessageRole.ASSISTANT,
         content="",
         metadata=CanvasMessageMetadata(
             turn_id=turn_id,

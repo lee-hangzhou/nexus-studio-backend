@@ -5,20 +5,28 @@ from uuid import UUID
 
 from tortoise.transactions import in_transaction
 
-from app.contracts.canvas import CanvasNodeView, CanvasPatchOp, CanvasPatchResponse
+from app.contracts.canvas import CanvasNodeView, CanvasPatchOp, CanvasPatchResponse, GenerationProgress
 from app.server.assets.services.service import AssetService
 from app.server.canvas.services import generation_sync
 from app.server.canvas.services.canvas_service import canvas_service, node_view_from_row
+from app.server.canvas.services.episode_events import (
+    publish_patch_and_progress,
+    publish_session_title,
+)
+from app.server.canvas.services.episode_fence import canvas_episode_fence
 from app.server.canvas.domain.enums import (
     CanvasEdgeType,
     CanvasNodeKind,
     CanvasNodeStatus,
+    CanvasSessionStatus,
     CanvasSourcePort,
     CanvasTargetPort,
 )
 from app.server.canvas.persistence.edges import CanvasEdges
 from app.server.canvas.persistence.episode_meta import CanvasEpisodeMeta
 from app.server.canvas.persistence.messages import CanvasMessages
+from app.server.canvas.persistence.sessions import CanvasSessions
+from app.server.chat.domain.enums import ChatMessageRole
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
 from app.server.generation.domain.enums import GenerationKind
@@ -345,6 +353,7 @@ class CanvasPortAdapter(CanvasPort, object):
         ops: list[CanvasPatchOp],
         turn_id: str | None,
     ) -> CanvasPatchResponse:
+        await canvas_episode_fence.assert_writable(episode_id)
         return await canvas_service.apply_patch(
             CanvasScope(project_id=project_id, episode_id=episode_id, user_id=user_id),
             ops,
@@ -352,6 +361,7 @@ class CanvasPortAdapter(CanvasPort, object):
         )
 
     async def claim_node_for_generation(self, episode_id: int, node_id: str) -> CanvasNodeClaimDTO:
+        await canvas_episode_fence.assert_writable(episode_id)
         async with in_transaction():
             episode = await ProjectEpisodes.select_for_update().filter(
                 id=episode_id,
@@ -378,6 +388,7 @@ class CanvasPortAdapter(CanvasPort, object):
             if row.status == CanvasNodeStatus.RUNNING.value or active_task_id is not None:
                 return CanvasNodeClaimDTO(claimed=False, active_task_id=active_task_id)
             row.status = CanvasNodeStatus.RUNNING.value
+            row.task_id = None
             row.error_message = ""
             row.revision = row.revision + 1
             await row.save()
@@ -394,6 +405,7 @@ class CanvasPortAdapter(CanvasPort, object):
         *,
         allowed_statuses: tuple[CanvasNodeStatus, ...],
     ) -> tuple[int, CanvasNodeView] | None:
+        await canvas_episode_fence.assert_writable(episode_id)
         async with in_transaction():
             episode = await ProjectEpisodes.select_for_update().filter(
                 id=episode_id,
@@ -446,6 +458,7 @@ class CanvasPortAdapter(CanvasPort, object):
         resolution: str | None = None,
         expected_revision: int | None = None,
     ) -> tuple[int, CanvasNodeView]:
+        await canvas_episode_fence.assert_writable(episode_id)
         return await canvas_service.update_node_generation(
             episode_id,
             node_id,
@@ -472,6 +485,7 @@ class CanvasPortAdapter(CanvasPort, object):
         model_id: str | None = None,
         expected_revision: int | None = None,
     ) -> tuple[int, CanvasNodeView]:
+        await canvas_episode_fence.assert_writable(episode_id)
         return await canvas_service.update_node_text_output(
             episode_id,
             node_id,
@@ -482,10 +496,10 @@ class CanvasPortAdapter(CanvasPort, object):
             expected_revision=expected_revision,
         )
 
-    async def is_turn_completed(self, episode_id: int, client_turn_id: str) -> bool:
+    async def is_turn_completed(self, session_id: int, client_turn_id: str) -> bool:
         row = await CanvasMessages.filter(
-            episode_id=episode_id,
-            role=2,
+            session_id=session_id,
+            role=ChatMessageRole.ASSISTANT,
             metadata__contains={"client_turn_id": client_turn_id},
         ).first()
         return row is not None
@@ -494,23 +508,32 @@ class CanvasPortAdapter(CanvasPort, object):
         self,
         *,
         episode_id: int,
+        session_id: int,
         user_id: int,
-        role: int,
+        role: ChatMessageRole,
         content: str,
         metadata: dict,
     ) -> None:
+        session = await CanvasSessions.get_or_none(
+            id=session_id,
+            episode_id=episode_id,
+            user_id=user_id,
+        )
+        if session is None or session.status != CanvasSessionStatus.ACTIVE:
+            raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "canvas session not found")
         await CanvasMessages.create(
             episode_id=episode_id,
+            session_id=session_id,
             user_id=user_id,
             role=role,
             content=content,
             metadata=metadata,
         )
 
-    async def find_user_turn_message(self, episode_id: int, client_turn_id: str) -> bool:
+    async def find_user_turn_message(self, session_id: int, client_turn_id: str) -> bool:
         row = await CanvasMessages.filter(
-            episode_id=episode_id,
-            role=1,
+            session_id=session_id,
+            role=ChatMessageRole.USER,
             metadata__contains={"client_turn_id": client_turn_id},
         ).first()
         return row is not None
@@ -518,6 +541,91 @@ class CanvasPortAdapter(CanvasPort, object):
     async def touch_episode(self, episode_id: int) -> None:
         await ProjectEpisodes.filter(id=episode_id, deleted_at__isnull=True).update(
             updated_at=datetime.now(timezone.utc)
+        )
+
+    async def get_session_title(
+        self,
+        *,
+        episode_id: int,
+        session_id: int,
+        user_id: int,
+    ) -> str | None:
+        row = await CanvasSessions.get_or_none(
+            id=session_id,
+            episode_id=episode_id,
+            user_id=user_id,
+            status=CanvasSessionStatus.ACTIVE,
+        )
+        return None if row is None else row.title
+
+    async def count_session_user_messages(self, session_id: int) -> int:
+        return await CanvasMessages.filter(
+            session_id=session_id,
+            role=ChatMessageRole.USER,
+        ).count()
+
+    async def touch_session(
+        self,
+        *,
+        episode_id: int,
+        session_id: int,
+        user_id: int,
+    ) -> None:
+        await CanvasSessions.filter(
+            id=session_id,
+            episode_id=episode_id,
+            user_id=user_id,
+            status=CanvasSessionStatus.ACTIVE,
+        ).update(updated_at=datetime.now(timezone.utc))
+
+    async def apply_session_title_if_unchanged(
+        self,
+        *,
+        episode_id: int,
+        session_id: int,
+        user_id: int,
+        expected_title: str,
+        new_title: str,
+    ) -> tuple[bool, str | None]:
+        row = await CanvasSessions.get_or_none(
+            id=session_id,
+            episode_id=episode_id,
+            user_id=user_id,
+            status=CanvasSessionStatus.ACTIVE,
+        )
+        if row is None or row.title != expected_title:
+            return False, None
+        row.title = new_title
+        await row.save(update_fields=["title", "updated_at"])
+        updated_at = row.updated_at.isoformat() if row.updated_at else None
+        return True, updated_at
+
+    async def publish_episode_graph_event(
+        self,
+        episode_id: int,
+        *,
+        canvas_patch: CanvasPatchResponse | None = None,
+        progress: GenerationProgress | None = None,
+    ) -> None:
+        await publish_patch_and_progress(
+            episode_id,
+            canvas_patch=canvas_patch,
+            progress=progress,
+        )
+
+    async def publish_episode_session_title(
+        self,
+        episode_id: int,
+        *,
+        session_id: int,
+        title: str,
+        updated_at: str,
+    ) -> None:
+        await publish_session_title(
+            episode_id,
+            session_id=session_id,
+            title=title,
+            updated_at=updated_at,
         )
 
 

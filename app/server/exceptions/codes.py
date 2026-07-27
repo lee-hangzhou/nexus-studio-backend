@@ -19,6 +19,7 @@ class ErrorCode(IntEnum):
     CANVAS_SUBMIT_REF_MISMATCH = 40906
     EPISODE_LAST_REMAINING = 40907
     CANVAS_EPISODE_BUSY = 40908
+    CANVAS_SESSION_BUSY = 40909
     STREAM_REQUEST_CONFLICT = 40920
     STREAM_REPLAY_EXPIRED = 41001
     RESOURCE_NOT_FOUND = 40401
@@ -58,6 +59,7 @@ HTTP_STATUS_BY_ERROR_CODE: dict[ErrorCode, int] = {
     ErrorCode.CANVAS_SUBMIT_REF_MISMATCH: 400,
     ErrorCode.EPISODE_LAST_REMAINING: 409,
     ErrorCode.CANVAS_EPISODE_BUSY: 409,
+    ErrorCode.CANVAS_SESSION_BUSY: 409,
     ErrorCode.STREAM_REQUEST_CONFLICT: 409,
     ErrorCode.STREAM_REPLAY_EXPIRED: 410,
     ErrorCode.RESOURCE_NOT_FOUND: 404,
@@ -105,5 +107,6 @@ DEFAULT_ERROR_MESSAGES: dict[ErrorCode, str] = {
     ErrorCode.STREAM_REPLAY_EXPIRED: "Stream replay has expired",
     ErrorCode.EPISODE_LAST_REMAINING: "project must keep at least one episode",
     ErrorCode.CANVAS_EPISODE_BUSY: "canvas episode is busy",
+    ErrorCode.CANVAS_SESSION_BUSY: "canvas session is busy",
     ErrorCode.INTERNAL_ERROR: "Internal server error",
 }

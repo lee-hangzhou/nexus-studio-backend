@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
-from app.contracts.canvas import CanvasNodeView, CanvasPatchOp, CanvasPatchResponse
+from app.contracts.canvas import CanvasNodeView, CanvasPatchOp, CanvasPatchResponse, GenerationProgress
 from app.server.canvas.domain.enums import (
     CanvasEdgeType,
     CanvasNodeKind,
@@ -11,6 +11,7 @@ from app.server.canvas.domain.enums import (
     CanvasSourcePort,
     CanvasTargetPort,
 )
+from app.server.chat.domain.enums import ChatMessageRole
 from app.server.generation.domain.enums import GenerationKind
 from app.server.generation.domain.models import GenerationModelCapabilities
 from app.server.generation.schemas import (
@@ -240,21 +241,67 @@ class CanvasPort(Protocol):
         expected_revision: int | None = None,
     ) -> tuple[int, CanvasNodeView]: ...
 
-    async def is_turn_completed(self, episode_id: int, client_turn_id: str) -> bool: ...
+    async def is_turn_completed(self, session_id: int, client_turn_id: str) -> bool: ...
 
     async def append_canvas_message(
         self,
         *,
         episode_id: int,
+        session_id: int,
         user_id: int,
-        role: int,
+        role: ChatMessageRole,
         content: str,
         metadata: dict[str, Any],
     ) -> None: ...
 
-    async def find_user_turn_message(self, episode_id: int, client_turn_id: str) -> bool: ...
+    async def find_user_turn_message(self, session_id: int, client_turn_id: str) -> bool: ...
 
     async def touch_episode(self, episode_id: int) -> None: ...
+
+    async def get_session_title(
+        self,
+        *,
+        episode_id: int,
+        session_id: int,
+        user_id: int,
+    ) -> str | None: ...
+
+    async def count_session_user_messages(self, session_id: int) -> int: ...
+
+    async def touch_session(
+        self,
+        *,
+        episode_id: int,
+        session_id: int,
+        user_id: int,
+    ) -> None: ...
+
+    async def apply_session_title_if_unchanged(
+        self,
+        *,
+        episode_id: int,
+        session_id: int,
+        user_id: int,
+        expected_title: str,
+        new_title: str,
+    ) -> tuple[bool, str | None]: ...
+
+    async def publish_episode_graph_event(
+        self,
+        episode_id: int,
+        *,
+        canvas_patch: CanvasPatchResponse | None = None,
+        progress: GenerationProgress | None = None,
+    ) -> None: ...
+
+    async def publish_episode_session_title(
+        self,
+        episode_id: int,
+        *,
+        session_id: int,
+        title: str,
+        updated_at: str,
+    ) -> None: ...
 
 
 @runtime_checkable

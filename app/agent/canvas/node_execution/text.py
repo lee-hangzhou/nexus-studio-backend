@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from uuid import UUID
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -10,7 +11,9 @@ from app.agent.canvas.services.workflow_dispatch import dispatch_node_terminal
 from app.agent.chat.llm import get_adapter
 from app.agent.chat.llm.registry import get_model_spec
 from app.agent.runtime.ports import get_canvas_port
+from app.contracts.canvas import CanvasPatchResponse, GenerationProgress
 from app.server.canvas.domain.enums import CanvasNodeKind, CanvasNodeStatus
+from app.server.canvas.services.episode_fence import canvas_episode_fence
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
 from app.server.infra.config import settings
@@ -19,6 +22,7 @@ from app.server.infra.logger import log_exception, logger
 
 
 def _extract_completion_text(response: dict, *, adapter) -> str:
+    """从网关响应抽出文本正文"""
     parsed = adapter.parse_response(response)
     text = str(parsed.get("content") or "").strip()
     if not text:
@@ -27,6 +31,7 @@ def _extract_completion_text(response: dict, *, adapter) -> str:
 
 
 async def _build_text_system_prompt(project_id: int, episode_id: int) -> str:
+    """拼文本节点系统提示"""
     context = await get_canvas_port().get_project_prompt_context(project_id, episode_id)
     parts = ["你是短剧画布文本节点生成助手。根据用户指令生成可直接使用的文本内容，直接输出正文，不要解释过程。"]
     if context.tone_constraint:
@@ -34,6 +39,32 @@ async def _build_text_system_prompt(project_id: int, episode_id: int) -> str:
     if context.style_constraint:
         parts.append(f"风格约束：{json.dumps(context.style_constraint, ensure_ascii=False, sort_keys=True)}")
     return "\n".join(parts)
+
+
+async def _publish_text_node(
+    episode_id: int,
+    node_id: str,
+    *,
+    rev: int,
+    node_view,
+    status: CanvasNodeStatus,
+) -> None:
+    """文本节点写回后推集级 patch/progress"""
+    await get_canvas_port().publish_episode_graph_event(
+        episode_id,
+        canvas_patch=CanvasPatchResponse(
+            nodes=[node_view],
+            edges=[],
+            deleted_node_ids=[],
+            deleted_edge_ids=[],
+        ),
+        progress=GenerationProgress(
+            node_id=UUID(node_id),
+            task_id=None,
+            status=status,
+            revision=rev,
+        ),
+    )
 
 
 async def execute_text_node_generation(
@@ -46,7 +77,30 @@ async def execute_text_node_generation(
     prompt: str | None = None,
     expected_revision: int | None = None,
 ) -> tuple[int, dict]:
-    """同步生成文本并写回 canvas node，返回 revision 与 patch delta。"""
+    """同步生成文本并写回 canvas node, 返回 revision 与 patch delta"""
+    async with canvas_episode_fence.generation(episode_id):
+        return await _execute_text_node_generation_locked(
+            project_id=project_id,
+            episode_id=episode_id,
+            user_id=user_id,
+            node_id=node_id,
+            model_key=model_key,
+            prompt=prompt,
+            expected_revision=expected_revision,
+        )
+
+
+async def _execute_text_node_generation_locked(
+    *,
+    project_id: int,
+    episode_id: int,
+    user_id: int,
+    node_id: str,
+    model_key: str,
+    prompt: str | None = None,
+    expected_revision: int | None = None,
+) -> tuple[int, dict]:
+    """已持生成栅栏的文本生成实现"""
     canvas = get_canvas_port()
     await require_node_kind(episode_id, node_id, CanvasNodeKind.TEXT)
     resolved_prompt = await resolve_execute_prompt(episode_id, node_id, prompt_override=prompt)
@@ -84,6 +138,13 @@ async def execute_text_node_generation(
             error_message=str(exc.message),
             expected_revision=rev,
         )
+        await _publish_text_node(
+            episode_id,
+            node_id,
+            rev=rev,
+            node_view=node_view,
+            status=CanvasNodeStatus.FAILED,
+        )
         raise
     except Exception as exc:
         log_exception(
@@ -101,6 +162,13 @@ async def execute_text_node_generation(
             error_message=str(exc),
             expected_revision=rev,
         )
+        await _publish_text_node(
+            episode_id,
+            node_id,
+            rev=rev,
+            node_view=node_view,
+            status=CanvasNodeStatus.FAILED,
+        )
         raise AppError(ErrorCode.GATEWAY_PROTOCOL_ERROR, "文本生成失败", {"node_id": node_id}) from exc
 
     rev, node_view = await canvas.update_node_text_output(
@@ -110,6 +178,13 @@ async def execute_text_node_generation(
         output_text=output_text,
         error_message="",
         expected_revision=rev,
+    )
+    await _publish_text_node(
+        episode_id,
+        node_id,
+        rev=rev,
+        node_view=node_view,
+        status=CanvasNodeStatus.SUCCESS,
     )
     await dispatch_node_terminal(
         project_id,

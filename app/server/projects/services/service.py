@@ -230,24 +230,35 @@ class EpisodeService:
             raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "episode not found")
         return (await self._views([row], user_id=user_id))[0]
 
-    async def delete(self, user_id: int, episode_id: int) -> None:
+    async def raise_if_canvas_busy(self, episode_id: int) -> None:
+        """画布节点/任务在途则禁止删集, 零副作用"""
+        canvas_state = await self._canvas_lifecycle.get_delete_state(episode_id)
+        if canvas_state.running_node_count or await self._generation_tasks.has_non_terminal(
+            canvas_state.task_ids
+        ):
+            raise AppError(ErrorCode.CANVAS_EPISODE_BUSY, "canvas episode is busy")
+
+    async def delete(self, user_id: int, episode_id: int, *, require_idle: bool = True) -> None:
+        """软删集; 调用方须已完成会话清理
+
+        require_idle=True 时再检 busy; 删集用例已在持锁窗口入口检过则传 False, 避免半死后失败
+        """
         async with in_transaction():
             episode_snapshot = await self._episodes.get_active(episode_id)
             if episode_snapshot is None:
                 raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "episode not found")
-            project_id = int(episode_snapshot.project_id)
+            project_id = episode_snapshot.project_id
             project = await self._projects.get_owned_for_update(user_id, project_id)
             if project is None:
                 raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "project not found")
             episode = await self._episodes.get_active_for_update(episode_id)
-            if episode is None or int(episode.project_id) != project_id:
+            if episode is None or episode.project_id != project_id:
                 raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "episode not found")
             if await self._episodes.count_active(project_id) <= 1:
                 raise AppError(ErrorCode.EPISODE_LAST_REMAINING, "project must keep at least one episode")
 
-            canvas_state = await self._canvas_lifecycle.get_delete_state(episode_id)
-            if canvas_state.running_node_count or await self._generation_tasks.has_non_terminal(canvas_state.task_ids):
-                raise AppError(ErrorCode.CANVAS_EPISODE_BUSY, "canvas episode is busy")
+            if require_idle:
+                await self.raise_if_canvas_busy(episode_id)
 
             await self._canvas_lifecycle.delete_all(episode_id)
             if not await self._episodes.soft_delete(episode_id):

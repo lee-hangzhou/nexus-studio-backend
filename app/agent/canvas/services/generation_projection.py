@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from app.agent.canvas.services.workflow_dispatch import dispatch_node_terminal
-from app.agent.canvas.turn.generation_hub import canvas_generation_hub
 from app.agent.runtime.ports import get_canvas_port
 from app.contracts.canvas import CanvasPatchResponse, GenerationProgress
 from app.server.canvas.domain.enums import CanvasNodeStatus
@@ -11,7 +10,7 @@ from app.server.ports.product import CanvasTaskProjectionDTO
 
 
 async def project_from_task(task_id: int, user_id: int) -> CanvasPatchResponse | None:
-    """投影生成任务，并在 Agent 编排层发布 SSE 与推进下游节点"""
+    """投影生成任务, 经 Port 发布集级事件并推进下游"""
     projection = await get_canvas_port().project_generation_task(task_id, user_id)
     if projection is None:
         return None
@@ -29,7 +28,7 @@ async def project_from_task(task_id: int, user_id: int) -> CanvasPatchResponse |
 
 
 async def publish_canvas_node_result(projection: CanvasTaskProjectionDTO) -> None:
-    """发布节点投影到 generation hub, 并在终态推进下游"""
+    """经 Port 发布节点投影, 终态推进下游"""
     payload = projection.patch
     if payload is None:
         return
@@ -48,17 +47,15 @@ async def publish_canvas_node_result(projection: CanvasTaskProjectionDTO) -> Non
             f"canvas patch missing node {projection.node_id} for generation progress",
         )
     progress = GenerationProgress(
-        node_id=projection.node_id,
+        node_id=node_view.id,
         task_id=projection.task_id,
         status=projection.status,
         revision=node_view.revision,
     )
-    await canvas_generation_hub.publish(
+    await get_canvas_port().publish_episode_graph_event(
         projection.episode_id,
-        {
-            "canvas_patch": payload.model_dump(mode="json"),
-            "progress": progress.model_dump(mode="json"),
-        },
+        canvas_patch=payload,
+        progress=progress,
     )
     if projection.status in {CanvasNodeStatus.SUCCESS, CanvasNodeStatus.FAILED}:
         await dispatch_node_terminal(

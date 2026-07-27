@@ -10,6 +10,7 @@ from app.server.canvas.domain.enums import (
     CanvasNodeKind,
     CanvasNodeStatus,
     CanvasPatchOperation,
+    CanvasSessionStatus,
     CanvasSourcePort,
     CanvasTargetPort,
 )
@@ -176,3 +177,34 @@ class CanvasRevisionConflictItem(CanvasContract):
     id: UUID
     expected_revision: int
     actual_revision: int
+
+
+class CanvasSessionView(CanvasContract):
+    """画布 Agent 会话视图"""
+
+    id: int
+    episode_id: int
+    title: str
+    status: CanvasSessionStatus
+    is_default: bool
+    created_at: str
+    updated_at: str
+
+
+class CanvasSessionCreateRequest(CanvasContract):
+    """新建画布会话"""
+
+    title: str | None = None
+
+
+class CanvasSessionUpdateRequest(CanvasContract):
+    """更新画布会话标题"""
+
+    session_id: int
+    title: str = Field(min_length=1, max_length=40)
+
+
+class CanvasSessionIdRequest(CanvasContract):
+    """按 session_id 操作"""
+
+    session_id: int

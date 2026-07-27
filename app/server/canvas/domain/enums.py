@@ -1,4 +1,9 @@
-from enum import StrEnum
+from enum import IntEnum, StrEnum
+
+
+class CanvasSessionStatus(IntEnum):
+    ACTIVE = 1
+    CLOSED = 2
 
 
 class CanvasNodeKind(StrEnum):

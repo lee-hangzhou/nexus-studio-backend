@@ -21,6 +21,7 @@ from app.server.canvas.persistence.episode_meta import CanvasEpisodeMeta
 from app.server.canvas.persistence.messages import CanvasMessages
 from app.server.canvas.persistence.nodes import CanvasNodes
 from app.server.canvas.persistence.operations import CanvasOperations
+from app.server.canvas.services.episode_events import publish_canvas_patch
 from app.server.canvas.schemas.api import (
     CanvasEdgeView,
     CanvasMessageView,
@@ -183,11 +184,15 @@ class CanvasService:
         self,
         scope: CanvasScope,
         *,
+        session_id: int,
         before_id: int | None,
         limit: int,
     ) -> list[CanvasMessageView]:
-        """按游标倒序分页列出画布消息"""
-        query = CanvasMessages.filter(episode_id=scope.episode_id).order_by("-created_at")
+        """按 session 游标倒序分页列出画布消息"""
+        query = CanvasMessages.filter(
+            episode_id=scope.episode_id,
+            session_id=session_id,
+        ).order_by("-created_at")
         if before_id is not None:
             query = query.filter(id__lt=before_id)
         rows = await query.limit(limit)
@@ -454,13 +459,15 @@ class CanvasService:
             )
 
         await refresh_node_asset_urls(changed_nodes, scope=scope)
-        return CanvasPatchResponse(
+        result = CanvasPatchResponse(
             op_id=op_id,
             nodes=changed_nodes,
             edges=changed_edges,
             deleted_node_ids=deleted_node_ids,
             deleted_edge_ids=deleted_edge_ids,
         )
+        await publish_canvas_patch(scope.episode_id, result)
+        return result
 
     def _require_entity_revision(
         self,

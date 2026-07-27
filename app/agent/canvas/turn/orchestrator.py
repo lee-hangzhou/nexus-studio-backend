@@ -1,5 +1,3 @@
-"""Canvas turn thin entry: lock + CanvasMount + stream_agent_turn."""
-
 from __future__ import annotations
 
 import asyncio
@@ -24,6 +22,7 @@ async def stream_canvas_turn(
     *,
     project_id: int,
     episode_id: int,
+    session_id: int,
     user_id: int,
     content: str,
     model_key: str,
@@ -35,17 +34,24 @@ async def stream_canvas_turn(
     lock_held: bool = False,
 ) -> AsyncIterator[str]:
     turn_id = turn_id or uuid4().hex
-    bind_context(user_id=user_id, project_id=project_id, episode_id=episode_id, turn_id=turn_id)
+    bind_context(
+        user_id=user_id,
+        project_id=project_id,
+        episode_id=episode_id,
+        session_id=session_id,
+        turn_id=turn_id,
+    )
     acquired = False
     try:
         if not lock_held:
-            await canvas_turn_lock.acquire(episode_id, turn_id)
+            await canvas_turn_lock.acquire(session_id, turn_id)
             acquired = True
 
         ctx = CanvasMountContext(
             user_id=user_id,
             project_id=project_id,
             episode_id=episode_id,
+            session_id=session_id,
             turn_id=turn_id,
             cancel_event=cancel_event,
             checkpointer=get_chat_checkpointer(),
@@ -60,6 +66,7 @@ async def stream_canvas_turn(
             "canvas.turn.start",
             project_id=project_id,
             episode_id=episode_id,
+            session_id=session_id,
             turn_id=turn_id,
             mode=mode,
             model_key=ctx.resolved_model_key,
@@ -69,6 +76,7 @@ async def stream_canvas_turn(
             yield chunk
     except AppError as exc:
         code = {
+            int(ErrorCode.CANVAS_SESSION_BUSY): StreamErrorCode.CANVAS_SESSION_BUSY.value,
             int(ErrorCode.CANVAS_EPISODE_BUSY): StreamErrorCode.CANVAS_EPISODE_BUSY.value,
             int(ErrorCode.CANVAS_DUPLICATE_TURN): StreamErrorCode.CANVAS_DUPLICATE_TURN.value,
         }.get(exc.code, "internal")
@@ -87,6 +95,7 @@ async def stream_canvas_turn(
             exc=exc,
             project_id=project_id,
             episode_id=episode_id,
+            session_id=session_id,
             turn_id=turn_id,
         )
         yield encode_sse_frame(
@@ -99,13 +108,14 @@ async def stream_canvas_turn(
         )
     finally:
         if acquired:
-            await canvas_turn_lock.release(episode_id, turn_id)
+            await canvas_turn_lock.release(session_id, turn_id)
 
 
 async def stream_canvas_resume(
     *,
     project_id: int,
     episode_id: int,
+    session_id: int,
     user_id: int,
     turn_id: str,
     tool_call_id: str,
@@ -118,7 +128,7 @@ async def stream_canvas_resume(
     acquired = False
     try:
         if not lock_held:
-            await canvas_turn_lock.acquire(episode_id, turn_id)
+            await canvas_turn_lock.acquire(session_id, turn_id)
             acquired = True
 
         decision = (
@@ -130,6 +140,7 @@ async def stream_canvas_resume(
             user_id=user_id,
             project_id=project_id,
             episode_id=episode_id,
+            session_id=session_id,
             turn_id=turn_id,
             cancel_event=cancel_event,
             checkpointer=get_chat_checkpointer(),
@@ -147,4 +158,4 @@ async def stream_canvas_resume(
             yield chunk
     finally:
         if acquired:
-            await canvas_turn_lock.release(episode_id, turn_id)
+            await canvas_turn_lock.release(session_id, turn_id)

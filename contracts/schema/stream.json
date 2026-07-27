@@ -461,6 +461,42 @@
       "title": "CanvasPosition",
       "type": "object"
     },
+    "CanvasSessionTitleFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "integer"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "type": {
+          "const": "canvas_session_title",
+          "title": "Type",
+          "type": "string"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "session_id",
+        "title",
+        "updated_at"
+      ],
+      "title": "CanvasSessionTitleFrame",
+      "type": "object"
+    },
     "CanvasSourcePort": {
       "enum": [
         "output_text",
@@ -717,6 +753,7 @@
         "agent_recovery_exhausted",
         "canvas_duplicate_turn",
         "canvas_episode_busy",
+        "canvas_session_busy",
         "empty_response",
         "execution_lost",
         "generation_failed",
@@ -1045,6 +1082,7 @@
       "browser_frame": "#/$defs/BrowserFrameEvent",
       "cancelled": "#/$defs/CancelledFrame",
       "canvas_patch": "#/$defs/CanvasPatchFrame",
+      "canvas_session_title": "#/$defs/CanvasSessionTitleFrame",
       "conversation_title": "#/$defs/ConversationTitleFrame",
       "done": "#/$defs/DoneFrame",
       "error": "#/$defs/ErrorFrame",
@@ -1082,6 +1120,9 @@
     },
     {
       "$ref": "#/$defs/ConversationTitleFrame"
+    },
+    {
+      "$ref": "#/$defs/CanvasSessionTitleFrame"
     },
     {
       "$ref": "#/$defs/CanvasPatchFrame"

@@ -77,6 +77,13 @@ class ConversationTitleFrame(StreamContract):
     updated_at: str
 
 
+class CanvasSessionTitleFrame(StreamContract):
+    type: Literal[StreamFrameType.CANVAS_SESSION_TITLE]
+    session_id: int
+    title: str
+    updated_at: str
+
+
 class CanvasPatchFrame(StreamContract):
     type: Literal[StreamFrameType.CANVAS_PATCH]
     data: CanvasPatchResponse
@@ -134,6 +141,7 @@ StreamFrame = Annotated[
     | DoneFrame
     | CancelledFrame
     | ConversationTitleFrame
+    | CanvasSessionTitleFrame
     | CanvasPatchFrame
     | GenerationProgressFrame
     | ToolPendingFrame

@@ -387,6 +387,115 @@
       "title": "CanvasRevisionConflictItem",
       "type": "object"
     },
+    "CanvasSessionCreateRequest": {
+      "additionalProperties": false,
+      "description": "新建画布会话",
+      "properties": {
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        }
+      },
+      "title": "CanvasSessionCreateRequest",
+      "type": "object"
+    },
+    "CanvasSessionIdRequest": {
+      "additionalProperties": false,
+      "description": "按 session_id 操作",
+      "properties": {
+        "session_id": {
+          "title": "Session Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "title": "CanvasSessionIdRequest",
+      "type": "object"
+    },
+    "CanvasSessionStatus": {
+      "enum": [
+        1,
+        2
+      ],
+      "title": "CanvasSessionStatus",
+      "type": "integer"
+    },
+    "CanvasSessionUpdateRequest": {
+      "additionalProperties": false,
+      "description": "更新画布会话标题",
+      "properties": {
+        "session_id": {
+          "title": "Session Id",
+          "type": "integer"
+        },
+        "title": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id",
+        "title"
+      ],
+      "title": "CanvasSessionUpdateRequest",
+      "type": "object"
+    },
+    "CanvasSessionView": {
+      "additionalProperties": false,
+      "description": "画布 Agent 会话视图",
+      "properties": {
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "episode_id": {
+          "title": "Episode Id",
+          "type": "integer"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "is_default": {
+          "title": "Is Default",
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/$defs/CanvasSessionStatus"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "episode_id",
+        "title",
+        "status",
+        "is_default",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "CanvasSessionView",
+      "type": "object"
+    },
     "CanvasSnapshot": {
       "additionalProperties": false,
       "properties": {
@@ -1040,6 +1149,18 @@
           "$ref": "#/$defs/DisconnectNodesOp"
         }
       ]
+    },
+    {
+      "$ref": "#/$defs/CanvasSessionView"
+    },
+    {
+      "$ref": "#/$defs/CanvasSessionCreateRequest"
+    },
+    {
+      "$ref": "#/$defs/CanvasSessionUpdateRequest"
+    },
+    {
+      "$ref": "#/$defs/CanvasSessionIdRequest"
     }
   ]
 }
