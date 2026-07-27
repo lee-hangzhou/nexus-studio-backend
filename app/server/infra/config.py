@@ -50,8 +50,15 @@ class Settings(BaseSettings):
 
 
     REDIS_URL: str = Field(default="redis://localhost:6379/0")
-    # Per-process pool; total ≈ workers × this value (stay well below Redis maxclients).
+    # 短命令共享池 (GET/SET/锁/publish)。禁止把长生命周期 Pub/Sub 放进此池。
+    # Per-process; total ≈ workers × this value (stay well below Redis maxclients).
     REDIS_MAX_CONNECTIONS: int = Field(default=50)
+
+    # 画布集级 /events SSE 的 Redis Pub/Sub 独立池 (每条订阅独占一条连接)。
+    CANVAS_EPISODE_EVENTS_REDIS_MAX_CONNECTIONS: int = Field(default=256, gt=0)
+    CANVAS_EPISODE_EVENTS_REDIS_ACQUIRE_TIMEOUT_SEC: float = Field(default=20.0, gt=0)
+    CANVAS_EPISODE_EVENTS_REDIS_SOCKET_TIMEOUT_SEC: float = Field(default=5.0, gt=0)
+    CANVAS_EPISODE_EVENTS_ACTIVE_WARN_THRESHOLD: int = Field(default=200, gt=0)
 
     # 缓存（MultiLevelCache）
     CACHE_L1_TTL: int = Field(default=10)            # 进程内 L1 默认 TTL，短以控制跨实例脏读
@@ -101,7 +108,7 @@ class Settings(BaseSettings):
     GATEWAY_API_KEY: str = Field(default="")
     GATEWAY_USER_ID: str = Field(default="dream-drama")
     GATEWAY_CALLBACK_BASE_URL: str = Field(default="http://localhost:8000")
-    GATEWAY_TEXT_EMBEDDING_MODEL: str = Field(default="qwen/qwen3-embedding-8b")
+    GATEWAY_TEXT_EMBEDDING_MODEL: str = Field(default="text-embedding-v4")
     GATEWAY_MULTIMODAL_EMBEDDING_MODEL: str = Field(default="google/gemini-embedding-2-preview")
     GATEWAY_EMBEDDING_ENCODING_FORMAT: str = Field(default="float")
     GATEWAY_TIMEOUTS: GatewayTimeoutConfig = Field(default_factory=GatewayTimeoutConfig)
@@ -152,8 +159,8 @@ class Settings(BaseSettings):
     CHAT_TURN_LOCK_TTL_SEC: int = Field(default=1800)
     CHAT_HEARTBEAT_INTERVAL_SEC: int = Field(default=15)
     MEMORY_STORE_ENABLED: bool = Field(default=True)
-    MEMORY_EMBEDDING_MODEL: str = Field(default="qwen/qwen3-embedding-8b")
-    MEMORY_VECTOR_DIMENSION: int = Field(default=3072)
+    MEMORY_EMBEDDING_MODEL: str = Field(default="text-embedding-v4")
+    MEMORY_VECTOR_DIMENSION: int = Field(default=1024)
     MEMORY_TOOL_TIMEOUT_SEC: int = Field(default=60, ge=5, le=180)
     # 覆盖网关 embedding 慢请求与排队；过短会导致 project 语义注入每轮 timeout
     MEMORY_INJECTION_TIMEOUT_SEC: int = Field(default=60, ge=1, le=180)
@@ -199,7 +206,7 @@ class Settings(BaseSettings):
         default_factory=ObjectStorageTimeoutConfig
     )
 
-    ASSET_VECTOR_DIMENSION: int = Field(default=3072)
+    ASSET_VECTOR_DIMENSION: int = Field(default=1024)
     ASSET_RETRIEVAL_LIMIT: int = Field(default=12)
 
     AGENT_MAX_RETRIES: int = Field(default=2)

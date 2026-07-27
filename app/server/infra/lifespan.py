@@ -16,6 +16,7 @@ from app.server.infra.database import db
 from app.server.infra.gateway import gateway_client
 from app.server.infra.logger import logger
 from app.server.infra.memory_store import create_memory_store
+from app.server.canvas.services.episode_events import canvas_episode_events_bus
 from app.server.infra.redis import redis_client
 from app.server.persistence import TORTOISE_ORM_MODEL_MODULES
 
@@ -39,6 +40,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         await redis_client.connect()
         logger.info("Redis connected")
+
+        await canvas_episode_events_bus.connect()
+        logger.info("Canvas episode events bus connected")
 
         await replay_store.connect()
         logger.info("SSE replay store connected")
@@ -65,6 +69,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 set_chat_checkpointer(None)
                 set_memory_store(None)
                 await replay_store.disconnect()
+                await canvas_episode_events_bus.disconnect()
                 await gateway_client.close()
                 await redis_client.disconnect()
                 db.mark_shutdown()

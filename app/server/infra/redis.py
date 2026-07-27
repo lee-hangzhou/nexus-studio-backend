@@ -254,7 +254,12 @@ class RedisClient(Singleton):
         return int(result)
 
     def pubsub(self) -> Any:
-        """Get a PubSub instance."""
+        """短命令客户端的 PubSub。
+
+        长生命周期订阅 (如画布 /events) 禁止走此路径: redis-py Pub/Sub
+        会独占池内连接直到 aclose, 会打爆 REDIS_MAX_CONNECTIONS。
+        请用 canvas_episode_events_bus / 独立 Blocking 池。
+        """
         client = self._ensure_connected()
         return client.pubsub()
 
