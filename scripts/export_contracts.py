@@ -34,7 +34,13 @@ from app.contracts.gateway import (
     GatewayVideoSubmitRequest,
 )
 from app.contracts.generation import GenerateParamOptions
-from app.contracts.turn_content import TurnSkillBlock, TurnTextBlock, TurnUserInput
+from app.contracts.turn_content import (
+    TurnMediaBlock,
+    TurnNodeBlock,
+    TurnSkillBlock,
+    TurnTextBlock,
+    TurnUserInput,
+)
 from app.contracts.stream import StreamFrame
 from app.server.generation.schemas import (
     GenerateModelItem,
@@ -118,7 +124,9 @@ CONTRACTS = {
     "gateway": TypeAdapter(GatewayContracts),
     "projects": TypeAdapter(ProjectContracts),
     "stream": TypeAdapter(StreamFrame),
-    "turn_content": TypeAdapter(TurnUserInput | TurnTextBlock | TurnSkillBlock),
+    "turn_content": TypeAdapter(
+        TurnUserInput | TurnTextBlock | TurnSkillBlock | TurnMediaBlock | TurnNodeBlock
+    ),
 }
 
 

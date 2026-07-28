@@ -15,8 +15,7 @@ class SubmitManualRefInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    asset_id: int | None = None
-    material_id: int | None = None
+    asset_id: int = Field(ge=1)
 
 
 class SubmitNodeExecuteInput(BaseModel):
@@ -35,7 +34,6 @@ class SubmitNodeExecuteInput(BaseModel):
     count: int = Field(default=1, ge=1, le=6)
     duration: int | None = Field(default=None, ge=3, le=15)
     reference_mode: ReferenceMode | None = None
-    ref_attachment_ids: list[int] = Field(default_factory=list)
     ref_asset_ids: list[int] = Field(default_factory=list)
     submit_content: list[dict[str, Any]] | None = Field(
         default=None,
@@ -65,7 +63,6 @@ class SubmitNodeExecuteInput(BaseModel):
             count=self.count,
             duration=self.duration,
             reference_mode=self.reference_mode,
-            ref_attachment_ids=self.ref_attachment_ids,
             ref_asset_ids=self.ref_asset_ids,
             expected_revision=self.expected_revision,
         )

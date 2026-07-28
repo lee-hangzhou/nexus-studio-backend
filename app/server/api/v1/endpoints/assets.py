@@ -11,7 +11,7 @@ from app.server.assets.schemas import (
     AssetUpdateRequest,
     AssetViewResponse,
 )
-from app.server.assets.services.service import asset_service
+from app.server.assets.services.service import LIBRARY_SOURCE_TYPES, asset_service
 from app.server.assets.persistence.assets import Assets
 from app.server.api.schemas import Response
 from app.server.projects.services.cover import cover_service
@@ -53,7 +53,11 @@ async def list_assets(request: Request, body: AssetListRequest) -> Response[Asse
         query = query.filter(filename__icontains=keyword)
     if body.asset_type != "all":
         query = query.filter(asset_type=body.asset_type)
-    if body.source_type != "all":
+    if body.source_type == "all":
+        pass
+    elif body.source_type == "library":
+        query = query.filter(source_type__in=list(LIBRARY_SOURCE_TYPES))
+    else:
         query = query.filter(source_type=body.source_type)
     if body.favorites_only:
         query = query.filter(favorite=True)

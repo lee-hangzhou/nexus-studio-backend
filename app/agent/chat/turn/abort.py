@@ -160,7 +160,13 @@ async def resolve_gate_interrupt(
         audit=[],
         loop_guard=loop_guard,
     )
-    tools = build_chat_turn_tools(ctx, enable_tools=True, user_id=user_id)
+    tools = build_chat_turn_tools(
+        ctx,
+        enable_tools=True,
+        user_id=user_id,
+        tool_asset_ids=frozenset(),
+        asset_media_types={},
+    )
     spec = get_model_spec(model_key)
     llm = GatewayChatModel(model_key=model_key, spec=spec)
     agent = build_chat_agent(

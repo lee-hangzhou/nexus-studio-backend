@@ -7,7 +7,7 @@ class Assets(BaseModel):
     """System-wide asset registry.
 
     Assets are the durable resource truth for chat uploads, generate results,
-    and canvas node outputs. Preview URLs are derived from storage_key at read
+    and library/manual assets. Preview URLs are derived from storage_key at read
     time and are never stored here.
     """
 

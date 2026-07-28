@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
 from app.agent.chat.stream.encoder import encode_sse_frame
@@ -16,6 +16,8 @@ from app.agent.runtime.stream.replay import (
 )
 from app.server.api.schemas import Response
 from app.server.api.use_cases import canvas_episode_use_cases
+from app.server.assets.schemas import AssetViewResponse
+from app.server.assets.services.service import asset_service
 from app.server.canvas.domain.constants import CANVAS_SESSION_TURN_LOCK_KEY_TEMPLATE
 from app.server.canvas.schemas.api import (
     CanvasCancelRequest,
@@ -37,6 +39,7 @@ from app.server.canvas.services.canvas_service import CanvasRevisionConflictErro
 from app.server.canvas.services.episode_events import iter_episode_events
 from app.server.canvas.services.episode_fence import canvas_episode_fence
 from app.server.canvas.services.session_service import canvas_session_service
+from app.server.chat.services.capabilities import validate_upload_size, validate_upload_type
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
 from app.server.projects.services.service import canvas_scope_service
@@ -237,6 +240,48 @@ async def list_canvas_messages(
         limit=body.limit,
     )
     return Response(data=items)
+
+
+@router.post("/episodes/{episode_id}/agent-upload")
+async def upload_canvas_agent_asset(
+    episode_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+) -> Response[AssetViewResponse]:
+    """上传画布 Agent 会话素材, 写入 assets(agent_upload)"""
+    user_id: int = request.state.user_id
+    scope = await canvas_scope_service.require_write_scope(user_id, episode_id)
+    filename = file.filename if file.filename else "file"
+    mime_type = file.content_type if file.content_type else "application/octet-stream"
+    validate_upload_type(filename, mime_type)
+    await file.seek(0)
+    raw = await file.read()
+    validate_upload_size(filename=filename, mime_type=mime_type, size=len(raw))
+    row = await asset_service.upload_agent_asset(
+        user_id=user_id,
+        project_id=scope.project_id,
+        filename=filename,
+        mime_type=mime_type,
+        raw_bytes=raw,
+    )
+    view = asset_service.to_view(row)
+    return Response(
+        data=AssetViewResponse(
+            id=view.id,
+            project_id=view.project_id,
+            filename=view.filename,
+            mime_type=view.mime_type,
+            asset_type=view.asset_type,
+            source_type=view.source_type,
+            source_id=view.source_id,
+            metadata=view.metadata,
+            status=view.status,
+            favorite=view.favorite,
+            preview_url=view.preview_url,
+            created_at=row.created_at.isoformat() if row.created_at else "",
+            updated_at=row.updated_at.isoformat() if row.updated_at else "",
+        )
+    )
 
 
 @router.post("/episodes/{episode_id}/turn")

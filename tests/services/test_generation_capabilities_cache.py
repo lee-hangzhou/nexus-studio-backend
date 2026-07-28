@@ -46,9 +46,7 @@ def _service(*, gateway: MagicMock, model_cache: MagicMock) -> GenerationService
     return GenerationService(
         task_repository=MagicMock(),
         asset_repository=MagicMock(),
-        attachment_repository=MagicMock(),
         gateway_client=gateway,
-        attachment_service=MagicMock(),
         asset_service=MagicMock(),
         object_storage=MagicMock(),
         model_cache=model_cache,

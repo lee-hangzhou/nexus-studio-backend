@@ -20,7 +20,6 @@ class SubmitNodeGenerationInput(BaseModel):
     count: int = Field(default=1, ge=1, le=6)
     duration: int | None = Field(default=None, ge=3, le=15)
     reference_mode: ReferenceMode | None = None
-    ref_attachment_ids: list[int] = Field(default_factory=list)
     ref_asset_ids: list[int] = Field(default_factory=list)
     expected_revision: int | None = Field(
         default=None,

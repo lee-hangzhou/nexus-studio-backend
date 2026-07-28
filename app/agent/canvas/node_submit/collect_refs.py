@@ -10,8 +10,9 @@ from app.agent.canvas.node_submit.types import (
 _MEDIA_SEGMENT_TYPES = frozenset({"image_url", "video_url", "audio_url"})
 
 
-def _push_unique_id(target: list[int], seen: set[int], value: int | None) -> None:
-    if value is None or value <= 0 or value in seen:
+def _push_unique_id(target: list[int], seen: set[int], value: int) -> None:
+    """按首次出现顺序写入去重 id"""
+    if value <= 0 or value in seen:
         return
     seen.add(value)
     target.append(value)
@@ -22,7 +23,7 @@ def pick_connected_reference_asset_ids(
     nodes: list[dict],
     edges: list[dict],
 ) -> list[int]:
-    """移植 pickConnectedReferenceAssetIds：edges 数组顺序，REFERENCE_ASSET + SUCCESS。"""
+    """按 edges 顺序收集 REFERENCE_ASSET 连线的成功节点 output_asset_ids"""
     node_by_id = {str(node["id"]): node for node in nodes}
     ids: list[int] = []
     seen: set[int] = set()
@@ -52,6 +53,7 @@ def pick_connected_reference_asset_ids(
 
 
 def collect_asset_ids_from_content(content: WorkflowPromptContent) -> list[int]:
+    """从 WorkflowPromptContent 媒体段收集 assetId"""
     ids: list[int] = []
     seen: set[int] = set()
     for seg in content:
@@ -66,11 +68,12 @@ def collect_asset_ids_from_content(content: WorkflowPromptContent) -> list[int]:
 
 
 def collect_asset_ids_from_mention_items(items: list[MentionItemRef]) -> list[int]:
+    """从 media mention 列表收集 asset_id; 非法 id fail-closed"""
     ids: list[int] = []
     seen: set[int] = set()
     for item in items:
-        if item.type == "text":
-            continue
+        if item.asset_id <= 0:
+            raise ValueError(f"mention item asset_id must be >= 1, got {item.asset_id}")
         _push_unique_id(ids, seen, item.asset_id)
     return ids
 
@@ -82,11 +85,9 @@ def collect_submit_material_refs(
     manual_refs: list[ManualMaterialRef] | None = None,
     preview_media_refs: list[MentionItemRef] | None = None,
 ) -> SubmitMaterialRefs:
-    """移植 collectSubmitMaterialRefs 四段合并与去重顺序。"""
+    """四段合并去重收集 submit 用 ref_asset_ids"""
     ref_asset_ids: list[int] = []
-    ref_attachment_ids: list[int] = []
     seen_assets: set[int] = set()
-    seen_attachments: set[int] = set()
 
     for asset_id in connected_asset_ids:
         _push_unique_id(ref_asset_ids, seen_assets, asset_id)
@@ -98,10 +99,8 @@ def collect_submit_material_refs(
         _push_unique_id(ref_asset_ids, seen_assets, asset_id)
 
     for ref in manual_refs or []:
+        if ref.asset_id <= 0:
+            raise ValueError(f"manual_ref asset_id must be >= 1, got {ref.asset_id}")
         _push_unique_id(ref_asset_ids, seen_assets, ref.asset_id)
-        _push_unique_id(ref_attachment_ids, seen_attachments, ref.material_id)
 
-    return SubmitMaterialRefs(
-        ref_asset_ids=tuple(ref_asset_ids),
-        ref_attachment_ids=tuple(ref_attachment_ids),
-    )
+    return SubmitMaterialRefs(ref_asset_ids=tuple(ref_asset_ids))

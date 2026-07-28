@@ -177,15 +177,16 @@ async def persist_user_message(
     conversation_id: int,
     content: str,
     turn_human: HumanMessage,
-    attachment_ids: list[int],
+    bind_attachment_ids: list[int],
     turn_id: str,
     client_turn_id: str | None,
-    input_snapshot: dict | None = None,
+    input_snapshot: dict,
 ) -> ChatMessages:
+    """持久化用户消息并绑定可选 chat_attachments 行"""
     metadata = UserMessageMetadata(
         turn_id=turn_id,
         client_turn_id=client_turn_id,
-        attachment_ids=attachment_ids,
+        attachment_ids=list(bind_attachment_ids),
         input=input_snapshot,
     )
     row = await ChatMessages.create(
@@ -199,7 +200,7 @@ async def persist_user_message(
     await chat_attachment_service.bind_to_message(
         user_id=user_id,
         conversation_id=conversation_id,
-        attachment_ids=attachment_ids,
+        attachment_ids=bind_attachment_ids,
         message_id=row.id,
     )
     return row

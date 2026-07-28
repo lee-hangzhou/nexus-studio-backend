@@ -1,3 +1,5 @@
+import asyncio
+import hashlib
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -42,6 +44,7 @@ from app.agent.chat.turn.trace import log_stage
 from app.contracts.metadata import ToolAuditMetadata
 from app.server.infra.config import settings
 from app.server.infra.object_storage import object_storage
+from app.server.assets.services.service import ASSET_SOURCE_ASSISTANT_OUTPUT, asset_service
 from app.server.chat.domain.enums import AttachmentSource
 from app.server.chat.persistence.attachments import ChatAttachments
 
@@ -278,6 +281,8 @@ def build_langchain_tools(ctx: ChatToolContext, enable_tools: bool = True) -> Li
         upload_name = filename or target.name
         storage_key = f"chat/{ctx.user_id}/{ctx.conversation_id}/{uuid4().hex}/{upload_name}"
         file_size = target.stat().st_size
+        raw_bytes = await asyncio.to_thread(target.read_bytes)
+        file_sha256 = hashlib.sha256(raw_bytes).hexdigest()
         await object_storage.put_file_path(storage_key, target)
         row = await ChatAttachments.create(
             conversation_id=ctx.conversation_id,
@@ -289,10 +294,28 @@ def build_langchain_tools(ctx: ChatToolContext, enable_tools: bool = True) -> Li
             size=file_size,
             source=AttachmentSource.ASSISTANT_TOOL.value,
             is_attached=True,
+            file_sha256=file_sha256,
         )
+        asset = await asset_service.create_asset(
+            user_id=ctx.user_id,
+            storage_key=storage_key,
+            filename=upload_name,
+            mime_type=row.mime_type,
+            source_type=ASSET_SOURCE_ASSISTANT_OUTPUT,
+            source_id=row.id,
+            metadata={
+                "conversation_id": ctx.conversation_id,
+                "attachment_id": row.id,
+                "size": file_size,
+                "file_sha256": file_sha256,
+            },
+        )
+        row.asset_id = asset.id
+        await row.save(update_fields=["asset_id"])
         ctx.published_artifacts.append(
             PublishResult(
                 attachment_id=row.id,
+                asset_id=asset.id,
                 filename=upload_name,
                 mime_type=row.mime_type,
                 storage_key=storage_key,

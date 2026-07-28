@@ -16,7 +16,7 @@ class ListAssetsInput(BaseModel):
     asset_type: str | None = Field(default=None, description="可选资产类型：image | video | audio | text")
     source_type: str | None = Field(
         default=None,
-        description="可选来源过滤，例如 chat_upload、generate_result、canvas_node_output",
+        description="可选来源过滤，例如 chat_upload、generate_result、generate_material",
     )
     limit: int = Field(default=20, ge=1, le=100)
 

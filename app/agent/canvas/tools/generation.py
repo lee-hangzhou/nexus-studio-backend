@@ -59,7 +59,6 @@ async def _submit_node_generation_locked(
             mode="agent",
             prompt=args.prompt,
             ref_asset_ids=args.ref_asset_ids,
-            ref_attachment_ids=args.ref_attachment_ids,
         )
         req = SubmitGenerateRequest(
             kind=args.kind,
@@ -71,7 +70,6 @@ async def _submit_node_generation_locked(
             count=args.count,
             duration=args.duration,
             reference_mode=args.reference_mode,
-            ref_attachment_ids=list(prepared.ref_attachment_ids),
             ref_asset_ids=list(prepared.ref_asset_ids),
         )
         try:

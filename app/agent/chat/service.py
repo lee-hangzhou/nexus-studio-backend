@@ -16,6 +16,7 @@ from app.agent.chat.turn.abort import TurnAbortReason, abort_user_turn, clear_st
 from app.agent.chat.turn.lock import conversation_turn_lock
 from app.agent.chat.turn.orchestrator import stream_turn
 from app.agent.chat.turn.resume import stream_chat_resume
+from app.contracts.turn_content import TurnUserInput
 from app.agent.chat.workspace import conversation_workspace
 from app.agent.chat.workspace.session import ensure_workspace_session
 from app.agent.chat.gate import session_bridge
@@ -289,9 +290,9 @@ class ChatService:
         turn_id: str,
         user_id: int,
         conversation_id: int,
-        content: list,
+        user_input: TurnUserInput,
+        content_text: str,
         project_id: int | None,
-        attachment_ids: list[int],
         enable_tools: bool = True,
         client_turn_id: Optional[str] = None,
         cancel_event: asyncio.Event,
@@ -303,10 +304,10 @@ class ChatService:
                 conversation=conversation,
                 user_id=user_id,
                 conversation_id=conversation_id,
-                content=content,
+                user_input=user_input,
+                content_text=content_text,
                 project_id=project_id,
                 model_key=model_key,
-                attachment_ids=attachment_ids,
                 enable_tools=enable_tools,
                 client_turn_id=client_turn_id,
                 cancel_event=cancel_event,

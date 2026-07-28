@@ -18,7 +18,6 @@ class SubmitGenerateRequest(BaseModel):
     count: int = Field(default=1, ge=1, le=6)
     duration: Optional[int] = Field(default=None, ge=3, le=15)
     reference_mode: Optional[ReferenceMode] = None
-    ref_attachment_ids: List[int] = Field(default_factory=list)
     ref_asset_ids: List[int] = Field(default_factory=list)
 
 
@@ -28,8 +27,7 @@ class GenerateTaskSubmitResponse(BaseModel):
 
 
 class GenerateMaterialUploadResponse(BaseModel):
-    material_id: int
-    asset_id: Optional[int] = None
+    asset_id: int
     filename: str
     mime_type: str
     url: str
@@ -44,8 +42,7 @@ class GenerateTasksStatusRequest(BaseModel):
 
 
 class GenerateRefMaterial(BaseModel):
-    attachment_id: Optional[int] = None
-    asset_id: Optional[int] = None
+    asset_id: int = Field(ge=1)
     filename: str
     mime_type: str
     url: str

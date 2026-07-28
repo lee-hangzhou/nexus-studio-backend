@@ -108,7 +108,6 @@ CREATE TABLE IF NOT EXISTS generate_task (
   max_images SMALLINT DEFAULT 1,
   duration SMALLINT,
   reference_mode SMALLINT,
-  ref_attachment_ids JSONB,
   ref_asset_ids JSONB,
   result_keys JSONB,
   result_asset_ids JSONB,
@@ -149,7 +148,7 @@ CREATE TABLE IF NOT EXISTS assets (
   asset_type VARCHAR(16) NOT NULL,
   source_type VARCHAR(32) NOT NULL,
   source_id VARCHAR(128),
-  metadata JSONB NOT NULL DEFAULT '{}',
+  metadata JSONB NOT NULL DEFAULT '{}', -- 可选 file_sha256 等 dedup 字段
   status VARCHAR(16) NOT NULL DEFAULT 'ready',
   favorite BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,

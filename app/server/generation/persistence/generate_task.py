@@ -18,7 +18,6 @@ class GenerateTask(BaseModel):
     max_images = fields.SmallIntField(null=True, default=1)    # 图片生成张数
     duration = fields.SmallIntField(null=True)                 # 视频时长（秒）
     reference_mode = fields.SmallIntField(null=True)           # 仅视频，1-4
-    ref_attachment_ids = fields.JSONField(null=True)           # 引用素材的 ChatAttachments id 数组
     ref_asset_ids = fields.JSONField(null=True)                 # 引用素材的统一资产 id 数组
     result_keys = fields.JSONField(null=True)                  # 裸 TOS key 数组（含宽高元数据）
     result_asset_ids = fields.JSONField(null=True)              # 统一资产 id 数组

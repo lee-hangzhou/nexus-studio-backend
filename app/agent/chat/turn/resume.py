@@ -119,7 +119,13 @@ async def stream_chat_resume(
             loop_guard=loop_guard,
             cancel_event=cancel_event,
         )
-        tools = build_chat_turn_tools(ctx, enable_tools=True, user_id=user_id)
+        tools = build_chat_turn_tools(
+            ctx,
+            enable_tools=True,
+            user_id=user_id,
+            tool_asset_ids=frozenset(),
+            asset_media_types={},
+        )
         spec = get_model_spec(model_key)
         llm = GatewayChatModel(
             model_key=model_key,

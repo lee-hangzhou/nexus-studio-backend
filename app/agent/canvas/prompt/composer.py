@@ -9,6 +9,7 @@ from app.agent.runtime.skills.prompt_format import (
     format_user_skill_index_text,
 )
 from app.agent.runtime.tools.user_skill_protocol import WRITE_USER_SKILL_FILE
+from app.contracts.turn_content import TurnReferenceIndex, format_turn_references_block
 from app.server.ports.product import SelectedSkillDTO
 from app.server.skills.domain.enums import SkillSurface
 
@@ -32,12 +33,13 @@ async def compose_canvas_system_prompt(
     project_id: int,
     episode_id: int,
     user_id: int,
+    reference_index: TurnReferenceIndex,
     selected_skills: tuple[SelectedSkillDTO, ...] = (),
     is_resume: bool = False,
     memory_blocks_text: str = "",
     memory_ops_brief: str | None = None,
 ) -> str:
-    """组合项目元信息、技能、记忆块与工具硬性规则"""
+    """组合项目元信息、技能、记忆块、Turn References 与工具硬性规则"""
     _ = is_resume
     skills = _load_skills()
     context = await get_canvas_port().get_project_prompt_context(project_id, episode_id)
@@ -75,6 +77,9 @@ async def compose_canvas_system_prompt(
 - """ + WRITE_USER_SKILL_FILE + """ creates user-scoped skills for the canvas surface only.
 """
     parts = [skills, f"## Project\n\n{meta_block}", policy]
+    refs_block = format_turn_references_block(reference_index)
+    if refs_block:
+        parts.append(refs_block)
     selected_paths = {item.path for item in selected_skills}
     index_items = await get_user_skill_port().list_enabled_for_index(
         surface=SkillSurface.CANVAS,

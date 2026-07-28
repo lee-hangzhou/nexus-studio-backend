@@ -217,7 +217,7 @@ class ChatPersistenceSubscriber:
                     user_id=session.user_id,
                     conversation_id=session.conversation_id,
                     content=session.content,
-                    attachment_ids=session.attachment_ids,
+                    turn_asset_ids=session.turn_asset_ids,
                     model_key=session.model_key,
                 )
             )
@@ -228,7 +228,7 @@ async def _background_conversation_title(
     user_id: int,
     conversation_id: int,
     content: str,
-    attachment_ids: list[int],
+    turn_asset_ids: tuple[int, ...],
     model_key: str,
 ) -> None:
     try:
@@ -236,7 +236,7 @@ async def _background_conversation_title(
             user_id=user_id,
             conversation_id=conversation_id,
             user_content=content,
-            attachment_ids=attachment_ids,
+            turn_asset_ids=turn_asset_ids,
             model_key=model_key,
         )
     except Exception:

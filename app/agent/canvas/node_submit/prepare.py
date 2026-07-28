@@ -62,31 +62,22 @@ def _expected_refs_from_graph(
     )
 
 
-def _validate_ref_lists(
+def _validate_ref_asset_ids(
     *,
     node_id: str,
     expected_asset_ids: tuple[int, ...],
-    expected_attachment_ids: tuple[int, ...],
     got_asset_ids: list[int] | None,
-    got_attachment_ids: list[int] | None,
 ) -> None:
     got_assets = tuple(got_asset_ids or ())
-    got_attachments = tuple(got_attachment_ids or ())
-    if got_assets == expected_asset_ids and got_attachments == expected_attachment_ids:
+    if got_assets == expected_asset_ids:
         return
     raise AppError(
         ErrorCode.CANVAS_SUBMIT_REF_MISMATCH,
         "提交引用与画布状态不一致，请刷新后重试",
         details={
             "node_id": node_id,
-            "expected": {
-                "ref_asset_ids": list(expected_asset_ids),
-                "ref_attachment_ids": list(expected_attachment_ids),
-            },
-            "got": {
-                "ref_asset_ids": list(got_assets),
-                "ref_attachment_ids": list(got_attachments),
-            },
+            "expected": {"ref_asset_ids": list(expected_asset_ids)},
+            "got": {"ref_asset_ids": list(got_assets)},
         },
     )
 
@@ -124,7 +115,6 @@ async def prepare_node_submit(
     mode: Literal["manual", "agent"],
     prompt: str | None = None,
     ref_asset_ids: list[int] | None = None,
-    ref_attachment_ids: list[int] | None = None,
     content: WorkflowPromptContent | None = None,
     manual_refs: list[ManualMaterialRef] | None = None,
     preview_media_refs: list[MentionItemRef] | None = None,
@@ -140,19 +130,16 @@ async def prepare_node_submit(
             manual_refs=manual_refs,
             preview_media_refs=preview_media_refs,
         )
-        _validate_ref_lists(
+        _validate_ref_asset_ids(
             node_id=node_id,
             expected_asset_ids=expected.ref_asset_ids,
-            expected_attachment_ids=expected.ref_attachment_ids,
             got_asset_ids=ref_asset_ids,
-            got_attachment_ids=ref_attachment_ids,
         )
         if not (prompt or "").strip():
             raise AppError(ErrorCode.INVALID_PARAMS, "prompt 不能为空")
         return PrepareNodeSubmitResult(
             prompt=prompt.strip(),
             ref_asset_ids=expected.ref_asset_ids,
-            ref_attachment_ids=expected.ref_attachment_ids,
         )
 
     resolved = await resolve_node_inputs(episode_id, node_id)
@@ -175,5 +162,4 @@ async def prepare_node_submit(
     return PrepareNodeSubmitResult(
         prompt=prompt.strip(),
         ref_asset_ids=final_asset_ids,
-        ref_attachment_ids=tuple(ref_attachment_ids or ()),
     )

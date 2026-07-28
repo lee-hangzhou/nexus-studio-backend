@@ -19,11 +19,12 @@ def _task(
     task_id: int,
     gateway_task_id: int | None,
     status: GatewayTaskStatus,
-    ref_attachment_ids: list[int] | None = None,
+    ref_asset_ids: list[int] | None = None,
     result_asset_ids: list[int] | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=task_id,
+        user_id=7,
         union_task_id=gateway_task_id,
         kind="image",
         status=status,
@@ -33,8 +34,7 @@ def _task(
         resolution="2k",
         duration=None,
         reference_mode=None,
-        ref_attachment_ids=ref_attachment_ids,
-        ref_asset_ids=None,
+        ref_asset_ids=ref_asset_ids,
         result_keys=None,
         result_asset_ids=result_asset_ids or [],
         error_message=None,
@@ -46,28 +46,20 @@ def _service(
     *,
     tasks: list[SimpleNamespace],
     gateway_client: MagicMock,
-    attachments: list[SimpleNamespace] | None = None,
+    assets: list[SimpleNamespace] | None = None,
     favorited: list[SimpleNamespace] | None = None,
 ) -> GenerationService:
     task_repository = MagicMock()
     task_repository.get_by_ids_for_user = AsyncMock(return_value=tasks)
-    attachment_repository = MagicMock()
-    attachment_repository.get_by_ids_for_user = AsyncMock(
-        return_value=attachments or []
-    )
     asset_repository = MagicMock()
-    asset_repository.get_active_by_ids_for_user = AsyncMock(return_value=[])
+    asset_repository.get_active_by_ids_for_user = AsyncMock(return_value=assets or [])
     asset_repository.get_favorited_by_ids_for_user = AsyncMock(
         return_value=favorited or []
     )
-    attachment_service = MagicMock()
-    attachment_service.build_preview_url.return_value = "/preview/reference.png"
     return GenerationService(
         task_repository=task_repository,
         asset_repository=asset_repository,
-        attachment_repository=attachment_repository,
         gateway_client=gateway_client,
-        attachment_service=attachment_service,
         asset_service=MagicMock(),
         object_storage=MagicMock(),
         model_cache=MagicMock(),
@@ -107,14 +99,14 @@ async def test_status_observe_cas_updates_when_gateway_status_differs(
         task_id=2,
         gateway_task_id=202,
         status=GatewayTaskStatus.QUEUED,
-        ref_attachment_ids=[12],
+        ref_asset_ids=[12],
     )
-    attachment = SimpleNamespace(
+    asset = SimpleNamespace(
         id=12,
-        asset_id=None,
         filename="reference.png",
         mime_type="image/png",
         storage_key="references/reference.png",
+        source_type="manual_upload",
     )
     queue_response = GatewayQueueResponse.model_validate(
         {
@@ -147,11 +139,14 @@ async def test_status_observe_cas_updates_when_gateway_status_differs(
         "app.server.generation.services.service.GenerationService.apply_result",
         fake_apply,
     )
+    asset_service = MagicMock()
+    asset_service.preview_url.return_value = "/preview/reference.png"
     service = _service(
         tasks=[queued],
         gateway_client=gateway_client,
-        attachments=[attachment],
+        assets=[asset],
     )
+    service._asset_service = asset_service
 
     result = await service.get_tasks_status([2, 999, 2], user_id=7)
 
@@ -163,7 +158,8 @@ async def test_status_observe_cas_updates_when_gateway_status_differs(
     assert view.queue_position == 3
     assert view.queue_total == 8
     assert view.estimated_wait_seconds == 90
-    assert view.ref_materials[0].attachment_id == 12
+    assert len(view.ref_materials) == 1
+    assert view.ref_materials[0].asset_id == 12
     gateway_client.get_task.assert_not_called()
 
 
@@ -293,4 +289,4 @@ async def test_callback_endpoint_projects_canvas_after_write(
     await generate_endpoint.receive_generate_callback(payload)
 
     handle.assert_awaited_once_with(payload)
-    project.assert_awaited_once_with(task)
+    project.assert_awaited_once_with(9, 7)

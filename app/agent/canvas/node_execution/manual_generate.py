@@ -55,10 +55,9 @@ async def run_manual_node_generate(
         mode="manual",
         prompt=body.prompt,
         ref_asset_ids=body.ref_asset_ids,
-        ref_attachment_ids=body.ref_attachment_ids,
         content=body.submit_content or [],
         manual_refs=[
-            ManualMaterialRef(asset_id=item.asset_id, material_id=item.material_id)
+            ManualMaterialRef(asset_id=item.asset_id)
             for item in body.manual_refs
         ],
         preview_media_refs=[
@@ -72,7 +71,6 @@ async def run_manual_node_generate(
             "expected_revision": None,
             "prompt": prepared.prompt,
             "ref_asset_ids": list(prepared.ref_asset_ids),
-            "ref_attachment_ids": list(prepared.ref_attachment_ids),
         }
     )
     result, delta = await submit_node_generation_for_episode(project_id, episode_id, user_id, gen_input)

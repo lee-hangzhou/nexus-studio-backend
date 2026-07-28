@@ -37,7 +37,7 @@ class ChatTurnSession:
     user_id: int
     model_key: str
     content: str
-    attachment_ids: list[int]
+    turn_asset_ids: tuple[int, ...]
     conversation: ChatConversations
     workspace: Path
     cancel_event: asyncio.Event

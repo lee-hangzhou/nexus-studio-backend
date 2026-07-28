@@ -1,7 +1,6 @@
 from app.agent.chat.service import ChatService
 from app.agent.runtime.ports import configure_ports
 from app.server.assets.services.service import asset_service
-from app.server.chat.services.attachments.service import chat_attachment_service
 from app.server.generation.binding import bind_generation_service
 from app.server.generation.services import GenerationService
 from app.server.infra.cache import app_cache
@@ -24,9 +23,7 @@ chat_service = ChatService()
 generation_service = GenerationService(
     task_repository=GenerateTaskRepository(),
     asset_repository=AssetRepository(),
-    attachment_repository=ChatAttachmentRepository(),
     gateway_client=gateway_client,
-    attachment_service=chat_attachment_service,
     asset_service=asset_service,
     object_storage=object_storage,
     model_cache=app_cache,

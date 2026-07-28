@@ -8,7 +8,7 @@ class AssetListRequest(BaseModel):
     page_size: int = Field(default=40, ge=1, le=100)
     query: str = ""
     asset_type: str = "all"
-    source_type: str = "all"
+    source_type: str = "library"
     favorites_only: bool = False
     created_from: str | None = None
     created_to: str | None = None

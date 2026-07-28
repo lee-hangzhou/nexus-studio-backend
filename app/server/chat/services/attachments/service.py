@@ -29,6 +29,7 @@ class AttachmentItem:
     status: int
     is_attached: bool
     source: str
+    asset_id: int | None
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,14 @@ class MaterializedAttachment:
     attachment_id: int
     filename: str
     workspace_path: str
+
+
+@dataclass(frozen=True)
+class MaterializedTurnAsset:
+    asset_id: int
+    filename: str
+    workspace_path: str
+    attachment_id: int | None = None
 
 
 class ChatAttachmentService:
@@ -103,9 +112,12 @@ class ChatAttachmentService:
         for row in rows:
             safe_name = Path(row.filename).name
             if not safe_name:
-                continue
+                raise AppError(
+                    ErrorCode.INVALID_PARAMS,
+                    f"attachment {row.id} missing filename",
+                )
 
-            binary_rel = f"attachments/{safe_name}"
+            binary_rel = f"attachments/{row.id}_{safe_name}"
 
             if is_cache_hit(workspace, row.id, row.file_sha256, safe_name):
                 manifest_entry = load_manifest(workspace).get(manifest_key(row.id, row.file_sha256), {})
@@ -124,6 +136,65 @@ class ChatAttachmentService:
                     attachment_id=row.id,
                     filename=safe_name,
                     workspace_path=binary_rel,
+                )
+            )
+        return materialized
+
+    async def materialize_turn_assets_to_workspace(
+        self,
+        workspace: Path,
+        *,
+        user_id: int,
+        conversation_id: int,
+        asset_ids: tuple[int, ...],
+    ) -> list[MaterializedTurnAsset]:
+        """按 asset_id 将 turn 引用资产物化到工作区"""
+        if not asset_ids:
+            return []
+        attachments_dir = workspace / "attachments"
+        attachments_dir.mkdir(parents=True, exist_ok=True)
+        attachment_rows = await ChatAttachments.filter(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            asset_id__in=list(asset_ids),
+        )
+        attachment_by_asset = {
+            int(row.asset_id): row for row in attachment_rows if row.asset_id is not None
+        }
+        materialized: list[MaterializedTurnAsset] = []
+        for asset_id in asset_ids:
+            att_row = attachment_by_asset.get(asset_id)
+            if att_row is not None:
+                rows = await self.materialize_to_workspace(workspace, [att_row])
+                if not rows:
+                    raise AppError(
+                        ErrorCode.INTERNAL_ERROR,
+                        f"failed to materialize attachment for asset {asset_id}",
+                    )
+                item = rows[0]
+                materialized.append(
+                    MaterializedTurnAsset(
+                        asset_id=asset_id,
+                        filename=item.filename,
+                        workspace_path=item.workspace_path,
+                        attachment_id=item.attachment_id,
+                    )
+                )
+                continue
+            asset_row = await asset_service.require_owned(user_id=user_id, asset_id=asset_id)
+            safe_name = Path(asset_row.filename).name
+            if not safe_name:
+                raise AppError(ErrorCode.INVALID_PARAMS, f"asset {asset_id} missing filename")
+            binary_rel = f"attachments/asset_{asset_id}_{safe_name}"
+            dest = workspace / binary_rel
+            if not dest.exists():
+                await self.storage.download_to_path(asset_row.storage_key, dest)
+            materialized.append(
+                MaterializedTurnAsset(
+                    asset_id=asset_id,
+                    filename=safe_name,
+                    workspace_path=binary_rel,
+                    attachment_id=None,
                 )
             )
         return materialized
@@ -170,6 +241,7 @@ class ChatAttachmentService:
         attachment_ids: list[int],
         message_id: int,
     ) -> None:
+        """将附件行绑定到消息"""
         if not attachment_ids:
             return
         await ChatAttachments.filter(
@@ -177,6 +249,23 @@ class ChatAttachmentService:
             user_id=user_id,
             conversation_id=conversation_id,
         ).update(message_id=message_id)
+
+    async def attachment_ids_for_asset_ids(
+        self,
+        *,
+        user_id: int,
+        conversation_id: int,
+        asset_ids: tuple[int, ...],
+    ) -> list[int]:
+        """解析 turn 引用 asset_id 对应的 chat_attachments 行 id"""
+        if not asset_ids:
+            return []
+        rows = await ChatAttachments.filter(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            asset_id__in=list(asset_ids),
+        )
+        return [row.id for row in rows if row.asset_id is not None]
 
     def build_preview_url(self, storage_key: str) -> str:
         return self.storage.presigned_get_url(storage_key)
@@ -192,6 +281,7 @@ class ChatAttachmentService:
             status=row.status,
             is_attached=row.is_attached,
             source=attachment_source(row),
+            asset_id=row.asset_id,
         )
 
 

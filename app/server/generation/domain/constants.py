@@ -5,9 +5,6 @@ from app.server.generation.domain.enums import (
     ReferenceMode,
 )
 
-# 生成素材不归属会话；附件表 conversation_id 非空，用 0 表示域外上传
-UNSCOPED_ATTACHMENT_CONVERSATION_ID = 0
-
 MATERIAL_MAX_BYTES = 200 * 1024 * 1024
 
 MIME_PREFIX_IMAGE = "image/"
@@ -38,9 +35,6 @@ REFERENCE_MODE_LABELS: dict[ReferenceMode, str] = {
     ReferenceMode.OMNI_REFERENCE: "全能参考",
     ReferenceMode.VIDEO_EDIT: "视频编辑",
 }
-
-# 读模型：任务引用的会话附件（非 assets.source_type）
-REF_SOURCE_CHAT_ATTACHMENT = "chat_attachment"
 
 MODEL_LIST_CACHE_KEY_PREFIX = "gen:models:"
 MODEL_CAPABILITIES_CACHE_KEY = "gen:model_capabilities"

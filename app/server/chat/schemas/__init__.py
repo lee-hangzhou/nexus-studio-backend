@@ -3,9 +3,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, UUID4, model_validator
+from pydantic import BaseModel, ConfigDict, Field, UUID4, model_validator
 
-from app.contracts.turn_content import TurnContentBlock, TurnUserInput, validate_turn_user_input
+from app.contracts.turn_content import (
+    TurnContentBlock,
+    TurnMaterialBlock,
+    TurnUserInput,
+    validate_turn_user_input,
+)
 
 
 class ChatModelItem(BaseModel):
@@ -55,20 +60,27 @@ class MessageListRequest(BaseModel):
 
 
 class MessageStreamRequest(BaseModel):
+    """Chat turn 流式请求体"""
+
+    model_config = ConfigDict(extra="forbid")
+
     request_id: UUID4
     conversation_id: int
     content: List[TurnContentBlock] = Field(min_length=1)
+    materials: list[TurnMaterialBlock] = Field(default_factory=list)
     model: str = Field(min_length=1)
-    attachment_ids: List[int] = Field(default_factory=list)
     enable_tools: bool = True
     client_turn_id: Optional[str] = None
     project_id: Optional[int] = None
 
     @model_validator(mode="after")
     def _validate_turn_input(self) -> MessageStreamRequest:
-        """校验文本必填"""
+        """校验文本必填与 materials 形状"""
         try:
-            validate_turn_user_input(TurnUserInput(content=self.content, materials=[]))
+            validate_turn_user_input(
+                TurnUserInput(content=self.content, materials=self.materials),
+                allow_node=False,
+            )
         except ValueError as exc:
             raise ValueError(str(exc)) from exc
         return self
@@ -171,6 +183,7 @@ class AttachmentView(BaseModel):
     status: int = 0
     is_attached: bool = True
     source: str = "user_upload"
+    asset_id: int | None = None
     preview_url: Optional[str] = None
 
 

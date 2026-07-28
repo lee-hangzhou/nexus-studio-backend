@@ -25,9 +25,11 @@ from app.agent.runtime.stream.replay import (
 from app.composition import chat_service, user_skill_port
 from app.contracts.turn_content import (
     TurnUserInput,
+    compile_human_text,
     extract_skill_paths,
     validate_turn_user_input,
 )
+from app.server.api.turn_input.enrich import enrich_turn_user_input
 from app.server.api.schemas import Response
 from app.server.skills.domain.enums import SkillSurface
 from app.server.chat.persistence.attachments import ChatAttachments
@@ -172,9 +174,17 @@ async def stream_message(request: Request, body: MessageStreamRequest) -> Stream
 
     if claim.created:
         try:
-            user_input = validate_turn_user_input(
-                TurnUserInput(content=body.content, materials=[])
+            raw_input = validate_turn_user_input(
+                TurnUserInput(content=body.content, materials=body.materials),
+                allow_node=False,
             )
+            user_input = await enrich_turn_user_input(
+                user_id=user_id,
+                user_input=raw_input,
+                project_id=body.project_id,
+                allow_node=False,
+            )
+            content_text = compile_human_text(user_input.content)
             selected_skills = await user_skill_port.resolve_selected(
                 surface=SkillSurface.CHAT,
                 user_id=user_id,
@@ -212,9 +222,9 @@ async def stream_message(request: Request, body: MessageStreamRequest) -> Stream
                     turn_id=proposed_turn_id,
                     user_id=user_id,
                     conversation_id=body.conversation_id,
-                    content=body.content,
+                    user_input=user_input,
+                    content_text=content_text,
                     project_id=body.project_id,
-                    attachment_ids=body.attachment_ids,
                     enable_tools=body.enable_tools,
                     client_turn_id=body.client_turn_id,
                     cancel_event=cancel_event,
@@ -473,6 +483,7 @@ async def upload_attachment(
     return Response(
         data={
             "attachment_id": row.id,
+            "asset_id": row.asset_id,
             "filename": row.filename,
             "mime_type": row.mime_type,
             "status": row.status,
@@ -491,6 +502,7 @@ def _attachment_view_from_row(row: ChatAttachments) -> AttachmentView:
         status=row.status,
         is_attached=row.is_attached,
         source=attachment_source(row),
+        asset_id=row.asset_id,
     )
 
 
@@ -536,6 +548,7 @@ async def list_attachments(request: Request, body: ConversationAttachmentRequest
                 status=item.status,
                 is_attached=item.is_attached,
                 source=item.source,
+                asset_id=item.asset_id,
                 preview_url=chat_attachment_service.build_preview_url(item.storage_key),
             )
             for item in items

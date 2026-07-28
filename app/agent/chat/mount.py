@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
@@ -16,7 +15,7 @@ from app.agent.chat.agent.factory import build_chat_agent
 from app.agent.chat.llm.gateway_chat_model import GatewayChatModel
 from app.agent.chat.llm.registry import get_model_spec
 from app.agent.chat.memory.store import chat_runnable_config
-from app.agent.chat.memory.turn_input import build_turn_human_message
+from app.agent.chat.memory.turn_input import build_attachment_context_block
 from app.agent.chat.prompt.composer import PromptComposer
 from app.agent.chat.prompt.types import AttachmentBrief, TurnPromptContext
 from app.agent.chat.tools.build_turn_tools import build_chat_turn_tools
@@ -37,7 +36,6 @@ from app.agent.chat.turn.session import ChatTurnSession
 from app.agent.chat.turn.subscribers import build_chat_lifecycle_subscribers
 from app.agent.chat.turn.trace import log_stage
 from app.agent.chat.turn.usage_log import TurnUsageCollector
-from app.agent.chat.vision.gate import assert_vision_turn_allowed, is_image_mime
 from app.agent.chat.workspace import conversation_workspace
 from app.agent.chat.workspace.session import ensure_workspace_session
 from app.agent.runtime.checkpointer import get_chat_checkpointer
@@ -52,16 +50,44 @@ from app.agent.runtime.skills.prompt_format import (
 from app.agent.runtime.turn.tool_loop_guard import TurnToolLoopGuard
 from app.agent.runtime.turn_engine.terminal_policy import SseTerminalPolicy
 from app.contracts.metadata import ToolAuditMetadata, TurnContextMetadata
-from app.contracts.turn_content import TurnUserInput
+from app.contracts.turn_content import (
+    CompiledTurnInput,
+    TurnMediaType,
+    TurnUserInput,
+    compile_turn_input,
+    input_snapshot_dict,
+)
 from app.server.chat.persistence.attachments import ChatAttachments
 from app.server.chat.persistence.conversations import ChatConversations
 from app.server.chat.services.attachments.service import chat_attachment_service
-from app.server.skills.domain.enums import SkillSurface
 from app.server.chat.services.attachments.status import attachment_status_label
-from app.server.chat.services.attachments.turn_prep import apply_attachment_intent
 from app.server.chat.services.constants import CHAT_CHECKPOINT_THREAD_PREFIX
+from app.server.exceptions.base import AppError
+from app.server.exceptions.codes import ErrorCode
 from app.server.infra.config import settings
 from app.server.ports.product import SelectedSkillDTO
+from app.server.skills.domain.enums import SkillSurface
+
+
+def _workspace_path_for_attachment(
+    *,
+    row: ChatAttachments,
+    turn_asset_ids: frozenset[int],
+    materialized_by_asset: dict[int, str],
+) -> str:
+    """解析附件在本轮工作区路径; 本 turn 引用资产必须已 materialize"""
+    if row.asset_id is None:
+        return ""
+    asset_id = int(row.asset_id)
+    if asset_id not in turn_asset_ids:
+        return ""
+    path = materialized_by_asset.get(asset_id)
+    if path is None:
+        raise AppError(
+            ErrorCode.INTERNAL_ERROR,
+            f"turn asset {asset_id} missing workspace materialization",
+        )
+    return path
 
 
 @dataclass
@@ -74,12 +100,12 @@ class ChatMountContext:
     conversation: ChatConversations
     content: str
     model_key: str
-    attachment_ids: list[int]
     enable_tools: bool
-    user_input: TurnUserInput | None = None
+    user_input: TurnUserInput
     selected_skills: tuple[SelectedSkillDTO, ...] = ()
     project_id: int | None = None
     client_turn_id: str | None = None
+    compiled_input: CompiledTurnInput | None = None
     persistence: TurnPersistence | None = None
     guards: TurnGuards | None = None
     usage_collector: TurnUsageCollector | None = None
@@ -99,16 +125,23 @@ def _thread_id(ctx: ChatMountContext) -> str:
 
 
 async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
+    """组装 Chat turn 的 agent、prompt 与持久化快照"""
+    if ctx.user_input is None:
+        raise AppError(ErrorCode.INTERNAL_ERROR, "enriched turn user input missing")
+    compiled = compile_turn_input(ctx.user_input)
+    ctx.compiled_input = compiled
+    ctx.content = compiled.human_message
+
     persistence = TurnPersistence(user_id=ctx.user_id, conversation_id=ctx.conversation_id)
     ctx.persistence = persistence
-    await apply_attachment_intent(ctx.user_id, ctx.conversation_id, ctx.attachment_ids)
     attachment_rows = await ChatAttachments.filter(
         user_id=ctx.user_id,
         conversation_id=ctx.conversation_id,
         is_attached=True,
     )
+    has_turn_assets = bool(compiled.tool_asset_ids)
     turn_ctx = build_turn_context(
-        has_attachments=bool(attachment_rows),
+        has_attachments=bool(attachment_rows) or has_turn_assets,
         enable_tools=ctx.enable_tools,
     )
     log_stage(
@@ -123,17 +156,19 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
     workspace = conversation_workspace(ctx.user_id, ctx.conversation_id)
     ensure_workspace_session(workspace)
     ctx.workspace = workspace
-    materialized: list = []
-    materialized_by_id: dict = {}
-    if turn_ctx.enable_materialize:
+    materialized = []
+    materialized_by_asset: dict[int, str] = {}
+    if turn_ctx.enable_materialize and compiled.tool_asset_ids:
         import time as _time
 
         mat_started = _time.perf_counter()
-        materialized = await chat_attachment_service.materialize_to_workspace(
+        materialized = await chat_attachment_service.materialize_turn_assets_to_workspace(
             workspace,
-            list(attachment_rows),
+            user_id=ctx.user_id,
+            conversation_id=ctx.conversation_id,
+            asset_ids=compiled.tool_asset_ids,
         )
-        materialized_by_id = {item.attachment_id: item for item in materialized}
+        materialized_by_asset = {item.asset_id: item.workspace_path for item in materialized}
         log_stage("turn.materialize", started=mat_started, count=len(materialized))
 
     guards = TurnGuards(
@@ -188,39 +223,44 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
         loop_guard=loop_guard,
     )
     plan_enable_tools = ctx.enable_tools and turn_ctx.enable_tools
-    # Chat 图无 HITL；技能写入与 MCP 同受 enable_tools 约束，直接执行
+    asset_media_types = {
+        asset.asset_id: asset.media_type for asset in compiled.tool_asset_index
+    }
     tools = build_chat_turn_tools(
         tool_ctx,
         enable_tools=plan_enable_tools,
         user_id=ctx.user_id,
+        tool_asset_ids=frozenset(compiled.tool_asset_ids),
+        asset_media_types=asset_media_types,
     )
     attachment_briefs = [
         AttachmentBrief(
             attachment_id=row.id,
             filename=row.filename,
-            mime_type=row.mime_type or "application/octet-stream",
+            mime_type=row.mime_type,
             status=attachment_status_label(row.status),
             is_attached=bool(row.is_attached),
-            workspace_path=(mat.workspace_path if (mat := materialized_by_id.get(row.id)) else ""),
+            workspace_path=_workspace_path_for_attachment(
+                row=row,
+                turn_asset_ids=frozenset(compiled.tool_asset_ids),
+                materialized_by_asset=materialized_by_asset,
+            ),
         )
         for row in attachment_rows
     ]
     workspace_hint = f"会话工作区相对路径根目录：{workspace}"
-    requested_ids = set(ctx.attachment_ids)
-    image_attachment_ids = [
-        row.id
-        for row in attachment_rows
-        if row.id in requested_ids and is_image_mime(row.mime_type or "")
-    ]
+    has_visual_refs = any(
+        asset.media_type in {TurnMediaType.IMAGE, TurnMediaType.VIDEO}
+        for asset in compiled.tool_asset_index
+    )
     spec = get_model_spec(ctx.model_key)
-    assert_vision_turn_allowed(spec=spec, image_attachment_ids=image_attachment_ids)
     prompt_ctx = TurnPromptContext(
         user_id=ctx.user_id,
         conversation_id=ctx.conversation_id,
         model_key=ctx.model_key,
         enable_tools=plan_enable_tools,
         tool_names=[tool.name for tool in tools],
-        has_vision_images=bool(image_attachment_ids),
+        has_turn_media_refs=has_visual_refs,
     )
     memory_tools_enabled = any(
         name in {"manage_user_memory", "recall_user_memory"} for name in prompt_ctx.tool_names
@@ -243,43 +283,39 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
     )
     user_skill_index_text = format_user_skill_index_text(index_items, selected_paths)
     selected_bodies_text = format_selected_skill_bodies_text(ctx.selected_skills)
+    attachment_context = build_attachment_context_block(
+        attachments=attachment_briefs,
+        workspace_hint=workspace_hint,
+    )
     system_prompt = PromptComposer.build_turn_system(
         prompt_ctx,
         memory_blocks_text=injection.memory_blocks_text,
         memory_ops_brief=injection.ops_brief_text,
         user_skill_index_text=user_skill_index_text,
         selected_bodies_text=selected_bodies_text,
+        turn_references_block=compiled.reference_index,
+        attachment_context_block=attachment_context if turn_ctx.has_attachments else "",
     )
-    turn_human = build_turn_human_message(
-        ctx.content,
-        attachments=attachment_briefs,
-        workspace_hint=workspace_hint,
-        image_attachment_ids=image_attachment_ids,
+    turn_human = HumanMessage(content=compiled.human_message)
+    bind_attachment_ids = await chat_attachment_service.attachment_ids_for_asset_ids(
+        user_id=ctx.user_id,
+        conversation_id=ctx.conversation_id,
+        asset_ids=compiled.tool_asset_ids,
     )
     await persist_user_message(
         user_id=ctx.user_id,
         conversation_id=ctx.conversation_id,
         content=ctx.content,
         turn_human=turn_human,
-        attachment_ids=ctx.attachment_ids,
+        bind_attachment_ids=bind_attachment_ids,
         turn_id=ctx.turn_id,
         client_turn_id=ctx.client_turn_id,
-        input_snapshot=(
-            ctx.user_input.model_dump(mode="json") if ctx.user_input is not None else None
-        ),
+        input_snapshot=input_snapshot_dict(ctx.user_input),
     )
-    attachment_binary_paths = {
-        item.attachment_id: item.workspace_path
-        for item in materialized
-        if item.attachment_id in image_attachment_ids
-    }
     llm = GatewayChatModel(
         model_key=ctx.model_key,
         spec=spec,
         cancel_event=ctx.cancel_event,
-        vision_hydrate_attachment_ids=image_attachment_ids,
-        vision_attachment_binary_paths=attachment_binary_paths,
-        vision_conversation_workspace=str(workspace),
     )
     checkpointer = ctx.checkpointer or get_chat_checkpointer()
     agent = build_chat_agent(
@@ -332,7 +368,7 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
         user_id=ctx.user_id,
         model_key=ctx.model_key,
         content=ctx.content,
-        attachment_ids=ctx.attachment_ids,
+        turn_asset_ids=compiled.tool_asset_ids,
         conversation=ctx.conversation,
         workspace=workspace,
         cancel_event=ctx.cancel_event,

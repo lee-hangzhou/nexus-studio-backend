@@ -22,8 +22,6 @@ from app.server.assets.services.service import (
     ASSET_TYPE_VIDEO,
     AssetService,
 )
-from app.server.chat.persistence.attachment_repository import ChatAttachmentRepository
-from app.server.chat.services.attachments.service import ChatAttachmentService
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
 from app.server.generation.domain.constants import (
@@ -40,7 +38,6 @@ from app.server.generation.domain.constants import (
     RESULT_ASSET_META_TASK_ID,
     RESULT_ASSET_META_UNION_TASK_ID,
     RESULT_MIME_BY_KIND,
-    UNSCOPED_ATTACHMENT_CONVERSATION_ID,
 )
 from app.server.generation.domain.enums import GenerationKind, MaterialType
 from app.server.generation.domain.gateway_status import (
@@ -101,18 +98,14 @@ class GenerationService:
         *,
         task_repository: GenerateTaskRepository,
         asset_repository: AssetRepository,
-        attachment_repository: ChatAttachmentRepository,
         gateway_client: GenerationGatewayPort,
-        attachment_service: ChatAttachmentService,
         asset_service: AssetService,
         object_storage: TosObjectStorage,
         model_cache: MultiLevelCache,
     ) -> None:
         self._tasks = task_repository
         self._assets = asset_repository
-        self._attachments = attachment_repository
         self._gateway = gateway_client
-        self._attachment_service = attachment_service
         self._asset_service = asset_service
         self._object_storage = object_storage
         self._model_cache = model_cache
@@ -155,7 +148,6 @@ class GenerationService:
             max_images=req.count if req.kind == GenerationKind.IMAGE else None,
             duration=req.duration if req.kind == GenerationKind.VIDEO else None,
             reference_mode=reference_mode,
-            ref_attachment_ids=list(dict.fromkeys(req.ref_attachment_ids)) or None,
             ref_asset_ids=list(dict.fromkeys(req.ref_asset_ids)) or None,
         )
         logger.info("generate.submit.created", task_id=task.id, kind=req.kind, user_id=user_id)
@@ -209,19 +201,17 @@ class GenerationService:
         if not content_type:
             raise AppError(ErrorCode.INVALID_PARAMS, "素材 Content-Type 不能为空")
         validate_material_upload(mime_type=content_type, size=len(raw_bytes))
-        row = await self._attachment_service.upload_and_enqueue(
+        asset = await self._asset_service.upload_generate_material(
             user_id=user_id,
-            conversation_id=UNSCOPED_ATTACHMENT_CONVERSATION_ID,
             filename=name,
             mime_type=content_type,
             raw_bytes=raw_bytes,
         )
         return GenerateMaterialUploadResponse(
-            material_id=row.id,
-            asset_id=row.asset_id,
-            filename=row.filename,
-            mime_type=row.mime_type,
-            url=self._attachment_service.build_preview_url(row.storage_key),
+            asset_id=asset.id,
+            filename=asset.filename,
+            mime_type=asset.mime_type,
+            url=self._asset_service.preview_url(asset.storage_key),
         )
 
     async def get_task_status(self, task_id: int, user_id: int) -> GenerateTaskView:
@@ -830,22 +820,6 @@ class GenerationService:
                         asset_ids=asset_ids,
                     )
                 )
-        if req.ref_attachment_ids:
-            requested_ids = list(dict.fromkeys(item for item in req.ref_attachment_ids if item > 0))
-            if requested_ids:
-                rows = await self._attachments.get_by_ids_for_user(requested_ids, user_id)
-                by_id = {row.id: row for row in rows}
-                missing_ids = [item_id for item_id in requested_ids if item_id not in by_id]
-                if missing_ids:
-                    raise AppError(ErrorCode.INVALID_PARAMS, "引用素材不存在或无权访问")
-                for item_id in requested_ids:
-                    row = by_id[item_id]
-                    materials.append(
-                        GatewayGenerateMaterial(
-                            type=material_type_from_mime(row.mime_type),
-                            storage_key=row.storage_key,
-                        )
-                    )
         materials = dedupe_materials(materials)
         validate_reference_materials(
             kind=req.kind,
@@ -893,33 +867,23 @@ class GenerationService:
         tasks: list[GenerateTask],
         user_id: int,
     ) -> dict[int, list[GenerateRefMaterial]]:
-        attachment_ids, asset_ids = assembly.collect_reference_ids(tasks)
-        if not attachment_ids and not asset_ids:
+        asset_ids = assembly.collect_ref_asset_ids(tasks)
+        if not asset_ids:
             return {}
-        attachments = await self._attachments.get_by_ids_for_user(attachment_ids, user_id)
-        assets = await self._assets.get_active_by_ids_for_user(asset_ids, user_id)
-        attachment_by_id = {row.id: row for row in attachments}
+        assets = await self._assets.get_active_by_ids_for_user(list(asset_ids), user_id)
         asset_by_id = {row.id: row for row in assets}
+        missing = sorted(asset_id for asset_id in asset_ids if asset_id not in asset_by_id)
+        if missing:
+            raise AppError(ErrorCode.INVALID_PARAMS, f"reference assets not found: {missing}")
         result: dict[int, list[GenerateRefMaterial]] = {}
         for task in tasks:
             materials: list[GenerateRefMaterial] = []
-            for attachment_id in task.ref_attachment_ids or []:
-                attachment = attachment_by_id.get(attachment_id)
-                if attachment is None:
-                    continue
-                materials.append(
-                    assembly.ref_material_from_attachment(
-                        attachment_id=attachment.id,
-                        asset_id=attachment.asset_id,
-                        filename=attachment.filename,
-                        mime_type=attachment.mime_type,
-                        url=self._attachment_service.build_preview_url(attachment.storage_key),
-                    )
-                )
+            seen_asset_ids: set[int] = set()
             for asset_id in task.ref_asset_ids or []:
-                asset = asset_by_id.get(asset_id)
-                if asset is None:
+                if asset_id in seen_asset_ids:
                     continue
+                asset = asset_by_id[asset_id]
+                seen_asset_ids.add(asset_id)
                 materials.append(
                     assembly.ref_material_from_asset(
                         asset_id=asset.id,

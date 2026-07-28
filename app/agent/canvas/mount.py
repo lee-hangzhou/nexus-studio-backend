@@ -29,7 +29,11 @@ from app.agent.runtime.ports import get_canvas_port, get_user_skill_port
 from app.agent.runtime.turn.tool_loop_guard import TurnToolLoopGuard
 from app.agent.runtime.turn_engine.terminal_policy import SseTerminalPolicy
 from app.contracts.turn_content import (
+    CompiledTurnInput,
+    TurnMediaType,
+    TurnReferenceIndex,
     TurnUserInput,
+    compile_turn_input,
     extract_skill_paths,
     parse_turn_content_blocks,
 )
@@ -52,6 +56,7 @@ class CanvasMountContext:
     model_key: str = ""
     content_text: str = ""
     user_input: TurnUserInput | None = None
+    compiled_input: CompiledTurnInput | None = None
     selected_skills: tuple[SelectedSkillDTO, ...] = ()
     client_turn_id: str | None = None
     mode: str = "auto"
@@ -78,6 +83,9 @@ def _runtime_scope_id(ctx: CanvasMountContext) -> str:
 async def _prepare_turn(ctx: CanvasMountContext) -> CanvasMountContext:
     ctx.checkpointer = get_chat_checkpointer()
     ctx._turn_id_holder = {"turn_id": ctx.turn_id}
+    if not ctx.is_resume and ctx.user_input is not None:
+        ctx.compiled_input = compile_turn_input(ctx.user_input)
+        ctx.content_text = ctx.compiled_input.human_message
     if ctx.is_resume and not ctx.selected_skills and ctx.client_turn_id:
         snapshot = await get_canvas_port().get_user_turn_input(
             ctx.session_id,
@@ -114,6 +122,18 @@ async def _build_agent(ctx: CanvasMountContext) -> CompiledStateGraph:
         cancel_event=ctx.cancel_event,
     )
     loop_guard = TurnToolLoopGuard(surface=SkillSurface.CANVAS)
+    if ctx.is_resume:
+        reference_index = TurnReferenceIndex()
+        tool_asset_ids: frozenset[int] = frozenset()
+        asset_media_types: dict[int, TurnMediaType] = {}
+    else:
+        if ctx.compiled_input is None:
+            raise AppError(ErrorCode.INTERNAL_ERROR, "compiled turn input missing before agent build")
+        reference_index = ctx.compiled_input.reference_index
+        tool_asset_ids = frozenset(ctx.compiled_input.tool_asset_ids)
+        asset_media_types = {
+            a.asset_id: a.media_type for a in ctx.compiled_input.tool_asset_index
+        }
     agent, _ = await build_canvas_agent(
         llm,
         project_id=ctx.project_id,
@@ -127,6 +147,9 @@ async def _build_agent(ctx: CanvasMountContext) -> CompiledStateGraph:
         user_message=ctx.content_text,
         is_resume=ctx.is_resume,
         selected_skills=ctx.selected_skills,
+        reference_index=reference_index,
+        tool_asset_ids=tool_asset_ids,
+        asset_media_types=asset_media_types,
     )
     ctx.agent = agent
     return agent

@@ -4,7 +4,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, UUID4, model_validator
 
-from app.contracts.turn_content import TurnContentBlock, TurnUserInput, validate_turn_user_input
+from app.contracts.turn_content import (
+    TurnContentBlock,
+    TurnMaterialBlock,
+    TurnUserInput,
+    validate_turn_user_input,
+)
 
 from app.server.canvas.schemas.node_execute import NodeExecuteKind
 from app.contracts.canvas import (
@@ -40,7 +45,7 @@ class CanvasTurnRequest(BaseModel):
     session_id: int
     request_id: UUID4
     content: list[TurnContentBlock] = Field(min_length=1)
-    materials: list[Any] = Field(default_factory=list)
+    materials: list[TurnMaterialBlock] = Field(default_factory=list)
     model_key: str | None = None
     client_turn_id: str | None = None
     mode: Literal["auto", "manual"] = "auto"
@@ -48,11 +53,12 @@ class CanvasTurnRequest(BaseModel):
 
     @model_validator(mode="after")
     def _validate_turn_input(self) -> CanvasTurnRequest:
-        """校验文本必填且本阶段 materials 为空"""
-        if self.materials:
-            raise ValueError("materials must be empty in this phase")
+        """校验文本必填与 materials 形状"""
         try:
-            validate_turn_user_input(TurnUserInput(content=self.content, materials=self.materials))
+            validate_turn_user_input(
+                TurnUserInput(content=self.content, materials=self.materials),
+                allow_node=True,
+            )
         except ValueError as exc:
             raise ValueError(str(exc)) from exc
         return self

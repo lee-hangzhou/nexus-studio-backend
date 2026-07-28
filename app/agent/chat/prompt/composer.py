@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 
 from app.agent.chat.prompt.types import TurnPromptContext
 from app.agent.chat.skills.registry import SkillRegistry
+from app.contracts.turn_content import TurnReferenceIndex, format_turn_references_block
 from app.server.infra.config import settings
 
 _CORE_POLICY_PATH = Path(__file__).resolve().parent.parent / "prompts" / "core_policy.md"
@@ -17,12 +18,18 @@ class PromptComposer:
     @staticmethod
     def build_capability_brief(ctx: TurnPromptContext) -> str:
         if not ctx.enable_tools:
-            return "## 本回合能力\n本回合未启用工具，仅使用对话作答，不要调用工具。"
+            if "inspect_turn_media" in ctx.tool_names:
+                return (
+                    "## 本回合能力\n"
+                    "本回合未启用通用工具；"
+                    "理解 Turn References 中的图像或视频时可调用 inspect_turn_media"
+                )
+            return "## 本回合能力\n本回合未启用工具，仅使用对话作答，不要调用工具"
         names = ", ".join(ctx.tool_names) if ctx.tool_names else "（无）"
         return (
             "## 本回合能力\n"
             f"已启用工具：{names}。\n"
-            "工作区路径为相对路径；读写、执行代码、发布文件均在当前会话工作区内完成。"
+            "工作区路径为相对路径；读写、执行代码、发布文件均在当前会话工作区内完成"
         )
 
     @staticmethod
@@ -38,13 +45,16 @@ class PromptComposer:
         )
 
     @staticmethod
-    def build_vision_brief(ctx: TurnPromptContext) -> str | None:
-        if not ctx.has_vision_images:
+    def build_turn_media_brief(ctx: TurnPromptContext) -> str | None:
+        """Turn References 含视觉媒体且已挂 inspect 时的指引"""
+        if not ctx.has_turn_media_refs:
+            return None
+        if "inspect_turn_media" not in ctx.tool_names:
             return None
         return (
-            "## 识图\n"
-            "用户在本轮消息中已直接附带图片，请根据消息中的图片内容作答。"
-            "描述或分析图片时不要调用 execute_python、read_file 等工具去读取 attachments/ 下的图片文件。"
+            "## 媒体引用\n"
+            "用户在本轮通过 Turn References 引用了图像或视频。"
+            "理解视觉内容请调用 inspect_turn_media，不要通过 read_file 读取 attachments/ 下的图片文件"
         )
 
     @staticmethod
@@ -74,6 +84,8 @@ class PromptComposer:
         memory_ops_brief: str | None = None,
         user_skill_index_text: str = "",
         selected_bodies_text: str = "",
+        turn_references_block: TurnReferenceIndex | None = None,
+        attachment_context_block: str = "",
     ) -> str:
         """组装本轮静态 system prompt；记忆块由 mount 侧注入"""
         parts = [
@@ -91,9 +103,15 @@ class PromptComposer:
             parts.append(user_skill_index_text.strip())
         if selected_bodies_text.strip():
             parts.append(selected_bodies_text.strip())
-        vision_brief = PromptComposer.build_vision_brief(ctx)
-        if vision_brief:
-            parts.append(vision_brief)
+        if turn_references_block is not None:
+            refs_block = format_turn_references_block(turn_references_block)
+            if refs_block:
+                parts.append(refs_block)
+        if attachment_context_block.strip():
+            parts.append(attachment_context_block.strip())
+        turn_media_brief = PromptComposer.build_turn_media_brief(ctx)
+        if turn_media_brief:
+            parts.append(turn_media_brief)
         parts.append(PromptComposer.build_context_clock())
         skill_index = SkillRegistry.build_index_block()
         if skill_index:

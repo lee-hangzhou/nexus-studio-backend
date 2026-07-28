@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from io import BytesIO
 from typing import Any
 from uuid import uuid4
 
@@ -16,8 +18,20 @@ from app.server.infra.object_storage import TosObjectStorage, safe_filename
 
 ASSET_SOURCE_CHAT_UPLOAD = "chat_upload"
 ASSET_SOURCE_GENERATE_RESULT = "generate_result"
-ASSET_SOURCE_CANVAS_NODE_OUTPUT = "canvas_node_output"
 ASSET_SOURCE_MANUAL_UPLOAD = "manual_upload"
+ASSET_SOURCE_AGENT_UPLOAD = "agent_upload"
+ASSET_SOURCE_ASSISTANT_OUTPUT = "assistant_output"
+ASSET_SOURCE_GENERATE_MATERIAL = "generate_material"
+
+LIBRARY_SOURCE_TYPES = frozenset({ASSET_SOURCE_MANUAL_UPLOAD, ASSET_SOURCE_GENERATE_RESULT})
+NON_LIBRARY_SOURCE_TYPES = frozenset(
+    {
+        ASSET_SOURCE_CHAT_UPLOAD,
+        ASSET_SOURCE_AGENT_UPLOAD,
+        ASSET_SOURCE_ASSISTANT_OUTPUT,
+        ASSET_SOURCE_GENERATE_MATERIAL,
+    }
+)
 
 ASSET_TYPE_IMAGE = "image"
 ASSET_TYPE_VIDEO = "video"
@@ -129,6 +143,60 @@ class AssetService:
             asset_type=asset_type_from_mime(mime_type),
             source_type=ASSET_SOURCE_MANUAL_UPLOAD,
             metadata={"filename": filename},
+        )
+
+    async def upload_generate_material(
+        self,
+        *,
+        user_id: int,
+        filename: str,
+        mime_type: str,
+        raw_bytes: bytes,
+    ) -> Assets:
+        """上传生成参考素材并登记为 generate_material 资产"""
+        safe_name = safe_filename(filename)
+        file_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+        storage_key = f"materials/{user_id}/{uuid4().hex}/{safe_name}"
+        upload = UploadFile(file=BytesIO(raw_bytes), filename=safe_name)
+        await self.storage.put_upload_file(storage_key, upload, content_type=mime_type)
+        return await self.create_asset(
+            user_id=user_id,
+            storage_key=storage_key,
+            filename=safe_name,
+            mime_type=mime_type,
+            asset_type=asset_type_from_mime(mime_type),
+            source_type=ASSET_SOURCE_GENERATE_MATERIAL,
+            metadata={"file_sha256": file_sha256, "size": len(raw_bytes)},
+        )
+
+    async def upload_agent_asset(
+        self,
+        *,
+        user_id: int,
+        project_id: int,
+        filename: str,
+        mime_type: str,
+        raw_bytes: bytes,
+    ) -> Assets:
+        """上传画布 Agent 会话素材并登记为 agent_upload 资产"""
+        safe_name = safe_filename(filename)
+        file_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+        storage_key = f"agent/{user_id}/{project_id}/{uuid4().hex}/{safe_name}"
+        upload = UploadFile(file=BytesIO(raw_bytes), filename=safe_name)
+        await self.storage.put_upload_file(storage_key, upload, content_type=mime_type)
+        return await self.create_asset(
+            user_id=user_id,
+            project_id=project_id,
+            storage_key=storage_key,
+            filename=safe_name,
+            mime_type=mime_type,
+            asset_type=asset_type_from_mime(mime_type),
+            source_type=ASSET_SOURCE_AGENT_UPLOAD,
+            metadata={
+                "file_sha256": file_sha256,
+                "size": len(raw_bytes),
+                "project_id": project_id,
+            },
         )
 
     async def update_asset(

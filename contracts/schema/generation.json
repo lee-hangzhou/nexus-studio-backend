@@ -223,28 +223,9 @@
     "GenerateRefMaterial": {
       "properties": {
         "asset_id": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Asset Id"
-        },
-        "attachment_id": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Attachment Id"
+          "minimum": 1,
+          "title": "Asset Id",
+          "type": "integer"
         },
         "filename": {
           "title": "Filename",
@@ -272,6 +253,7 @@
         }
       },
       "required": [
+        "asset_id",
         "filename",
         "mime_type",
         "url"
@@ -840,13 +822,6 @@
             "type": "integer"
           },
           "title": "Ref Asset Ids",
-          "type": "array"
-        },
-        "ref_attachment_ids": {
-          "items": {
-            "type": "integer"
-          },
-          "title": "Ref Attachment Ids",
           "type": "array"
         },
         "reference_mode": {

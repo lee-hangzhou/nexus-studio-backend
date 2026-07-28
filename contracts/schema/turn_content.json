@@ -1,5 +1,129 @@
 {
   "$defs": {
+    "TurnMediaBlock": {
+      "additionalProperties": false,
+      "description": "图片 / 视频 / 音频 / 文件块; url 由 BFF enrich 写入",
+      "properties": {
+        "assetId": {
+          "minimum": 1,
+          "title": "Assetid",
+          "type": "integer"
+        },
+        "mediaType": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnMediaType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "origin": {
+          "$ref": "#/$defs/TurnMediaOrigin"
+        },
+        "previewUrl": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Previewurl"
+        },
+        "type": {
+          "enum": [
+            "image",
+            "video",
+            "audio",
+            "file"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        }
+      },
+      "required": [
+        "type",
+        "origin",
+        "assetId"
+      ],
+      "title": "TurnMediaBlock",
+      "type": "object"
+    },
+    "TurnMediaOrigin": {
+      "description": "媒体块语义来源, 不映射第二张资源表",
+      "enum": [
+        "library",
+        "upload"
+      ],
+      "title": "TurnMediaOrigin",
+      "type": "string"
+    },
+    "TurnMediaType": {
+      "description": "媒体类型",
+      "enum": [
+        "image",
+        "video",
+        "audio",
+        "file"
+      ],
+      "title": "TurnMediaType",
+      "type": "string"
+    },
+    "TurnNodeBlock": {
+      "additionalProperties": false,
+      "description": "画布节点引用块",
+      "properties": {
+        "nodeId": {
+          "minLength": 1,
+          "title": "Nodeid",
+          "type": "string"
+        },
+        "type": {
+          "const": "node",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "nodeId",
+        "type"
+      ],
+      "title": "TurnNodeBlock",
+      "type": "object"
+    },
     "TurnSkillBlock": {
       "additionalProperties": false,
       "description": "技能引用内容块",
@@ -11,13 +135,13 @@
         },
         "type": {
           "const": "skill",
-          "default": "skill",
           "title": "Type",
           "type": "string"
         }
       },
       "required": [
-        "path"
+        "path",
+        "type"
       ],
       "title": "TurnSkillBlock",
       "type": "object"
@@ -32,13 +156,13 @@
         },
         "type": {
           "const": "text",
-          "default": "text",
           "title": "Type",
           "type": "string"
         }
       },
       "required": [
-        "text"
+        "text",
+        "type"
       ],
       "title": "TurnTextBlock",
       "type": "object"
@@ -51,8 +175,13 @@
           "items": {
             "discriminator": {
               "mapping": {
+                "audio": "#/$defs/TurnMediaBlock",
+                "file": "#/$defs/TurnMediaBlock",
+                "image": "#/$defs/TurnMediaBlock",
+                "node": "#/$defs/TurnNodeBlock",
                 "skill": "#/$defs/TurnSkillBlock",
-                "text": "#/$defs/TurnTextBlock"
+                "text": "#/$defs/TurnTextBlock",
+                "video": "#/$defs/TurnMediaBlock"
               },
               "propertyName": "type"
             },
@@ -62,21 +191,46 @@
               },
               {
                 "$ref": "#/$defs/TurnSkillBlock"
+              },
+              {
+                "$ref": "#/$defs/TurnMediaBlock"
+              },
+              {
+                "$ref": "#/$defs/TurnNodeBlock"
               }
             ]
           },
-          "minItems": 1,
           "title": "Content",
           "type": "array"
         },
         "materials": {
-          "items": {},
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "audio": "#/$defs/TurnMediaBlock",
+                "file": "#/$defs/TurnMediaBlock",
+                "image": "#/$defs/TurnMediaBlock",
+                "node": "#/$defs/TurnNodeBlock",
+                "video": "#/$defs/TurnMediaBlock"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TurnMediaBlock"
+              },
+              {
+                "$ref": "#/$defs/TurnNodeBlock"
+              }
+            ]
+          },
           "title": "Materials",
           "type": "array"
         }
       },
       "required": [
-        "content"
+        "content",
+        "materials"
       ],
       "title": "TurnUserInput",
       "type": "object"
@@ -91,6 +245,12 @@
     },
     {
       "$ref": "#/$defs/TurnSkillBlock"
+    },
+    {
+      "$ref": "#/$defs/TurnMediaBlock"
+    },
+    {
+      "$ref": "#/$defs/TurnNodeBlock"
     }
   ]
 }

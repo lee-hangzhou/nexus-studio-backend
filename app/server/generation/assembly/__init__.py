@@ -8,7 +8,6 @@ from app.contracts.generation import GenerateMaterialLimits, GenerateParamOption
 from app.server.assets.persistence.assets import Assets
 from app.server.assets.services.service import ASSET_SOURCE_GENERATE_RESULT
 from app.server.generation.domain.constants import (
-    REF_SOURCE_CHAT_ATTACHMENT,
     REFERENCE_MODE_LABELS,
     RESULT_ASSET_META_TASK_ID,
 )
@@ -91,13 +90,11 @@ def asset_task_id(row: Assets) -> int | None:
         return None
 
 
-def collect_reference_ids(tasks: list[GenerateTask]) -> tuple[set[int], set[int]]:
-    attachment_ids: set[int] = set()
+def collect_ref_asset_ids(tasks: list[GenerateTask]) -> set[int]:
     asset_ids: set[int] = set()
     for task in tasks:
-        attachment_ids.update(task.ref_attachment_ids or [])
         asset_ids.update(task.ref_asset_ids or [])
-    return attachment_ids, asset_ids
+    return asset_ids
 
 
 def to_param_options(capabilities: GenerationModelCapabilities) -> GenerateParamOptions:
@@ -208,24 +205,6 @@ def to_task_list_item(
         view.queue_total = observation.total
         view.estimated_wait_seconds = observation.estimated_wait_seconds
     return view
-
-
-def ref_material_from_attachment(
-    *,
-    attachment_id: int,
-    asset_id: int | None,
-    filename: str,
-    mime_type: str,
-    url: str,
-) -> GenerateRefMaterial:
-    return GenerateRefMaterial(
-        attachment_id=attachment_id,
-        asset_id=asset_id,
-        filename=filename,
-        mime_type=mime_type,
-        url=url,
-        source_type=REF_SOURCE_CHAT_ATTACHMENT,
-    )
 
 
 def ref_material_from_asset(

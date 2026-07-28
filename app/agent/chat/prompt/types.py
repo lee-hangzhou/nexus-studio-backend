@@ -18,4 +18,4 @@ class TurnPromptContext:
     model_key: str
     enable_tools: bool
     tool_names: list[str]
-    has_vision_images: bool = False
+    has_turn_media_refs: bool = False

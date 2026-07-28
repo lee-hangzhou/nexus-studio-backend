@@ -6,11 +6,12 @@ from langgraph.graph.state import CompiledStateGraph
 
 from app.agent.canvas.agent.graph import build_canvas_agent_graph
 from app.agent.canvas.prompt.composer import compose_canvas_system_prompt
-from app.agent.canvas.tools.build import build_canvas_tools
+from app.agent.canvas.tools.build import build_canvas_inspect_only_tools, build_canvas_tools
 from app.agent.chat.llm.gateway_chat_model import GatewayChatModel
 from app.agent.runtime.memory.inject import MemoryInjectionRequest, build_memory_injection
 from app.agent.runtime.memory_store import get_memory_store
 from app.agent.runtime.turn.tool_loop_guard import TurnToolLoopGuard
+from app.contracts.turn_content import TurnMediaType, TurnReferenceIndex
 from app.server.ports.product import SelectedSkillDTO
 from app.server.skills.domain.enums import SkillSurface
 
@@ -23,30 +24,34 @@ async def build_canvas_agent(
     user_id: int,
     checkpointer: BaseCheckpointSaver,
     enable_tools: bool,
+    turn_id_holder: dict[str, str | None],
+    reference_index: TurnReferenceIndex,
+    tool_asset_ids: frozenset[int],
+    asset_media_types: dict[int, TurnMediaType],
     mode: str = "auto",
-    turn_id: str | None = None,
-    turn_id_holder: dict[str, str | None] | None = None,
     loop_guard: TurnToolLoopGuard | None = None,
     user_message: str = "",
     is_resume: bool = False,
     selected_skills: tuple[SelectedSkillDTO, ...] = (),
 ) -> tuple[CompiledStateGraph, str]:
     """组装 LLM, 工具, system prompt, checkpointer, store 为可运行图"""
-    turn_id_holder = turn_id_holder if turn_id_holder is not None else {"turn_id": turn_id}
-    if turn_id and not turn_id_holder.get("turn_id"):
-        turn_id_holder["turn_id"] = turn_id
-    tools: list[StructuredTool] = (
-        build_canvas_tools(
+    if enable_tools:
+        tools: list[StructuredTool] = build_canvas_tools(
             project_id=project_id,
             episode_id=episode_id,
             user_id=user_id,
             turn_id_holder=turn_id_holder,
             loop_guard=loop_guard,
             surface=SkillSurface.CANVAS,
+            tool_asset_ids=tool_asset_ids,
+            asset_media_types=asset_media_types,
         )
-        if enable_tools
-        else []
-    )
+    else:
+        tools = build_canvas_inspect_only_tools(
+            user_id=user_id,
+            tool_asset_ids=tool_asset_ids,
+            asset_media_types=asset_media_types,
+        )
     memory_tools_enabled = any(
         name
         in {
@@ -76,6 +81,7 @@ async def build_canvas_agent(
         is_resume=is_resume,
         memory_blocks_text=injection.memory_blocks_text,
         memory_ops_brief=injection.ops_brief_text,
+        reference_index=reference_index,
     )
     store = get_memory_store()
     graph = build_canvas_agent_graph(

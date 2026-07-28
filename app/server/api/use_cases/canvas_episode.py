@@ -43,8 +43,9 @@ from app.contracts.turn_content import (
     extract_skill_paths,
     validate_turn_user_input,
 )
-from app.server.ports.adapters import UserSkillPortAdapter
-from app.server.ports.product import UserSkillPort
+from app.server.api.turn_input.enrich import enrich_turn_user_input
+from app.server.ports.adapters import CanvasPortAdapter, UserSkillPortAdapter
+from app.server.ports.product import CanvasPort, UserSkillPort
 from app.server.projects.services.scope import CanvasScopeService
 from app.server.projects.services.service import EpisodeService, canvas_scope_service, episode_service
 from app.server.skills.domain.enums import SkillSurface
@@ -84,12 +85,14 @@ class CanvasEpisodeUseCases:
         scopes: CanvasScopeService,
         episodes: EpisodeService,
         lock: CanvasSessionLock,
+        canvas: CanvasPort,
         user_skills: UserSkillPort,
     ) -> None:
-        """注入 scope、episode、session turn 锁与用户技能 Port"""
+        """注入 scope、episode、session turn 锁、画布 Port 与用户技能 Port"""
         self._scopes = scopes
         self._episodes = episodes
         self._lock = lock
+        self._canvas = canvas
         self._user_skills = user_skills
 
     @asynccontextmanager
@@ -264,8 +267,17 @@ class CanvasEpisodeUseCases:
 
         if claim.created:
             try:
-                user_input = validate_turn_user_input(
-                    TurnUserInput(content=body.content, materials=body.materials)
+                raw_input = validate_turn_user_input(
+                    TurnUserInput(content=body.content, materials=body.materials),
+                    allow_node=True,
+                )
+                user_input = await enrich_turn_user_input(
+                    user_id=user_id,
+                    user_input=raw_input,
+                    project_id=scope.project_id,
+                    episode_id=scope.episode_id,
+                    canvas_port=self._canvas,
+                    allow_node=True,
                 )
                 content_text = compile_human_text(user_input.content)
                 skill_paths = extract_skill_paths(user_input.content)
@@ -465,5 +477,6 @@ canvas_episode_use_cases = CanvasEpisodeUseCases(
     scopes=canvas_scope_service,
     episodes=episode_service,
     lock=canvas_turn_lock,
+    canvas=CanvasPortAdapter(),
     user_skills=UserSkillPortAdapter(user_skill_service),
 )

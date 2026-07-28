@@ -10,7 +10,6 @@ from app.agent.chat.llm import get_adapter
 from app.agent.chat.llm.adapter import ModelAdapter
 from app.agent.chat.llm.registry import get_model_spec
 from app.server.chat.domain.enums import ChatMessageRole
-from app.server.chat.persistence.attachments import ChatAttachments
 from app.server.chat.persistence.conversations import ChatConversations
 from app.server.chat.persistence.messages import ChatMessages
 from app.server.chat.services.constants import CONVERSATION_TITLE_MAX_LEN, DEFAULT_CONVERSATION_TITLE
@@ -55,21 +54,25 @@ def is_placeholder_title(title: str, *, placeholder: str = DEFAULT_CONVERSATION_
     return normalize_title_text(title) == normalize_title_text(placeholder)
 
 
-async def attachment_filenames(
-    *,
-    user_id: int,
-    conversation_id: int,
-    attachment_ids: list[int],
-) -> list[str]:
-    """按附件 id 取文件名列表"""
-    if not attachment_ids:
+async def asset_filenames(*, user_id: int, asset_ids: tuple[int, ...]) -> list[str]:
+    """按 asset_id 批量取文件名列表（保持入参顺序）"""
+    if not asset_ids:
         return []
-    rows = await ChatAttachments.filter(
-        id__in=attachment_ids,
+    from app.server.assets.persistence.assets import Assets
+
+    rows = await Assets.filter(
         user_id=user_id,
-        conversation_id=conversation_id,
+        id__in=list(asset_ids),
+        deleted_at__isnull=True,
     )
-    return [row.filename for row in rows]
+    by_id = {int(row.id): row.filename for row in rows}
+    missing = [asset_id for asset_id in asset_ids if asset_id not in by_id]
+    if missing:
+        from app.server.exceptions.base import AppError
+        from app.server.exceptions.codes import ErrorCode
+
+        raise AppError(ErrorCode.INVALID_PARAMS, f"assets not found: {missing}")
+    return [by_id[asset_id] for asset_id in asset_ids]
 
 
 def _gateway_error_code(response: dict) -> int | None:
@@ -171,7 +174,7 @@ async def generate_conversation_title_via_llm(
     user_id: int,
     conversation_id: int,
     user_content: str,
-    attachment_ids: list[int],
+    turn_asset_ids: tuple[int, ...],
     model_key: str,
 ) -> TitleApplyResult:
     """首轮且仍为占位标题时生成并写回 Chat 会话标题"""
@@ -185,10 +188,9 @@ async def generate_conversation_title_via_llm(
         return TitleApplyResult(applied=False)
 
     expected_title = row.title
-    attachment_filenames_list = await attachment_filenames(
+    attachment_filenames_list = await asset_filenames(
         user_id=user_id,
-        conversation_id=conversation_id,
-        attachment_ids=attachment_ids,
+        asset_ids=turn_asset_ids,
     )
     new_title = await propose_sidebar_title_via_llm(
         user_content=user_content,
