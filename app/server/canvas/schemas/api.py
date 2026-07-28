@@ -47,7 +47,7 @@ class CanvasTurnRequest(BaseModel):
     request_id: UUID4
     content: list[TurnContentBlock] = Field(min_length=1)
     materials: list[TurnMaterialBlock] = Field(default_factory=list)
-    model_key: str | None = None
+    model_key: str = Field(min_length=1)
     client_turn_id: str | None = None
     mode: Literal["auto", "manual"] = "auto"
     enable_tools: bool = True
@@ -75,7 +75,7 @@ class CanvasResumeRequest(BaseModel):
     tool_call_id: str
     action: Literal["confirm", "reject"]
     client_turn_id: str = Field(min_length=1)
-    model_key: str | None = None
+    model_key: str = Field(min_length=1)
     operation: CanvasToolPendingOperation | dict[str, Any] | None = None
 
 

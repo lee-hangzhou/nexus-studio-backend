@@ -70,7 +70,9 @@ class CanvasMountContext:
     @property
     def resolved_model_key(self) -> str:
         key = (self.model_key or "").strip()
-        return key or settings.CHAT_DEFAULT_MODEL
+        if not key:
+            raise AppError(ErrorCode.INVALID_PARAMS, "model is required")
+        return key
 
 
 def _thread_id(ctx: CanvasMountContext) -> str:
@@ -226,14 +228,14 @@ def _heartbeat(_ctx: CanvasMountContext) -> int:
 
 
 def _start_repair(ctx: CanvasMountContext):
-    async def repair(agent, runnable_config, **kwargs: Any) -> None:
+    async def repair(agent, runnable_config, *, reason: str, **_kwargs: Any) -> None:
         await repair_canvas_checkpoint_if_needed(
             agent,
             runnable_config,
             project_id=ctx.project_id,
             episode_id=ctx.episode_id,
             turn_id=ctx.turn_id,
-            reason=kwargs.get("reason") if kwargs.get("reason") != "turn_start" else None,
+            reason="turn_interrupted" if reason == "turn_start" else reason,
         )
 
     return repair

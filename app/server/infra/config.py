@@ -116,7 +116,7 @@ class Settings(BaseSettings):
     GATEWAY_CAPTION_MODEL: str = Field(default="")
 
     CHAT_MODEL_REGISTRY: str = Field(default="{}")
-    CHAT_DEFAULT_MODEL: str = Field(default="gpt-5.5")
+    SKILL_DESCRIPTION_FILL_MODEL: str = Field(default="")
     CHAT_MAX_ITERATIONS: int = Field(default=50)
     CHAT_CONTEXT_BUDGET: int = Field(default=120_000)
     CHAT_RECENT_MESSAGE_LIMIT: int = Field(default=20)

@@ -33,7 +33,7 @@ class _GatewayChatCompletion(BaseModel):
 
 def _gateway_model_id() -> str:
     """从配置解析用于描述补全的网关模型 id"""
-    model_key = settings.CHAT_DEFAULT_MODEL.strip()
+    model_key = settings.SKILL_DESCRIPTION_FILL_MODEL.strip()
     if not model_key:
         raise AppError(ErrorCode.INVALID_PARAMS, "skill description fill model unavailable")
     try:

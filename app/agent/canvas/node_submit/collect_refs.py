@@ -53,13 +53,13 @@ def pick_connected_reference_asset_ids(
 
 
 def collect_asset_ids_from_content(content: WorkflowPromptContent) -> list[int]:
-    """从 WorkflowPromptContent 媒体段收集 assetId"""
+    """从 WorkflowPromptContent 媒体段收集 asset_id"""
     ids: list[int] = []
     seen: set[int] = set()
     for seg in content:
         if seg.get("type") not in _MEDIA_SEGMENT_TYPES:
             continue
-        asset_id = seg.get("assetId")
+        asset_id = seg.get("asset_id")
         if not isinstance(asset_id, int) or asset_id <= 0 or asset_id in seen:
             continue
         seen.add(asset_id)

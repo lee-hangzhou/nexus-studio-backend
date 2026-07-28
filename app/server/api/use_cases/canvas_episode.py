@@ -322,7 +322,7 @@ class CanvasEpisodeUseCases:
                         content_text=content_text,
                         user_input=user_input,
                         selected_skills=selected_skills,
-                        model_key=body.model_key or "",
+                        model_key=body.model_key,
                         client_turn_id=body.client_turn_id,
                         mode=body.mode,
                         enable_tools=body.enable_tools,
@@ -411,7 +411,7 @@ class CanvasEpisodeUseCases:
                         action=body.action,
                         cancel_event=cancel_event,
                         lock_held=True,
-                        model_key=body.model_key or "",
+                        model_key=body.model_key,
                         operation=body.operation,
                     ),
                 )

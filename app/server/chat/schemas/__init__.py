@@ -22,7 +22,7 @@ class ChatModelItem(BaseModel):
 
 class ConversationCreateRequest(BaseModel):
     title: Optional[str] = None
-    model: Optional[str] = None
+    model: str = Field(min_length=1)
 
 
 class ConversationListRequest(BaseModel):

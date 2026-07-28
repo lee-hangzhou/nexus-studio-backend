@@ -24,7 +24,6 @@ from app.agent.chat.workspace.session import ensure_workspace_session
 from app.agent.chat.gate import session_bridge
 from app.agent.chat.gate.pending import get_gate_pending, get_gate_pending_many
 from app.agent.runtime.checkpointer import get_chat_checkpointer
-from app.server.infra.config import settings
 from app.server.infra.logger import log_exception, logger
 from app.server.chat.domain.enums import ChatConversationStatus, ChatMessageRole
 from app.server.exceptions.base import AppError
@@ -54,9 +53,8 @@ class ChatService:
         except Exception as exc:
             raise AppError(ErrorCode.INTERNAL_ERROR, f"failed to list chat models: {exc}") from exc
 
-    async def create_conversation(self, user_id: int, title: Optional[str], model: Optional[str]) -> ConversationView:
-        model_key = model or settings.CHAT_DEFAULT_MODEL
-        get_model_spec(model_key)
+    async def create_conversation(self, user_id: int, title: Optional[str], model: str) -> ConversationView:
+        model_key = require_turn_model(model)
         row = await ChatConversations.create(
             user_id=user_id,
             title=title or DEFAULT_CONVERSATION_TITLE,
