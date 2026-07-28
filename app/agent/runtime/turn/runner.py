@@ -96,6 +96,9 @@ async def stream_agent_turn(
             terminal_policy=terminal_policy,
             preview_tool_result=preview,
             surface=mount.name,
+            enrich_pending=(
+                mount.build_enrich_pending(ctx) if mount.build_enrich_pending is not None else None
+            ),
         )
         async for chunk in stream_prepared_turn(prepared):
             yield chunk

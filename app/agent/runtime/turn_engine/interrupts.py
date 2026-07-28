@@ -5,7 +5,9 @@ from typing import Any
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
+from pydantic import ValidationError
 
+from app.agent.runtime.agent.tool_call_registry import ModelToolCall
 from app.agent.runtime.turn_engine.interrupt_model import parse_pending_tool_actions
 
 
@@ -29,8 +31,10 @@ async def collect_pending_tool_calls(
 ) -> list[dict[str, Any]]:
     snapshot = await agent.aget_state(config)
     raw_messages = snapshot.values.get("messages")
-    if not isinstance(raw_messages, list):
+    if raw_messages is None:
         return []
+    if not isinstance(raw_messages, list):
+        raise TypeError("checkpoint messages must be a list")
     latest_ai: AIMessage | None = None
     for message in reversed(raw_messages):
         if isinstance(message, AIMessage):
@@ -40,20 +44,15 @@ async def collect_pending_tool_calls(
         return []
     pending: list[dict[str, Any]] = []
     for call in latest_ai.tool_calls:
-        if not isinstance(call, dict):
-            continue
-        call_id = call.get("id")
-        name = call.get("name")
-        args = call.get("args")
-        if not isinstance(call_id, str) or not call_id:
-            continue
-        if not isinstance(name, str) or not name:
-            continue
+        try:
+            parsed = ModelToolCall.model_validate(call)
+        except ValidationError as exc:
+            raise TypeError("tool_call violates contract") from exc
         pending.append(
             {
-                "call_id": call_id,
-                "name": name,
-                "args": dict(args) if isinstance(args, dict) else {},
+                "call_id": parsed.id,
+                "name": parsed.name,
+                "args": parsed.args,
             }
         )
     return pending

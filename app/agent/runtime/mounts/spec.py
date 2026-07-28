@@ -14,7 +14,7 @@ from app.agent.runtime.mounts.context import MountTurnContext
 from app.agent.runtime.turn.guards import TurnGuards
 from app.agent.runtime.turn_engine.checkpoint import CheckpointRepairFn
 from app.agent.runtime.turn_engine.handlers import RecoveryHook
-from app.agent.runtime.turn_engine.sse_subscriber import ToolPreviewFn
+from app.agent.runtime.turn_engine.sse_subscriber import PendingEnrichFn, ToolPreviewFn
 from app.agent.runtime.turn_engine.subscribers import TurnSubscriber
 from app.agent.runtime.turn_engine.terminal_policy import SseTerminalPolicy
 
@@ -27,6 +27,7 @@ BuildRunnableConfigFn = Callable[[Any], RunnableConfig]
 BuildTerminalPolicyFn = Callable[[Any], SseTerminalPolicy]
 BuildRecoveryHookFn = Callable[[Any], RecoveryHook | None]
 BuildPreviewFn = Callable[[Any], ToolPreviewFn | None]
+BuildEnrichPendingFn = Callable[[Any], PendingEnrichFn | None]
 ResolveInputMessagesFn = Callable[[Any], list[BaseMessage] | None]
 ResolveHeartbeatFn = Callable[[Any], int]
 ResolveRepairFn = Callable[[Any], CheckpointRepairFn | None]
@@ -50,6 +51,7 @@ class AgentMountSpec:
     prepare_turn: PrepareTurnFn | None = None
     build_recovery_hook: BuildRecoveryHookFn | None = None
     build_preview_tool_result: BuildPreviewFn | None = None
+    build_enrich_pending: BuildEnrichPendingFn | None = None
     resolve_input_messages: ResolveInputMessagesFn | None = None
     resolve_on_turn_start_repair: ResolveRepairFn | None = None
     resolve_on_turn_cleanup_repair: ResolveRepairFn | None = None

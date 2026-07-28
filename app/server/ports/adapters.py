@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 from uuid import UUID
 
+from pydantic import TypeAdapter
 from tortoise.transactions import in_transaction
 
 from app.contracts.canvas import CanvasNodeView, CanvasPatchOp, CanvasPatchResponse, GenerationProgress
@@ -67,6 +69,9 @@ from app.server.generation.schemas import (
     GenerateTaskSubmitResponse,
     SubmitGenerateRequest,
 )
+
+
+_OPTIONAL_JSON_OBJECT = TypeAdapter(dict[str, Any] | None)
 
 
 class GenerationPortAdapter(GenerationPort, object):
@@ -140,28 +145,20 @@ def _task_dto(task: GenerateTask) -> GenerationTaskDTO:
 
 
 def _node_dto(row: CanvasNodes, *, view: CanvasNodeView | None = None) -> CanvasNodeDTO:
-    raw_asset_ids = row.output_asset_ids
-    asset_ids = tuple(int(item) for item in raw_asset_ids) if isinstance(raw_asset_ids, list) else ()
+    from app.server.canvas.domain.node_data import dump_node_data, parse_node_data
+
+    data = dump_node_data(parse_node_data(row.data))
     return CanvasNodeDTO(
         id=str(row.id),
         episode_id=int(row.episode_id),
         kind=CanvasNodeKind(row.kind),
-        status=CanvasNodeStatus(row.status),
         revision=row.revision,
         position_x=float(row.position_x),
         position_y=float(row.position_y),
-        title=row.title,
-        input_prompt=row.input_prompt,
-        output_text=row.output_text,
-        model_id=row.model_id,
-        voice_id=row.voice_id,
-        ratio=row.ratio,
-        duration_sec=row.duration_sec,
-        resolution=row.resolution,
-        task_id=int(row.task_id) if row.task_id is not None else None,
-        output_asset_ids=asset_ids,
+        width=float(row.width) if row.width is not None else None,
+        height=float(row.height) if row.height is not None else None,
+        data=data,
         output_asset_urls=tuple(view.output_asset_urls or ()) if view is not None else (),
-        error_message=row.error_message,
     )
 
 
@@ -187,7 +184,10 @@ class CanvasPortAdapter(CanvasPort, object):
         ).first()
         if task is None:
             return None
-        node = await CanvasNodes.filter(task_id=task_id, deleted_at__isnull=True).first()
+        node = await CanvasNodes.filter(
+            deleted_at__isnull=True,
+            data__contains={"generate_task_id": task_id},
+        ).first()
         if node is None:
             return None
         patch = await generation_sync.project_from_task(task)
@@ -198,7 +198,10 @@ class CanvasPortAdapter(CanvasPort, object):
         ).first()
         if task is None:
             return None
-        node = await CanvasNodes.filter(task_id=task_id, deleted_at__isnull=True).first()
+        node = await CanvasNodes.filter(
+            deleted_at__isnull=True,
+            data__contains={"generate_task_id": task_id},
+        ).first()
         if node is None:
             return None
         episode = await ProjectEpisodes.filter(id=node.episode_id, deleted_at__isnull=True).first()
@@ -262,7 +265,7 @@ class CanvasPortAdapter(CanvasPort, object):
         if kind is not None:
             query = query.filter(kind=kind.value)
         if status is not None:
-            query = query.filter(status=status.value)
+            query = query.filter(data__contains={"status": status.value})
         rows = await query.all()
         views_by_id: dict[str, CanvasNodeView] = {}
         if include_asset_urls:
@@ -340,13 +343,9 @@ class CanvasPortAdapter(CanvasPort, object):
             project_name=project.name,
             episode_no=int(episode.episode_no),
             episode_name=episode.name,
-            tone_constraint=(
-                dict(project.tone_constraint) if isinstance(project.tone_constraint, dict) else None
-            ),
-            style_constraint=(
-                dict(project.style_constraint) if isinstance(project.style_constraint, dict) else None
-            ),
-            config=dict(project.config) if isinstance(project.config, dict) else None,
+            tone_constraint=_OPTIONAL_JSON_OBJECT.validate_python(project.tone_constraint),
+            style_constraint=_OPTIONAL_JSON_OBJECT.validate_python(project.style_constraint),
+            config=_OPTIONAL_JSON_OBJECT.validate_python(project.config),
         )
 
     async def apply_patch(
@@ -385,16 +384,31 @@ class CanvasPortAdapter(CanvasPort, object):
             ).first()
             if row is None:
                 raise AppError(ErrorCode.RESOURCE_NOT_FOUND, f"node {node_id} not found")
+            from app.server.canvas.domain.node_data import (
+                apply_generation_to_data,
+                data_status,
+                dump_node_data,
+                parse_node_data,
+            )
+
+            existing = parse_node_data(row.data)
             active_task_id: int | None = None
-            if row.task_id is not None:
-                task = await GenerateTask.filter(id=row.task_id, deleted_at__isnull=True).first()
+            if existing.generate_task_id is not None:
+                task = await GenerateTask.filter(
+                    id=existing.generate_task_id,
+                    deleted_at__isnull=True,
+                ).first()
                 if task is not None and GatewayTaskStatus(task.status).is_non_terminal:
                     active_task_id = task.id
-            if row.status == CanvasNodeStatus.RUNNING.value or active_task_id is not None:
+            if data_status(existing) == CanvasNodeStatus.RUNNING or active_task_id is not None:
                 return CanvasNodeClaimDTO(claimed=False, active_task_id=active_task_id)
-            row.status = CanvasNodeStatus.RUNNING.value
-            row.task_id = None
-            row.error_message = ""
+            claimed = apply_generation_to_data(
+                existing,
+                status=CanvasNodeStatus.RUNNING,
+                generate_task_id=None,
+                generate_error="",
+            )
+            row.data = dump_node_data(claimed)
             row.revision = row.revision + 1
             await row.save()
             return CanvasNodeClaimDTO(
@@ -428,24 +442,80 @@ class CanvasPortAdapter(CanvasPort, object):
                 episode_id=episode_id,
                 id=UUID(node_id),
                 deleted_at__isnull=True,
-                task_id__isnull=True,
-                status__in=[status.value for status in allowed_statuses],
             ).first()
             if row is None:
                 return None
-            row.status = CanvasNodeStatus.RUNNING.value
-            row.error_message = ""
+            from app.server.canvas.domain.node_data import (
+                apply_generation_to_data,
+                data_status,
+                dump_node_data,
+                parse_node_data,
+            )
+
+            existing = parse_node_data(row.data)
+            if existing.generate_task_id is not None:
+                return None
+            if data_status(existing) not in allowed_statuses:
+                return None
+            claimed = apply_generation_to_data(
+                existing,
+                status=CanvasNodeStatus.RUNNING,
+                generate_error="",
+            )
+            row.data = dump_node_data(claimed)
             row.revision = row.revision + 1
             await row.save()
             return row.revision, node_view_from_row(row)
 
     async def list_episode_node_task_ids(self, episode_id: int, *, limit: int) -> list[int]:
-        rows = await CanvasNodes.filter(
-            episode_id=episode_id,
-            deleted_at__isnull=True,
-            task_id__isnull=False,
-        ).limit(limit)
-        return [task_id for row in rows if (task_id := row.task_id) is not None]
+        """列出本集节点上的 generate_task_id（有任务的节点，按 updated_at 新到旧）
+
+        在 DB 侧过滤含 generate_task_id 的行，避免 episode 全表进内存
+        """
+        if limit < 1:
+            return []
+        from tortoise import connections
+
+        conn = connections.get("default")
+        dialect = getattr(conn.capabilities, "dialect", "") or ""
+        if dialect == "sqlite":
+            rows = await conn.execute_query_dict(
+                """
+                SELECT CAST(json_extract(data, '$.generate_task_id') AS INTEGER) AS task_id
+                FROM canvas_nodes
+                WHERE episode_id = ?
+                  AND deleted_at IS NULL
+                  AND json_extract(data, '$.generate_task_id') IS NOT NULL
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                [episode_id, limit],
+            )
+        elif dialect in {"postgres", "postgresql"}:
+            rows = await conn.execute_query_dict(
+                """
+                SELECT (data->>'generate_task_id')::bigint AS task_id
+                FROM canvas_nodes
+                WHERE episode_id = $1
+                  AND deleted_at IS NULL
+                  AND jsonb_typeof(data->'generate_task_id') = 'number'
+                ORDER BY updated_at DESC
+                LIMIT $2
+                """,
+                [episode_id, limit],
+            )
+        else:
+            raise AppError(
+                ErrorCode.INTERNAL,
+                f"list_episode_node_task_ids unsupported db dialect: {dialect!r}",
+            )
+        task_ids: list[int] = []
+        for row in rows:
+            raw = row.get("task_id")
+            if raw is None:
+                continue
+            task_ids.append(int(raw))
+        return task_ids
 
     async def update_node_generation(
         self,
@@ -552,7 +622,7 @@ class CanvasPortAdapter(CanvasPort, object):
         if row is None:
             return None
         raw = (row.metadata or {}).get("input")
-        return raw if isinstance(raw, dict) else None
+        return _OPTIONAL_JSON_OBJECT.validate_python(raw)
 
     async def touch_episode(self, episode_id: int) -> None:
         await ProjectEpisodes.filter(id=episode_id, deleted_at__isnull=True).update(

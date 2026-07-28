@@ -6,7 +6,11 @@ import json
 import uuid
 from typing import Any
 
+from pydantic import TypeAdapter
+
 from app.server.infra.config import settings
+
+_JSON_OBJECT = TypeAdapter(dict[str, Any])
 
 _memory: dict[str, dict[str, Any]] = {}
 _use_memory = False
@@ -59,9 +63,9 @@ async def get_otp_flow(conversation_id: int, otp_flow_id: str) -> dict[str, Any]
         return None
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
+    except json.JSONDecodeError as exc:
+        raise ValueError("otp flow is not valid JSON") from exc
+    return _JSON_OBJECT.validate_python(data)
 
 
 async def set_otp_send_selector(

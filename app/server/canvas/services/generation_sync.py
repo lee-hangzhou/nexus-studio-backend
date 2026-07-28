@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 from app.contracts.canvas import CanvasPatchResponse
-from app.server.canvas.services.canvas_service import canvas_service
+from typing import Any
+
+from pydantic import TypeAdapter
 from app.server.canvas.domain.enums import CanvasNodeStatus
+from app.server.canvas.domain.node_data import data_status, parse_node_data
+from app.server.canvas.persistence.nodes import CanvasNodes
+from app.server.canvas.services.canvas_service import canvas_service
+from app.server.exceptions.base import AppError
+from app.server.exceptions.codes import ErrorCode
 from app.server.generation.domain.gateway_status import (
     NON_TERMINAL_GATEWAY_TASK_STATUSES,
     TERMINAL_GATEWAY_TASK_STATUSES,
     GatewayTaskStatus,
 )
-from app.server.exceptions.base import AppError
-from app.server.exceptions.codes import ErrorCode
-from app.server.canvas.persistence.nodes import CanvasNodes
 from app.server.generation.persistence.generate_task import GenerateTask
 from app.server.projects.domain.models import CanvasScope
 from app.server.projects.persistence.episodes import ProjectEpisodes
@@ -42,16 +46,28 @@ def node_status_from_task(status: int) -> CanvasNodeStatus:
 def canvas_node_needs_sync(node: CanvasNodes, task: GenerateTask) -> bool:
     """判断 canvas_nodes 是否落后于 generate_task"""
     expected = node_status_from_task(task.status)
-    if node.status != expected:
+    data = parse_node_data(node.data)
+    if data_status(data) != expected:
         return True
     if expected == CanvasNodeStatus.SUCCESS:
-        task_assets = task.result_asset_ids if isinstance(task.result_asset_ids, list) else []
-        node_assets = node.output_asset_ids if isinstance(node.output_asset_ids, list) else []
+        task_assets = (
+            []
+            if task.result_asset_ids is None
+            else TypeAdapter(list[Any]).validate_python(task.result_asset_ids)
+        )
+        node_assets = data.output_asset_ids if data.output_asset_ids is not None else []
         if task_assets and not node_assets:
             return True
-    if expected == CanvasNodeStatus.FAILED and task.error_message and not node.error_message:
+    if expected == CanvasNodeStatus.FAILED and task.error_message and not data.generate_error:
         return True
     return False
+
+
+async def _node_for_task(task_id: int) -> CanvasNodes | None:
+    return await CanvasNodes.filter(
+        deleted_at__isnull=True,
+        data__contains={"generate_task_id": task_id},
+    ).first()
 
 
 async def project_from_task(task: GenerateTask) -> CanvasPatchResponse | None:
@@ -71,7 +87,7 @@ async def reconcile_canvas_node_for_task(
     status = GatewayTaskStatus(task.status)
     if status not in TERMINAL_GATEWAY_TASK_STATUSES:
         return None
-    node = await CanvasNodes.filter(task_id=task.id, deleted_at__isnull=True).first()
+    node = await _node_for_task(int(task.id))
     if node is None:
         return None
     if ensure_assets and status == GatewayTaskStatus.SUCCEEDED:
@@ -88,7 +104,7 @@ async def sync_canvas_node_from_generate_task(
     task: GenerateTask,
 ) -> CanvasPatchResponse | None:
     """把 generate_task 状态写回 canvas node"""
-    node = await CanvasNodes.filter(task_id=task.id, deleted_at__isnull=True).first()
+    node = await _node_for_task(int(task.id))
     if node is None:
         return None
     scope = await _scope_for_node(node, user_id=int(task.user_id))

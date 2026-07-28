@@ -40,10 +40,10 @@ async def run_manual_node_generate(
         return CanvasNodeGenerateResponse(
             node_id=node_id,
             kind="text",
-            status=node_view.status,
-            task_id=node_view.task_id,
+            status=node_view.data.status or CanvasNodeStatus.IDLE,
+            task_id=node_view.data.generate_task_id,
             node=node_view,
-            error_message=node_view.error_message,
+            error_message=node_view.data.generate_error,
         )
 
     if body.kind not in ("image", "video", "audio"):
@@ -99,7 +99,7 @@ async def run_manual_node_generate(
         if raw_task_id is not None:
             task_id = int(raw_task_id)
     except (json.JSONDecodeError, TypeError, ValueError):
-        task_id = node_view.task_id
+        task_id = node_view.data.generate_task_id
     return CanvasNodeGenerateResponse(
         node_id=node_id,
         kind=body.kind,

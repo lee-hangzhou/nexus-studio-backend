@@ -28,13 +28,29 @@ def _edge_to_graph(edge: CanvasEdgeDTO) -> dict:
 
 
 def _node_to_graph(node: CanvasNodeDTO) -> dict:
+    from app.server.canvas.domain.node_data import (
+        data_output_asset_ids,
+        data_output_text,
+        data_prompt_text,
+        data_status,
+        parse_node_data,
+    )
+
+    data = parse_node_data(node.data)
     return {
         "id": node.id,
         "data": {
-            "status": node.status.value,
-            "input_prompt": node.input_prompt,
-            "output_text": node.output_text,
-            "output_asset_ids": list(node.output_asset_ids),
+            "status": data_status(data).value,
+            "input_prompt": data_prompt_text(data, node.kind),
+            "output_text": data_output_text(data),
+            "output_asset_ids": list(data_output_asset_ids(data)),
+            "prompt": data.prompt,
+            "content": data.content,
+            "prompt_content": (
+                [seg.model_dump(mode="json") for seg in data.prompt_content]
+                if data.prompt_content
+                else None
+            ),
         },
     }
 

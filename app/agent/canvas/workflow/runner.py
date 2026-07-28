@@ -9,6 +9,14 @@ from app.agent.runtime.ports import get_canvas_port, get_generation_port
 from app.contracts.canvas import CanvasPatchResponse, GenerationProgress
 from app.server.canvas.domain.enums import CanvasNodeKind, CanvasNodeStatus
 from app.server.canvas.domain.models import ResolvedCanvasInputs
+from app.server.canvas.domain.node_data import (
+    data_generate_error,
+    data_ratio,
+    data_resolution,
+    data_status,
+    data_task_id,
+    parse_node_data,
+)
 from app.server.exceptions.base import AppError
 from app.server.generation.domain.enums import GenerationKind
 from app.server.generation.schemas import SubmitGenerateRequest
@@ -48,9 +56,12 @@ class CanvasWorkflowRunner:
         node = await get_canvas_port().get_node(episode_id, node_id)
         if node is None or node.kind not in RUNNABLE_NODE_KINDS:
             return
-        if node.status in NON_REPEATABLE_STATUSES or node.task_id is not None:
+        node_data = parse_node_data(node.data)
+        node_status = data_status(node_data)
+        node_task_id = data_task_id(node_data)
+        if node_status in NON_REPEATABLE_STATUSES or node_task_id is not None:
             return
-        if node.status not in ADVANCEABLE_STATUSES:
+        if node_status not in ADVANCEABLE_STATUSES:
             return
 
         model_id, duration_sec, config_changed = await resolve_node_generation_config(node)
@@ -79,7 +90,7 @@ class CanvasWorkflowRunner:
                 episode_id,
                 node_id,
                 status=CanvasNodeStatus.WAITING_INPUTS,
-                task_id=node.task_id,
+                task_id=node_task_id,
                 error_message="; ".join(missing),
             )
             return
@@ -119,8 +130,8 @@ class CanvasWorkflowRunner:
                 kind=GenerationKind(node.kind.value),
                 prompt=prepared.prompt,
                 model_id=model_id,
-                ratio=node.ratio,
-                resolution=node.resolution,
+                ratio=data_ratio(parse_node_data(node.data)),
+                resolution=data_resolution(parse_node_data(node.data)),
                 duration=duration_sec if node.kind == CanvasNodeKind.VIDEO else None,
                 ref_asset_ids=list(prepared.ref_asset_ids),
             )
@@ -179,16 +190,21 @@ class CanvasWorkflowRunner:
         row = await get_canvas_port().get_node(episode_id, node_id)
         if row is None:
             return
+        row_data = parse_node_data(row.data)
         rev, node_view = await get_canvas_port().update_node_generation(
             episode_id,
             node_id,
-            task_id=row.task_id if task_id is None else task_id,
-            status=status if status is not None else row.status,
+            task_id=data_task_id(row_data) if task_id is None else task_id,
+            status=status if status is not None else data_status(row_data),
             model_id=model_id,
             duration_sec=duration_sec,
-            error_message=error_message if error_message is not None else row.error_message,
+            error_message=(
+                data_generate_error(row_data) if error_message is None else error_message
+            ),
         )
-        resolved_status = status if status is not None else CanvasNodeStatus(node_view.status)
+        resolved_status = status if status is not None else (
+            node_view.data.status or CanvasNodeStatus.IDLE
+        )
         await get_canvas_port().publish_episode_graph_event(
             episode_id,
             canvas_patch=CanvasPatchResponse(

@@ -24,12 +24,21 @@ class CanvasEpisodeLifecycleRepository:
     async def get_delete_state(self, episode_id: int) -> CanvasEpisodeDeleteState:
         # Include soft-deleted nodes: DeleteNodeOp can leave RUNNING + in-flight tasks
         # that would otherwise be missed and orphaned by delete_all.
-        rows = await CanvasNodes.filter(episode_id=episode_id).only("status", "task_id")
+        from app.server.canvas.domain.node_data import data_status, data_task_id, parse_node_data
+
+        rows = await CanvasNodes.filter(episode_id=episode_id).only("data")
+        task_ids: list[int] = []
+        running = 0
+        for row in rows:
+            data = parse_node_data(row.data)
+            if data_status(data) == CanvasNodeStatus.RUNNING:
+                running += 1
+            task_id = data_task_id(data)
+            if task_id is not None:
+                task_ids.append(int(task_id))
         return CanvasEpisodeDeleteState(
-            running_node_count=sum(1 for row in rows if row.status == CanvasNodeStatus.RUNNING.value),
-            task_ids=tuple(
-                dict.fromkeys(int(row.task_id) for row in rows if row.task_id is not None)
-            ),
+            running_node_count=running,
+            task_ids=tuple(dict.fromkeys(task_ids)),
         )
 
     async def delete_all(self, episode_id: int) -> None:

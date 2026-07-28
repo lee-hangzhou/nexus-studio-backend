@@ -40,25 +40,18 @@ class ObservedGenerationDTO:
 
 @dataclass(frozen=True)
 class CanvasNodeDTO:
+    """画布节点 Port DTO；业务字段只在 data，调用方用 node_data helpers 读取"""
+
     id: str
     episode_id: int
     kind: CanvasNodeKind
-    status: CanvasNodeStatus
     revision: int
     position_x: float
     position_y: float
-    title: str
-    input_prompt: str
-    output_text: str
-    model_id: str | None
-    voice_id: str | None
-    ratio: str | None
-    duration_sec: int | None
-    resolution: str | None
-    task_id: int | None
-    output_asset_ids: tuple[int, ...]
-    output_asset_urls: tuple[str, ...]
-    error_message: str | None
+    width: float | None
+    height: float | None
+    data: dict[str, Any]
+    output_asset_urls: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

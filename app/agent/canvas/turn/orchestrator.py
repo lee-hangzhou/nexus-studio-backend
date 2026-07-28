@@ -8,16 +8,21 @@ from langgraph.types import Command
 
 from app.agent.canvas.mount import CANVAS_MOUNT, CanvasMountContext
 from app.agent.canvas.turn.lock import canvas_turn_lock
+from app.agent.canvas.turn.pending import (
+    APPLY_CANVAS_PATCH,
+    SUBMIT_NODE_GENERATION,
+    edited_tool_args_from_pending_operation,
+)
 from app.agent.chat.stream.encoder import encode_sse_frame
 from app.agent.chat.stream.frames import StreamFrameType, create_stream_frame
 from app.agent.runtime.checkpointer import get_chat_checkpointer
-from app.agent.runtime.tools.skill_write_pending import parse_skill_revision
 from app.agent.runtime.tools.user_skill_protocol import (
     SKILL_WRITE_OPERATION_TYPE,
     WRITE_USER_SKILL_FILE,
 )
 from app.agent.runtime.turn.runner import stream_agent_turn
 from app.contracts.turn_content import TurnUserInput
+from app.server.canvas.domain.enums import CanvasPendingOperationType
 from app.server.chat.domain.stream_enums import StreamErrorCode
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
@@ -136,7 +141,7 @@ async def stream_canvas_resume(
     model_key: str = "",
     operation: dict | None = None,
 ) -> AsyncIterator[str]:
-    """恢复画布 turn, skill_write 可带编辑后的 operation"""
+    """恢复画布 turn；确认时带结构化 operation 映射为 edited_action"""
     del tool_call_id
     acquired = False
     try:
@@ -176,32 +181,37 @@ async def stream_canvas_resume(
 
 
 def _confirm_decision(operation: dict | None) -> dict:
-    """构建确认决策, skill_write 用 edited_action 回传可编辑字段"""
-    if not isinstance(operation, dict) or operation.get("type") != SKILL_WRITE_OPERATION_TYPE:
-        return {"type": "approve"}
-    path = str(operation.get("path") or "").strip()
-    if not path:
-        return {"type": "reject", "message": "invalid skill write path"}
-    if operation.get("revision_invalid"):
-        return {"type": "reject", "message": "invalid skill write revision"}
-    try:
-        revision = parse_skill_revision(operation.get("revision"))
-    except ValueError:
-        return {"type": "reject", "message": "invalid skill write revision"}
-    args: dict = {
-        "path": path,
-        "name": str(operation.get("name") or ""),
-        "content": str(operation.get("content") or ""),
-    }
-    if "description" in operation:
-        raw_desc = operation.get("description")
-        args["description"] = None if raw_desc is None else str(raw_desc)
-    if revision is not None:
-        args["revision"] = revision
-    return {
-        "type": "approve",
-        "edited_action": {
-            "name": WRITE_USER_SKILL_FILE,
-            "args": args,
-        },
-    }
+    """构建确认决策；带 operation 时映射为 edited_action.args；未知类型显式 reject"""
+    if not isinstance(operation, dict):
+        return {"type": "reject", "message": "confirm requires structured operation"}
+    op_type = operation.get("type")
+    if op_type == SKILL_WRITE_OPERATION_TYPE:
+        if operation.get("revision_invalid"):
+            return {"type": "reject", "message": "invalid skill write revision"}
+        try:
+            args = edited_tool_args_from_pending_operation(WRITE_USER_SKILL_FILE, operation)
+        except (ValueError, TypeError) as exc:
+            return {"type": "reject", "message": str(exc)}
+        return {
+            "type": "approve",
+            "edited_action": {"name": WRITE_USER_SKILL_FILE, "args": args},
+        }
+    if op_type in {CanvasPendingOperationType.CREATE, CanvasPendingOperationType.UPDATE}:
+        try:
+            args = edited_tool_args_from_pending_operation(APPLY_CANVAS_PATCH, operation)
+        except (ValueError, TypeError) as exc:
+            return {"type": "reject", "message": str(exc)}
+        return {
+            "type": "approve",
+            "edited_action": {"name": APPLY_CANVAS_PATCH, "args": args},
+        }
+    if op_type == CanvasPendingOperationType.GENERATE:
+        try:
+            args = edited_tool_args_from_pending_operation(SUBMIT_NODE_GENERATION, operation)
+        except (ValueError, TypeError) as exc:
+            return {"type": "reject", "message": str(exc)}
+        return {
+            "type": "approve",
+            "edited_action": {"name": SUBMIT_NODE_GENERATION, "args": args},
+        }
+    return {"type": "reject", "message": f"unknown pending operation type: {op_type!r}"}

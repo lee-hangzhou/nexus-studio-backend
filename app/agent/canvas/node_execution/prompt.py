@@ -14,7 +14,9 @@ async def resolve_execute_prompt(
     *,
     prompt_override: str | None = None,
 ) -> str:
-    """解析节点执行 prompt：请求体优先，其次 input_prompt，再上游 dependency。"""
+    """解析节点执行 prompt：请求体优先，其次 data.prompt/prompt_content，再上游 dependency"""
+    from app.server.canvas.domain.node_data import data_prompt_text, parse_node_data
+
     explicit = (prompt_override or "").strip()
     if explicit:
         return explicit
@@ -23,8 +25,9 @@ async def resolve_execute_prompt(
     if row is None:
         raise AppError(ErrorCode.RESOURCE_NOT_FOUND, f"node {node_id} not found")
 
-    if row.input_prompt.strip():
-        return row.input_prompt.strip()
+    local = data_prompt_text(parse_node_data(row.data), row.kind).strip()
+    if local:
+        return local
 
     resolved = await resolve_node_inputs(episode_id, node_id)
     if resolved.waiting_on:

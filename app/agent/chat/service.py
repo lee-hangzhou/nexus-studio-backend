@@ -1,6 +1,8 @@
 import asyncio
-from typing import AsyncIterator, Optional
+from typing import Any, AsyncIterator, Optional
 from uuid import uuid4
+
+from pydantic import TypeAdapter
 
 from app.server.chat.services.attachments.service import chat_attachment_service
 from app.server.chat.services.constants import CHAT_CHECKPOINT_THREAD_PREFIX, DEFAULT_CONVERSATION_TITLE
@@ -31,6 +33,8 @@ from app.server.chat.persistence.attachments import ChatAttachments
 from app.server.chat.persistence.conversations import ChatConversations
 from app.server.chat.persistence.messages import ChatMessages
 from app.server.ports.product import SelectedSkillDTO
+
+_OPTIONAL_JSON_OBJECT = TypeAdapter(dict[str, Any] | None)
 
 
 def require_turn_model(model: str | None) -> str:
@@ -428,7 +432,7 @@ class ChatService:
             id=row.id,
             role=role_map.get(row.role, "assistant"),
             content=row.content,
-            input=input_snap if isinstance(input_snap, dict) else None,
+            input=_OPTIONAL_JSON_OBJECT.validate_python(input_snap),
             metadata=metadata,
             created_at=row.created_at,
         )

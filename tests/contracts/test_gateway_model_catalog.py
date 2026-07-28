@@ -11,6 +11,7 @@ def test_gateway_models_response_requires_parameters() -> None:
                 "object": "model",
                 "task_type": 2,
                 "supports_vision": False,
+                "supports_video_input": False,
                 "parameters": {
                     "resolutions": ["2k", "3k"],
                     "ratios": ["1:1", "4:3"],

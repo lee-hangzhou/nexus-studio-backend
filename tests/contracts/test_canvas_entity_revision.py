@@ -5,7 +5,8 @@ from uuid import uuid4
 import pytest
 from tortoise import Tortoise
 
-from app.contracts.canvas import DeleteNodeOp, DisconnectNodesOp, UpdateNodeOp, UpdateNodePatch
+from app.contracts.canvas import CanvasNodeData, DeleteNodeOp, DisconnectNodesOp, UpdateNodeOp, UpdateNodePayload
+from app.server.canvas.domain.node_data import dump_node_data, empty_node_data, parse_node_data
 from app.server.canvas.persistence.edges import CanvasEdges
 from app.server.canvas.persistence.episode_meta import CanvasEpisodeMeta
 from app.server.canvas.persistence.nodes import CanvasNodes
@@ -63,17 +64,14 @@ async def _scope() -> tuple[CanvasScope, CanvasNodes]:
         revision=1,
         position_x=0,
         position_y=0,
-        title="",
-        input_prompt="",
-        output_text="",
-        status="idle",
+        data=empty_node_data(),
     )
     return CanvasScope(project_id=int(project.id), episode_id=int(episode.id), user_id=1), node
 
 
 @pytest.mark.asyncio
 async def test_apply_patch_bumps_node_revision_on_success() -> None:
-    """正确 expected_revision 时更新成功且节点 revision +1"""
+    """正确 revision 时更新成功且节点 revision +1"""
     await _init_db()
     try:
         scope, node = await _scope()
@@ -82,25 +80,27 @@ async def test_apply_patch_bumps_node_revision_on_success() -> None:
             [
                 UpdateNodeOp(
                     op="update_node",
-                    node_id=node.id,
-                    expected_revision=1,
-                    patch=UpdateNodePatch(title="新标题"),
+                    node=UpdateNodePayload(
+                        id=node.id,
+                        revision=1,
+                        data=CanvasNodeData(title="新标题"),
+                    ),
                 )
             ],
         )
         assert len(result.nodes) == 1
         assert result.nodes[0].revision == 2
-        assert result.nodes[0].title == "新标题"
+        assert result.nodes[0].data.title == "新标题"
         refreshed = await CanvasNodes.get(id=node.id)
         assert refreshed.revision == 2
-        assert refreshed.title == "新标题"
+        assert parse_node_data(refreshed.data).title == "新标题"
     finally:
         await _close_db()
 
 
 @pytest.mark.asyncio
 async def test_apply_patch_revision_conflict_does_not_write() -> None:
-    """错误 expected_revision 时 409 conflicts 且库不改"""
+    """错误 revision 时 409 conflicts 且库不改"""
     await _init_db()
     try:
         scope, node = await _scope()
@@ -110,9 +110,11 @@ async def test_apply_patch_revision_conflict_does_not_write() -> None:
                 [
                     UpdateNodeOp(
                         op="update_node",
-                        node_id=node.id,
-                        expected_revision=99,
-                        patch=UpdateNodePatch(title="不应写入"),
+                        node=UpdateNodePayload(
+                            id=node.id,
+                            revision=99,
+                            data=CanvasNodeData(title="不应写入"),
+                        ),
                     )
                 ],
             )
@@ -128,7 +130,7 @@ async def test_apply_patch_revision_conflict_does_not_write() -> None:
         ]
         refreshed = await CanvasNodes.get(id=node.id)
         assert refreshed.revision == 1
-        assert refreshed.title == ""
+        assert parse_node_data(refreshed.data).title is None
     finally:
         await _close_db()
 
@@ -144,23 +146,27 @@ async def test_apply_patch_same_node_chained_ops_use_working_revision() -> None:
             [
                 UpdateNodeOp(
                     op="update_node",
-                    node_id=node.id,
-                    expected_revision=1,
-                    patch=UpdateNodePatch(title="一步"),
+                    node=UpdateNodePayload(
+                        id=node.id,
+                        revision=1,
+                        data=CanvasNodeData(title="一步"),
+                    ),
                 ),
                 UpdateNodeOp(
                     op="update_node",
-                    node_id=node.id,
-                    expected_revision=2,
-                    patch=UpdateNodePatch(title="二步"),
+                    node=UpdateNodePayload(
+                        id=node.id,
+                        revision=2,
+                        data=CanvasNodeData(title="二步"),
+                    ),
                 ),
             ],
         )
         assert result.nodes[-1].revision == 3
-        assert result.nodes[-1].title == "二步"
+        assert result.nodes[-1].data.title == "二步"
         refreshed = await CanvasNodes.get(id=node.id)
         assert refreshed.revision == 3
-        assert refreshed.title == "二步"
+        assert parse_node_data(refreshed.data).title == "二步"
     finally:
         await _close_db()
 
@@ -178,10 +184,7 @@ async def test_delete_then_disconnect_same_edge_fails_in_precheck() -> None:
             revision=1,
             position_x=10,
             position_y=0,
-            title="",
-            input_prompt="",
-            output_text="",
-            status="idle",
+            data=empty_node_data(),
         )
         edge = await CanvasEdges.create(
             id=uuid4(),

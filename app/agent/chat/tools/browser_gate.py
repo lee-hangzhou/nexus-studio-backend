@@ -463,12 +463,9 @@ async def request_user_gate(
         await _release_gate(workspace, gate_id)
         return result.to_tool_message()
 
-    submitted = resume_value.get("fields")
-    if gate_type != "qr_scan":
+        submitted = resume_value.get("fields")
         if not isinstance(submitted, dict):
             return ToolResult.fail(INVALID_ARGUMENTS, detail="missing fields on submit").to_tool_message()
-    else:
-        submitted = submitted if isinstance(submitted, dict) else {}
 
     await vault.put(gate_id, submitted)
     secrets = await vault.take(gate_id)

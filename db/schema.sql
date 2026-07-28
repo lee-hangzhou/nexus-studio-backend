@@ -256,18 +256,9 @@ CREATE TABLE IF NOT EXISTS canvas_nodes (
   revision BIGINT NOT NULL DEFAULT 1,
   position_x DOUBLE PRECISION NOT NULL,
   position_y DOUBLE PRECISION NOT NULL,
-  title VARCHAR(512) NOT NULL DEFAULT '',
-  input_prompt TEXT NOT NULL DEFAULT '',
-  output_text TEXT NOT NULL DEFAULT '',
-  status VARCHAR(16) NOT NULL DEFAULT 'idle',
-  model_id VARCHAR(128),
-  voice_id VARCHAR(128),
-  ratio VARCHAR(16),
-  duration_sec INTEGER,
-  resolution VARCHAR(16),
-  task_id BIGINT,
-  output_asset_ids JSONB,
-  error_message TEXT,
+  width DOUBLE PRECISION,
+  height DOUBLE PRECISION,
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   deleted_at TIMESTAMPTZ
@@ -324,11 +315,11 @@ CREATE INDEX IF NOT EXISTS idx_canvas_nodes_episode_alive
   ON canvas_nodes (episode_id)
   WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_canvas_nodes_episode_status_alive
-  ON canvas_nodes (episode_id, status)
+  ON canvas_nodes (episode_id, (data->>'status'))
   WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_canvas_nodes_task_alive
-  ON canvas_nodes (task_id)
-  WHERE deleted_at IS NULL AND task_id IS NOT NULL;
+  ON canvas_nodes (episode_id, ((data->>'generate_task_id')::bigint))
+  WHERE deleted_at IS NULL AND data->>'generate_task_id' IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_canvas_edges_episode_alive
   ON canvas_edges (episode_id)

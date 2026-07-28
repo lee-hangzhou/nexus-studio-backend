@@ -24,6 +24,7 @@ from app.contracts.canvas import (
     CanvasSessionUpdateRequest,
     CanvasSessionView,
     CanvasSnapshot,
+    CanvasToolPendingOperation,
     ConnectNodesOp,
     CreateEdgePayload,
     CreateNodeOp,
@@ -32,7 +33,7 @@ from app.contracts.canvas import (
     DisconnectNodesOp,
     GenerationProgress,
     UpdateNodeOp,
-    UpdateNodePatch,
+    UpdateNodePayload,
 )
 from app.server.canvas.domain.enums import CanvasNodeStatus
 
@@ -75,7 +76,7 @@ class CanvasResumeRequest(BaseModel):
     action: Literal["confirm", "reject"]
     client_turn_id: str = Field(min_length=1)
     model_key: str | None = None
-    operation: dict[str, Any] | None = None
+    operation: CanvasToolPendingOperation | dict[str, Any] | None = None
 
 
 class CanvasReconnectRequest(BaseModel):
@@ -145,6 +146,7 @@ __all__ = [
     "CanvasSessionUpdateRequest",
     "CanvasSessionView",
     "CanvasSnapshot",
+    "CanvasToolPendingOperation",
     "CanvasTurnRequest",
     "ConnectNodesOp",
     "CreateEdgePayload",
@@ -154,5 +156,5 @@ __all__ = [
     "DisconnectNodesOp",
     "GenerationProgress",
     "UpdateNodeOp",
-    "UpdateNodePatch",
+    "UpdateNodePayload",
 ]

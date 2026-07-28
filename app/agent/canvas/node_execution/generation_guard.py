@@ -61,7 +61,7 @@ async def claim_node_for_generation(episode_id: int, node_id: str) -> tuple[int,
         ),
         progress=GenerationProgress(
             node_id=UUID(node_id),
-            task_id=claim.node.task_id,
+            task_id=claim.node.data.generate_task_id,
             status=CanvasNodeStatus.RUNNING,
             revision=claim.revision,
         ),

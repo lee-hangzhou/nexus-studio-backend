@@ -17,22 +17,37 @@ from app.server.canvas.domain.models import (
     ResolvedCanvasInputs,
     UpstreamText,
 )
+from app.server.canvas.domain.node_data import (
+    data_output_asset_ids,
+    data_output_text,
+    data_prompt_text,
+    data_status,
+    parse_node_data,
+)
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
 from app.server.ports.product import CanvasEdgeDTO, CanvasNodeDTO
 
 
 def _asset_ids(node: CanvasNodeDTO) -> list[int]:
-    return list(node.output_asset_ids)
+    return list(data_output_asset_ids(parse_node_data(node.data)))
 
 
 def _node_to_graph(node: CanvasNodeDTO) -> dict:
+    data = parse_node_data(node.data)
     return {
         "id": node.id,
         "data": {
-            "status": node.status.value,
-            "output_text": node.output_text,
+            "status": data_status(data).value,
+            "output_text": data_output_text(data),
             "output_asset_ids": _asset_ids(node),
+            "prompt": data.prompt,
+            "content": data.content,
+            "prompt_content": (
+                [seg.model_dump(mode="json") for seg in data.prompt_content]
+                if data.prompt_content
+                else None
+            ),
         },
     }
 
@@ -46,14 +61,15 @@ def _edge_to_graph(edge: CanvasEdgeDTO) -> dict:
 
 
 async def resolve_node_inputs(episode_id: int, node_id: str) -> ResolvedCanvasInputs:
-    """沿依赖边解析结构化事实：local_prompt、upstream_texts、refs、waiting_on。"""
+    """沿依赖边解析结构化事实：local_prompt、upstream_texts、refs、waiting_on"""
     graph = await get_canvas_port().get_incoming_graph(episode_id, node_id)
     nodes_by_id = {node.id: node for node in graph.nodes}
     target = nodes_by_id.get(node_id)
     if target is None:
         raise AppError(ErrorCode.RESOURCE_NOT_FOUND, f"node {node_id} not found")
 
-    local_prompt = target.input_prompt.strip()
+    target_data = parse_node_data(target.data)
+    local_prompt = data_prompt_text(target_data, target.kind).strip()
     waiting_on: list[CanvasInputWait] = []
     sources: list[CanvasInputSource] = []
     graph_nodes: list[dict] = [_node_to_graph(target)]
@@ -73,19 +89,21 @@ async def resolve_node_inputs(episode_id: int, node_id: str) -> ResolvedCanvasIn
             continue
 
         source_rows[source.id] = source
+        source_data = parse_node_data(source.data)
+        source_status = data_status(source_data)
         if all(str(node["id"]) != source.id for node in graph_nodes):
             graph_nodes.append(_node_to_graph(source))
 
         source_info = CanvasInputSource(
             node_id=source.id,
             kind=source.kind,
-            status=source.status,
+            status=source_status,
             source_port=edge.source_port,
             target_port=edge.target_port,
         )
         sources.append(source_info)
 
-        if source.status == CanvasNodeStatus.FAILED:
+        if source_status == CanvasNodeStatus.FAILED:
             waiting_on.append(
                 CanvasInputWait(
                     reason=CanvasInputWaitReason.SOURCE_FAILED,
@@ -96,7 +114,10 @@ async def resolve_node_inputs(episode_id: int, node_id: str) -> ResolvedCanvasIn
             continue
 
         if edge.target_port == CanvasTargetPort.PROMPT_INPUT:
-            if edge.source_port != CanvasSourcePort.OUTPUT_TEXT or not source.output_text.strip():
+            if (
+                edge.source_port != CanvasSourcePort.OUTPUT_TEXT
+                or not data_output_text(source_data).strip()
+            ):
                 waiting_on.append(
                     CanvasInputWait(
                         reason=CanvasInputWaitReason.TEXT_NOT_READY,
@@ -109,7 +130,7 @@ async def resolve_node_inputs(episode_id: int, node_id: str) -> ResolvedCanvasIn
             ids = _asset_ids(source)
             if (
                 edge.source_port != CanvasSourcePort.OUTPUT_ASSET
-                or source.status != CanvasNodeStatus.SUCCESS
+                or source_status != CanvasNodeStatus.SUCCESS
                 or not ids
             ):
                 waiting_on.append(

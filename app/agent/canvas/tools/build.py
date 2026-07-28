@@ -3,7 +3,10 @@ from langchain_core.tools import StructuredTool
 from app.agent.canvas.tools.assets import build_get_asset_tool, build_list_assets_tool
 from app.agent.canvas.tools.guard import guard_canvas_tool
 from app.agent.canvas.tools.canvas_read import build_query_canvas_nodes_tool
-from app.agent.canvas.tools.canvas_write import build_apply_canvas_patch_tool
+from app.agent.canvas.tools.canvas_write import (
+    build_apply_canvas_edge_operation_tool,
+    build_apply_canvas_patch_tool,
+)
 from app.agent.canvas.tools.generate_models import build_list_generate_models_tool
 from app.agent.canvas.tools.generation import build_submit_node_generation_tool
 from app.agent.canvas.tools.inputs import build_resolve_node_inputs_tool
@@ -31,6 +34,12 @@ def build_canvas_tools(
     tools: list[StructuredTool] = [
         build_query_canvas_nodes_tool(project_id=project_id, episode_id=episode_id, user_id=user_id),
         build_apply_canvas_patch_tool(
+            project_id=project_id,
+            episode_id=episode_id,
+            user_id=user_id,
+            turn_id_holder=turn_id_holder,
+        ),
+        build_apply_canvas_edge_operation_tool(
             project_id=project_id,
             episode_id=episode_id,
             user_id=user_id,

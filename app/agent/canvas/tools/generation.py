@@ -48,10 +48,15 @@ async def _submit_node_generation_locked(
         voice_id = args.voice_id
         if args.kind == GenerationKind.AUDIO:
             node_row = await canvas.get_node(episode_id, args.node_id)
+            from app.server.canvas.domain.node_data import data_voice_id, parse_node_data
+
+            fallback = (
+                data_voice_id(parse_node_data(node_row.data)) if node_row is not None else None
+            )
             voice_id = await get_generation_port().resolve_tts_voice_id(
                 args.model_id,
                 voice_id=args.voice_id,
-                fallback_voice_id=node_row.voice_id if node_row is not None else None,
+                fallback_voice_id=fallback,
             )
         prepared = await prepare_node_submit(
             episode_id,

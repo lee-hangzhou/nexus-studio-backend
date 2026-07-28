@@ -32,6 +32,7 @@ def _image_model(
         object="model",
         task_type=GatewayModelTaskType.IMAGE,
         supports_vision=False,
+        supports_video_input=False,
         parameters=GatewayModelParameters(
             resolutions=["2k"],
             ratios=["16:9"],

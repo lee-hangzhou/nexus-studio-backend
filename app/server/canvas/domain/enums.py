@@ -31,6 +31,15 @@ class CanvasPatchOperation(StrEnum):
     DISCONNECT = "disconnect"
 
 
+class CanvasPendingOperationType(StrEnum):
+    """tool_pending 审批卡片展示的操作类型"""
+
+    CREATE = "create"
+    UPDATE = "update"
+    GENERATE = "generate"
+    SKILL_WRITE = "skill_write"
+
+
 class CanvasSourcePort(StrEnum):
     OUTPUT_TEXT = "output_text"
     OUTPUT_ASSET = "output_asset"

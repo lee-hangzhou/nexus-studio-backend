@@ -14,7 +14,7 @@ from langgraph.types import Command
 from app.agent.runtime.turn.guards import TurnGuards
 from app.agent.runtime.turn_engine.checkpoint import CheckpointRepairFn
 from app.agent.runtime.turn_engine.handlers import RecoveryHook
-from app.agent.runtime.turn_engine.sse_subscriber import ToolPreviewFn
+from app.agent.runtime.turn_engine.sse_subscriber import PendingEnrichFn, ToolPreviewFn
 from app.agent.runtime.turn_engine.subscribers import TurnSubscriber
 from app.agent.runtime.turn_engine.terminal_policy import SseTerminalPolicy
 from app.agent.runtime.tools.result import summarize_tool_result
@@ -47,6 +47,7 @@ class PreparedTurn:
     preview_tool_result: ToolPreviewFn | None = None
     heal_invalid_tool_calls: bool = True
     surface: str = SkillSurface.CHAT
+    enrich_pending: PendingEnrichFn | None = None
 
 
 def default_preview(tool_name: str, result: str, ok: bool) -> str:

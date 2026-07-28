@@ -100,11 +100,10 @@ async def test_canvas_snapshot_presigns_only_scope_owned_project_assets(monkeypa
             revision=1,
             position_x=0,
             position_y=0,
-            title="",
-            input_prompt="",
-            output_text="",
-            status="success",
-            output_asset_ids=[int(foreign_user.id), int(allowed.id), int(other_project.id)],
+            data={
+                "status": "success",
+                "output_asset_ids": [int(foreign_user.id), int(allowed.id), int(other_project.id)],
+            },
         )
         monkeypatch.setattr(asset_service, "preview_url", lambda key: f"signed:{key}")
 

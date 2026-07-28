@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from pydantic import TypeAdapter
 
 from app.agent.chat.browser import container_client, inprocess_session, session_manager
 from app.agent.chat.browser.exec_result import (
@@ -455,9 +456,11 @@ async def locator_bounding_box(
         return None
     try:
         parsed = json.loads(result.output.strip() or "null")
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
+        raise ValueError("browser runtime JSON output is invalid") from exc
+    if parsed is None:
         return None
-    return parsed if isinstance(parsed, dict) else None
+    return TypeAdapter(dict[str, Any]).validate_python(parsed)
 
 
 async def click_selector(

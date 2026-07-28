@@ -6,10 +6,14 @@ import time
 from pathlib import Path
 from typing import Any
 
+from pydantic import TypeAdapter
+
 from app.agent.chat.browser.challenge import artifacts, geometry
 from app.agent.chat.browser.session_lock import session_page_lock
 from app.agent.chat.contracts.interaction import ChallengeProbeResult
 from app.server.infra.logger import logger
+
+_JSON_OBJECT = TypeAdapter(dict[str, Any])
 
 
 async def read_geometry(
@@ -39,8 +43,16 @@ async def read_geometry(
     geom_err = geometry.validate_slider_geometry(track, handle)
     if geom_err:
         raise ValueError(f"challenge_geometry_invalid: {geom_err}")
-    viewport = data.get("viewport") if isinstance(data.get("viewport"), dict) else {}
-    frame = data.get("frame") if isinstance(data.get("frame"), dict) else {}
+    viewport = (
+        {}
+        if data.get("viewport") is None
+        else _JSON_OBJECT.validate_python(data.get("viewport"))
+    )
+    frame = (
+        {}
+        if data.get("frame") is None
+        else _JSON_OBJECT.validate_python(data.get("frame"))
+    )
     instruction_text = str(data.get("instruction_text") or "")
     content_width_px = data.get("content_width_px")
     intrinsic: float | None = None

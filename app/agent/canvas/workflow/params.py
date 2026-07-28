@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.agent.runtime.ports import get_generation_port
+from app.server.canvas.domain.node_data import data_duration_sec, data_model_id, parse_node_data
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
 from app.server.generation.domain.enums import GenerationKind
@@ -12,8 +13,9 @@ async def resolve_node_generation_config(
     node: CanvasNodeDTO,
 ) -> tuple[str, int | None, bool]:
     """从模型目录补齐节点 model_id 与视频时长, 无可用模型时 fail loud"""
-    model_id = (node.model_id or "").strip()
-    duration = node.duration_sec
+    data = parse_node_data(node.data)
+    model_id = (data_model_id(data) or "").strip()
+    duration = data_duration_sec(data)
     changed = False
     generation = get_generation_port()
 

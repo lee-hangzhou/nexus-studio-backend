@@ -8,6 +8,9 @@ from typing import Any
 
 from app.server.infra.config import settings
 from app.server.infra.logger import logger
+from pydantic import TypeAdapter
+
+_JSON_OBJECT = TypeAdapter(dict[str, Any])
 
 _memory_store: dict[str, dict[str, Any]] = {}
 _memory_handles: dict[str, str] = {}
@@ -84,8 +87,13 @@ async def consume_secret(handle: str) -> str | None:
 async def peek_meta(gate_id: str) -> dict[str, str]:
     """Return field_name -> handle without consuming."""
     if _use_memory:
-        data = _memory_store.get(_gate_handles_key(gate_id), {})
-        return dict(data) if isinstance(data, dict) else {}
+        data = _memory_store.get(_gate_handles_key(gate_id))
+        if data is None:
+            return {}
+        return {
+            str(k): str(v)
+            for k, v in _JSON_OBJECT.validate_python(data).items()
+        }
     from app.server.infra.redis import redis_client
 
     raw = await redis_client.get(_gate_handles_key(gate_id))
@@ -95,9 +103,10 @@ async def peek_meta(gate_id: str) -> dict[str, str]:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise ValueError("gate vault metadata is not valid JSON") from exc
-    if not isinstance(data, dict):
-        raise ValueError("gate vault metadata must be an object")
-    return {str(k): str(v) for k, v in data.items()}
+    return {
+        str(k): str(v)
+        for k, v in _JSON_OBJECT.validate_python(data).items()
+    }
 
 
 async def put(gate_id: str, fields: dict[str, Any]) -> None:

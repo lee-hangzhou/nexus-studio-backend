@@ -8,6 +8,7 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from app.agent.chat.tools.result import ToolResult
+from app.agent.chat.llm.model_catalog import model_catalog
 from app.agent.runtime.ports import get_assets_port
 from app.contracts.turn_content import TurnMediaType
 from app.server.exceptions.base import AppError
@@ -234,6 +235,27 @@ def build_inspect_turn_media_tool(
             ordered_urls.append(asset.preview_url)
             ordered_ids.append(ref.asset_id)
             ordered_types.append(media_type)
+
+        needs_image = any(t == TurnMediaType.IMAGE for t in ordered_types)
+        needs_video = any(t == TurnMediaType.VIDEO for t in ordered_types)
+        try:
+            if needs_image and not model_catalog.require_supports_vision(model_id):
+                return ToolResult.fail(
+                    "vision_unsupported_media",
+                    detail=f"model {model_id} does not support vision input",
+                ).to_tool_message()
+            if needs_video and not model_catalog.require_supports_video_input(model_id):
+                return ToolResult.fail(
+                    "vision_unsupported_media",
+                    detail=f"model {model_id} does not support video input",
+                ).to_tool_message()
+        except AppError as exc:
+            if int(exc.code) == int(ErrorCode.INVALID_PARAMS):
+                return ToolResult.fail(
+                    "vision_misconfigured",
+                    detail=exc.message,
+                ).to_tool_message()
+            raise
 
         prompt = (
             (instruction or "").strip()

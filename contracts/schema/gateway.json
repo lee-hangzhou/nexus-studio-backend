@@ -250,6 +250,10 @@
         "parameters": {
           "$ref": "#/$defs/GatewayModelParameters"
         },
+        "supports_video_input": {
+          "title": "Supports Video Input",
+          "type": "boolean"
+        },
         "supports_vision": {
           "title": "Supports Vision",
           "type": "boolean"
@@ -263,6 +267,7 @@
         "object",
         "task_type",
         "supports_vision",
+        "supports_video_input",
         "parameters"
       ],
       "title": "GatewayModelItem",

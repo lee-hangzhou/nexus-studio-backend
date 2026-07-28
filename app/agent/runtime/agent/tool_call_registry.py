@@ -5,8 +5,19 @@ from enum import StrEnum
 from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.server.infra.gateway_errors import GatewayChatError
+
+
+class ModelToolCall(BaseModel):
+    """LangChain / 模型侧单次 tool_call；缺省 args 按空对象"""
+
+    model_config = ConfigDict(extra="allow", from_attributes=True)
+
+    id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    args: dict[str, Any] = Field(default_factory=dict)
 
 
 class ToolCallPhase(StrEnum):
@@ -33,25 +44,12 @@ def unresolved_pending_tool_calls(messages: list[BaseMessage]) -> list[tuple[str
         if not isinstance(message, AIMessage):
             continue
         for call in message.tool_calls or []:
-            if not isinstance(call, dict):
-                continue
-            call_id = call.get("id")
-            name = call.get("name")
-            args = call.get("args")
-            if (
-                isinstance(call_id, str)
-                and call_id
-                and isinstance(name, str)
-                and name
-                and call_id not in fulfilled
-            ):
-                pending.append(
-                    (
-                        call_id,
-                        name,
-                        dict(args) if isinstance(args, dict) else {},
-                    )
-                )
+            try:
+                parsed = ModelToolCall.model_validate(call)
+            except ValidationError as exc:
+                raise TypeError("tool_call violates contract") from exc
+            if parsed.id not in fulfilled:
+                pending.append((parsed.id, parsed.name, parsed.args))
         break
     return pending
 
@@ -88,14 +86,15 @@ class ToolCallRegistry:
     def register_from_model_step(self, tool_calls: list[dict[str, Any]]) -> None:
         self.clear()
         for call in tool_calls:
-            call_id = call["id"]
-            tool_name = call["name"]
-            args = call.get("args")
-            self._entries[call_id] = ToolCallEntry(
-                call_id=call_id,
-                tool_name=tool_name,
+            try:
+                parsed = ModelToolCall.model_validate(call)
+            except ValidationError as exc:
+                raise TypeError("tool_call violates contract") from exc
+            self._entries[parsed.id] = ToolCallEntry(
+                call_id=parsed.id,
+                tool_name=parsed.name,
                 phase=ToolCallPhase.PENDING,
-                args=dict(args) if isinstance(args, dict) else {},
+                args=parsed.args,
             )
 
     def open_entries(self) -> list[ToolCallEntry]:

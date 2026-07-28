@@ -11,15 +11,19 @@ MODEL_CAPABILITY_UNAVAILABLE = "模型能力信息暂时不可用，请稍后重
 
 
 class ModelCatalog:
-    """union_lm 厚目录 GET /api/v1/models 的 supports_vision 内存缓存；启动拉取失败时为空。"""
+    """union_lm 厚目录 GET /api/v1/models 的 chat 媒体能力内存缓存；启动拉取失败时为空。"""
 
     def __init__(self) -> None:
         self._supports_vision: dict[str, bool] = {}
+        self._supports_video_input: dict[str, bool] = {}
 
     def clear(self) -> None:
         self._supports_vision.clear()
+        self._supports_video_input.clear()
 
     def update_from_gateway_rows(self, rows: list[dict[str, Any]]) -> None:
+        vision: dict[str, bool] = {}
+        video: dict[str, bool] = {}
         for row in rows:
             if not isinstance(row, dict):
                 continue
@@ -28,15 +32,32 @@ class ModelCatalog:
             model_id = row.get("id")
             if not isinstance(model_id, str) or not model_id:
                 continue
-            value = row.get("supports_vision")
-            if not isinstance(value, bool):
-                continue
-            self._supports_vision[model_id] = value
+            supports_vision = row.get("supports_vision")
+            supports_video_input = row.get("supports_video_input")
+            if not isinstance(supports_vision, bool) or not isinstance(supports_video_input, bool):
+                raise AppError(
+                    ErrorCode.INVALID_PARAMS,
+                    "gateway model catalog row missing bool capability fields",
+                    {
+                        "model_id": model_id,
+                        "supports_vision": supports_vision,
+                        "supports_video_input": supports_video_input,
+                    },
+                )
+            vision[model_id] = supports_vision
+            video[model_id] = supports_video_input
+        self._supports_vision = vision
+        self._supports_video_input = video
 
     def require_supports_vision(self, model_id: str) -> bool:
         if model_id not in self._supports_vision:
             raise AppError(ErrorCode.INVALID_PARAMS, MODEL_CAPABILITY_UNAVAILABLE)
         return self._supports_vision[model_id]
+
+    def require_supports_video_input(self, model_id: str) -> bool:
+        if model_id not in self._supports_video_input:
+            raise AppError(ErrorCode.INVALID_PARAMS, MODEL_CAPABILITY_UNAVAILABLE)
+        return self._supports_video_input[model_id]
 
     def has(self, model_id: str) -> bool:
         return model_id in self._supports_vision

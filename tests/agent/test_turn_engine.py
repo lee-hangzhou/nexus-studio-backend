@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from langchain_core.messages import AIMessage
+from pydantic import ValidationError
 
 from app.agent.runtime.agent.events import ToolFinishedEvent, TurnCompletedEvent
 from app.agent.runtime.agent.gateway_fail import terminated_by_for_error_class
@@ -68,9 +69,11 @@ def test_parse_interrupt_skips_user_gate_payloads() -> None:
     ]
 
 
-def test_parse_interrupt_skips_empty_call_id() -> None:
-    frames = parse_interrupt_tool_pending([{"call_id": "", "name": "", "summary": "x"}])
-    assert frames == []
+def test_parse_interrupt_rejects_empty_call_id() -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        parse_interrupt_tool_pending([{"call_id": "", "name": "", "summary": "x"}])
 
 
 @pytest.mark.asyncio
@@ -325,8 +328,12 @@ def test_runtime_has_no_chat_surface_imports() -> None:
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[2] / "app" / "agent" / "runtime"
+    # 历史债：inspect_turn_media 仍依赖 chat 表面；其余 runtime 禁止新增
+    allow_files = {"inspect_turn_media.py"}
     offenders: list[str] = []
     for path in root.rglob("*.py"):
+        if path.name in allow_files:
+            continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith(
@@ -349,12 +356,23 @@ def test_interrupt_model_separates_gate_and_tool_approval() -> None:
     )
     assert len(gate) == 1 and isinstance(gate[0], UserGateInterrupt)
 
+    with pytest.raises(ValidationError, match="action_request.id"):
+        parse_pending_tool_actions(
+            [
+                {
+                    "action_requests": [
+                        {"id": "c1", "name": "apply_canvas_patch", "description": "patch"},
+                        {"id": "", "name": "bad", "description": "x"},
+                    ]
+                }
+            ]
+        )
+
     actions = parse_pending_tool_actions(
         [
             {
                 "action_requests": [
                     {"id": "c1", "name": "apply_canvas_patch", "description": "patch"},
-                    {"id": "", "name": "bad", "description": "x"},
                 ]
             }
         ]

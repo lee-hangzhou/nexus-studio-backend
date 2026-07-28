@@ -22,7 +22,11 @@ from app.contracts.canvas import (
     CanvasSessionUpdateRequest,
     CanvasSessionView,
     CanvasSnapshot,
+    CanvasToolPendingOperation,
     GenerationProgress,
+    PendingCanvasPatchOperation,
+    PendingGenerateOperation,
+    PendingSkillWriteOperation,
 )
 from app.contracts.gateway import (
     GatewayGenerateCallback,
@@ -78,7 +82,11 @@ CanvasContracts = Annotated[
     | CanvasSessionView
     | CanvasSessionCreateRequest
     | CanvasSessionUpdateRequest
-    | CanvasSessionIdRequest,
+    | CanvasSessionIdRequest
+    | PendingCanvasPatchOperation
+    | PendingGenerateOperation
+    | PendingSkillWriteOperation
+    | CanvasToolPendingOperation,
     Field(union_mode="left_to_right"),
 ]
 GenerationContracts = Annotated[

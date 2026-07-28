@@ -19,6 +19,18 @@ class _SkillDescriptionDecision(BaseModel):
     description: str = Field(min_length=1, max_length=MAX_DESCRIPTION_LEN)
 
 
+class _GatewayChoiceMessage(BaseModel):
+    content: str | None = None
+
+
+class _GatewayChoice(BaseModel):
+    message: _GatewayChoiceMessage
+
+
+class _GatewayChatCompletion(BaseModel):
+    choices: list[_GatewayChoice] = Field(min_length=1)
+
+
 def _gateway_model_id() -> str:
     """从配置解析用于描述补全的网关模型 id"""
     model_key = settings.CHAT_DEFAULT_MODEL.strip()
@@ -41,11 +53,11 @@ def _normalize_description(text: str) -> str:
 
 def _parse_description_decision(response: dict) -> str:
     """从网关 chat completion 响应解析描述"""
-    choices = response.get("choices")
-    if not isinstance(choices, list) or not choices:
-        raise ValueError("empty choices")
-    message = choices[0].get("message") if isinstance(choices[0], dict) else None
-    content = message.get("content") if isinstance(message, dict) else None
+    try:
+        completion = _GatewayChatCompletion.model_validate(response)
+    except ValidationError as exc:
+        raise ValueError("empty choices") from exc
+    content = completion.choices[0].message.content
     if not isinstance(content, str) or not content.strip():
         raise ValueError("empty content")
     raw = content.strip()

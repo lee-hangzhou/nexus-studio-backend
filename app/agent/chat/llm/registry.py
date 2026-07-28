@@ -87,7 +87,8 @@ async def _compute_models_for_api() -> List[Dict[str, Any]]:
         if not isinstance(model_id, str) or not model_id:
             continue
         supports_vision = row.get("supports_vision")
-        if not isinstance(supports_vision, bool):
+        supports_video_input = row.get("supports_video_input")
+        if not isinstance(supports_vision, bool) or not isinstance(supports_video_input, bool):
             raise AppError(ErrorCode.INVALID_PARAMS, MODEL_CAPABILITY_UNAVAILABLE)
 
         spec = get_model_spec(model_id)

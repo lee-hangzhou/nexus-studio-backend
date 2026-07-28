@@ -68,7 +68,9 @@ def _parse_json_object(text: str) -> dict | None:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
         return None
-    return parsed if isinstance(parsed, dict) else None
+    if not isinstance(parsed, dict):
+        raise TypeError("tool preview JSON must be an object")
+    return parsed
 
 
 def _canvas_preview(tool_name: str, output: str, *, ok: bool) -> str:

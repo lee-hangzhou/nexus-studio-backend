@@ -80,45 +80,43 @@ async def emit_user_gates(
         gate = _parse_user_gate_interrupt(value)
         if gate is None:
             continue
-        gate_id = gate.gate_id
-        gate_type = gate.gate_type
+        # gate 已在 _parse_user_gate_interrupt 用 Pydantic 校验
         public = strip_public_gate_payload(gate.model_dump(mode="python"))
         phase_raw = public.get("phase")
         phase = str(phase_raw) if phase_raw is not None else None
-        assets: dict[str, Any] = public.get("assets") if isinstance(public.get("assets"), dict) else {}
-        raw_choices = public.get("choices") if isinstance(public.get("choices"), list) else []
-        choices = public_login_choices(raw_choices)
+        domain = str(public.get("domain") or "") or None
+        assets = gate.assets
+        choices = public_login_choices(gate.choices or [])
+        fields = normalize_field_defs(gate.fields)
 
         await emit(
             create_stream_frame(
                 type=StreamFrameType.USER_GATE_REQUIRED,
                 protocol_version=settings.CHAT_SSE_PROTOCOL_VERSION,
                 turn_id=turn_id,
-                gate_id=gate_id,
-                gate_type=gate_type,
-                prompt=str(public.get("prompt") or ""),
-                fields=normalize_field_defs(
-                    public.get("fields") if isinstance(public.get("fields"), list) else []
-                ),
+                gate_id=gate.gate_id,
+                gate_type=gate.gate_type,
+                prompt=gate.prompt,
+                fields=fields,
                 assets=assets,
                 choices=choices,
                 phase=phase,
-                domain=str(public.get("domain") or "") or None,
+                domain=domain,
             )
         )
         await set_gate_pending(
             conversation_id,
             turn_id=turn_id,
-            gate_id=gate_id,
-            gate_type=gate_type,
+            gate_id=gate.gate_id,
+            gate_type=gate.gate_type,
             model_key=model_key,
             prompt=gate.prompt,
-            fields=normalize_field_defs(gate.fields),
+            fields=fields,
             choices=choices,
             phase=phase,
             assets=assets,
             status="pending",
-            domain=str(public.get("domain") or "") or None,
+            domain=domain,
         )
         emitted = True
     return emitted

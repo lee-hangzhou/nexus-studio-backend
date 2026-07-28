@@ -10,9 +10,13 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
+from pydantic import TypeAdapter
+
 from app.agent.chat.gate import vault
 from app.server.infra.config import settings
 from app.server.infra.logger import logger
+
+_JSON_OBJECT = TypeAdapter(dict[str, Any])
 
 _memory: dict[str, dict[str, Any]] = {}
 _use_memory = False
@@ -131,9 +135,9 @@ async def _get_bridge_record(token_hash: str) -> dict[str, Any] | None:
         return None
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
+    except json.JSONDecodeError as exc:
+        raise ValueError("bridge record is not valid JSON") from exc
+    return _JSON_OBJECT.validate_python(data)
 
 
 async def import_bridge_cookies(

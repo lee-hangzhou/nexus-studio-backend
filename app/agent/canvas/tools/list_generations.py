@@ -29,8 +29,11 @@ async def _list_generations(episode_id: int, user_id: int, args: ListNodeGenerat
         node = await get_canvas_port().get_node(episode_id, args.node_id)
         if node is None:
             return ToolResult.fail(INVALID_NODE_ID, detail=args.node_id)
-        if node.task_id is not None:
-            task_ids.append(node.task_id)
+        from app.server.canvas.domain.node_data import data_task_id, parse_node_data
+
+        task_id = data_task_id(parse_node_data(node.data))
+        if task_id is not None:
+            task_ids.append(task_id)
     else:
         task_ids = await get_canvas_port().list_episode_node_task_ids(episode_id, limit=args.limit)
 

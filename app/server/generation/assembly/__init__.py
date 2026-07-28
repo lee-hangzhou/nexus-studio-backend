@@ -5,6 +5,7 @@ from typing import Any
 
 from app.contracts.gateway import GatewayModelItem, GatewayResultItem
 from app.contracts.generation import GenerateMaterialLimits, GenerateParamOptions, ReferenceModeOption
+from pydantic import TypeAdapter
 from app.server.assets.persistence.assets import Assets
 from app.server.assets.services.service import ASSET_SOURCE_GENERATE_RESULT
 from app.server.generation.domain.constants import (
@@ -21,6 +22,9 @@ from app.server.generation.schemas import (
 )
 from app.server.generation.schemas.observation import GatewayQueueObservation
 from app.server.infra.logger import logger
+
+_JSON_OBJECT = TypeAdapter(dict[str, Any])
+_JSON_LIST = TypeAdapter(list[Any])
 
 
 def capabilities_from_gateway_model(gateway_model: GatewayModelItem) -> GenerationModelCapabilities | None:
@@ -73,14 +77,14 @@ def capability_map_from_gateway_models(
 
 def task_result_asset_ids(task: GenerateTask) -> list[int]:
     # result_asset_ids 来自 JSON 列，持久化边界做一次整型归一
-    if not isinstance(task.result_asset_ids, list):
+    if task.result_asset_ids is None:
         return []
-    return [int(item) for item in task.result_asset_ids if item is not None]
+    return [int(item) for item in _JSON_LIST.validate_python(task.result_asset_ids) if item is not None]
 
 
 def asset_task_id(row: Assets) -> int | None:
     # metadata / source_id 来自 JSON 与字符串列
-    metadata = row.metadata if isinstance(row.metadata, dict) else {}
+    metadata = {} if row.metadata is None else _JSON_OBJECT.validate_python(row.metadata)
     raw = metadata.get(RESULT_ASSET_META_TASK_ID)
     if raw is None and row.source_type == ASSET_SOURCE_GENERATE_RESULT:
         raw = row.source_id

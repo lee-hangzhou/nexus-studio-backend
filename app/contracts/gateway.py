@@ -81,6 +81,7 @@ class GatewayModelItem(BaseModel):
     object: StrictStr
     task_type: GatewayModelTaskType
     supports_vision: StrictBool
+    supports_video_input: StrictBool
     parameters: GatewayModelParameters
 
     @property

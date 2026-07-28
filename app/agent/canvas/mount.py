@@ -13,6 +13,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from app.agent.canvas.agent.factory import build_canvas_agent
 from app.agent.canvas.memory.store import canvas_runnable_config
+from app.agent.canvas.turn.pending import enrich_pending_operation
 from app.agent.canvas.turn.checkpoint import repair_canvas_checkpoint_if_needed
 from app.agent.canvas.turn.empty_hook import CanvasEmptyAnswerHook
 from app.agent.canvas.turn.guards import CanvasTurnGuards
@@ -91,23 +92,25 @@ async def _prepare_turn(ctx: CanvasMountContext) -> CanvasMountContext:
             ctx.session_id,
             ctx.client_turn_id,
         )
-        content_raw = snapshot.get("content") if isinstance(snapshot, dict) else None
-        if isinstance(content_raw, list):
-            try:
-                blocks = parse_turn_content_blocks(content_raw)
-            except Exception as exc:
-                raise AppError(
-                    ErrorCode.INVALID_PARAMS,
-                    "invalid turn skill input snapshot",
-                ) from exc
-            paths = extract_skill_paths(blocks)
-            if paths:
-                ctx.selected_skills = await get_user_skill_port().resolve_selected(
-                    surface=SkillSurface.CANVAS,
-                    user_id=ctx.user_id,
-                    project_id=ctx.project_id,
-                    paths=paths,
-                )
+        if snapshot is not None:
+            # Port 边界已校验为对象；此处信任类型
+            content_raw = snapshot.get("content")
+            if isinstance(content_raw, list):
+                try:
+                    blocks = parse_turn_content_blocks(content_raw)
+                except Exception as exc:
+                    raise AppError(
+                        ErrorCode.INVALID_PARAMS,
+                        "invalid turn skill input snapshot",
+                    ) from exc
+                paths = extract_skill_paths(blocks)
+                if paths:
+                    ctx.selected_skills = await get_user_skill_port().resolve_selected(
+                        surface=SkillSurface.CANVAS,
+                        user_id=ctx.user_id,
+                        project_id=ctx.project_id,
+                        paths=paths,
+                    )
     return ctx
 
 
@@ -244,6 +247,21 @@ def _preview(_ctx: CanvasMountContext):
     return lambda name, result, ok: sanitize_tool_step_preview(name, result, ok=ok)
 
 
+def _enrich_pending(ctx: CanvasMountContext):
+    surface = SkillSurface.CANVAS
+    episode_id = ctx.episode_id
+
+    async def _enrich(name: str, args: dict | None):
+        return await enrich_pending_operation(
+            name,
+            args,
+            surface=surface,
+            episode_id=episode_id,
+        )
+
+    return _enrich
+
+
 CANVAS_MOUNT = AgentMountSpec(
     name=SkillSurface.CANVAS,
     prepare_turn=_prepare_turn,
@@ -256,6 +274,7 @@ CANVAS_MOUNT = AgentMountSpec(
     resolve_heartbeat_interval_sec=_heartbeat,
     build_recovery_hook=_recovery,
     build_preview_tool_result=_preview,
+    build_enrich_pending=_enrich_pending,
     resolve_input_messages=_input_messages,
     resolve_on_turn_start_repair=_start_repair,
     resolve_on_turn_cleanup_repair=_cleanup_repair,

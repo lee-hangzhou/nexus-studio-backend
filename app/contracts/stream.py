@@ -4,7 +4,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-from app.contracts.canvas import CanvasPatchResponse, GenerationProgress
+from app.contracts.canvas import CanvasPatchResponse, CanvasToolPendingOperation, GenerationProgress
 from app.server.chat.domain.stream_enums import StreamErrorCode, StreamFrameType, TokenChannel
 
 
@@ -102,7 +102,8 @@ class ToolPendingFrame(StreamContract):
     name: str
     summary: str | None = None
     turn_id: str
-    operation: dict[str, Any] | None = None
+    operation: CanvasToolPendingOperation | None = None
+    enrich_status: Literal["ok", "skipped", "failed"] | None = None
 
 
 class UserGateRequiredFrame(StreamContract):
