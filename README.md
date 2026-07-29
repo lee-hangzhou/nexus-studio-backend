@@ -63,7 +63,7 @@ make docker-images-build   # backend + chat-sandbox + browser-session
 Frontend image is built in the frontend repository:
 
 ```bash
-docker build -t nexus-studio-prod-frontend .
+make docker-build
 ```
 
 Image names used by Compose / runtime defaults:
