@@ -286,9 +286,13 @@ def _edited_generate_args(raw_operation: dict[str, Any]) -> dict[str, Any]:
         args["duration"] = int(config.duration_sec)
     elif config.duration and str(config.duration).isdigit():
         args["duration"] = int(config.duration)
-    if config.reference_mode is not None and "reference_mode" not in args:
-        args["reference_mode"] = config.reference_mode
-    if config.img_num is not None and "count" not in args:
+    if config.reference_mode is not None:
+        args["reference_mode"] = (
+            config.reference_mode.value
+            if hasattr(config.reference_mode, "value")
+            else config.reference_mode
+        )
+    if config.img_num is not None:
         args["count"] = int(config.img_num)
     return args
 
