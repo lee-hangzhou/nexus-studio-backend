@@ -195,8 +195,13 @@ def build_apply_canvas_patch_tool(
         coroutine=_run,
         name="apply_canvas_patch",
         description=(
+            "REQUIRED this turn: call read_canvas_skill(name=\"canvas_operations\") before this tool. "
+            "Listing/querying alone does not waive the read. "
             "Apply exactly one canvas node operation. Required: operation "
             "(create_node | update_node). No ops[], no delete_node, no connect. "
+            "update_node.node.revision must match query_canvas_nodes. "
+            "In manual mode, confirm-card edits win over the draft tool args. "
+            "Do not parallelize with apply_canvas_arrange or submit_node_generation in one reply. "
             "create_node: {\"op\":\"create_node\",\"node\":{\"kind\":\"video\","
             "\"position\":{\"x\":100,\"y\":100},\"data\":{\"title\":\"...\",\"prompt\":\"...\"}}}. "
             "update_node: {\"op\":\"update_node\",\"node\":{\"id\":\"<uuid>\",\"revision\":1,"
@@ -233,8 +238,11 @@ def build_apply_canvas_edge_operation_tool(
         coroutine=_run,
         name="apply_canvas_edge_operation",
         description=(
+            "REQUIRED this turn: call read_canvas_skill(name=\"canvas_operations\") before this tool. "
+            "Listing/querying alone does not waive the read. "
             "Apply exactly one canvas edge operation. Required: operation "
-            "(connect | disconnect). "
+            "(connect | disconnect). Executes without manual confirm. "
+            "connect requires existing node UUIDs from prior query/create. "
             "connect: {\"op\":\"connect\",\"edge\":{\"source\":\"<uuid>\",\"target\":\"<uuid>\","
             "\"source_port\":\"output_text\",\"target_port\":\"prompt_input\","
             "\"edge_type\":\"dependency\"}}. "

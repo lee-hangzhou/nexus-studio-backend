@@ -10,10 +10,20 @@ from app.agent.canvas.tools.build import build_canvas_inspect_only_tools, build_
 from app.agent.chat.llm.gateway_chat_model import GatewayChatModel
 from app.agent.runtime.memory.inject import MemoryInjectionRequest, build_memory_injection
 from app.agent.runtime.memory_store import get_memory_store
+from app.agent.runtime.skills.assembler import build_turn_skill_library
 from app.agent.runtime.turn.tool_loop_guard import TurnToolLoopGuard
 from app.contracts.turn_content import TurnMediaType, TurnReferenceIndex
 from app.server.ports.product import SelectedSkillDTO
 from app.server.skills.domain.enums import SkillSurface
+
+_MEMORY_TOOL_NAMES = frozenset(
+    {
+        "manage_user_memory",
+        "recall_user_memory",
+        "manage_project_memory",
+        "recall_project_memory",
+    }
+)
 
 
 async def build_canvas_agent(
@@ -35,6 +45,7 @@ async def build_canvas_agent(
     selected_skills: tuple[SelectedSkillDTO, ...] = (),
 ) -> tuple[CompiledStateGraph, str]:
     """组装 LLM, 工具, system prompt, checkpointer, store 为可运行图"""
+    skill_library = build_turn_skill_library(reference_index=reference_index)
     if enable_tools:
         tools: list[StructuredTool] = build_canvas_tools(
             project_id=project_id,
@@ -45,6 +56,7 @@ async def build_canvas_agent(
             surface=SkillSurface.CANVAS,
             tool_asset_ids=tool_asset_ids,
             asset_media_types=asset_media_types,
+            skill_library=skill_library,
         )
     else:
         tools = build_canvas_inspect_only_tools(
@@ -52,16 +64,7 @@ async def build_canvas_agent(
             tool_asset_ids=tool_asset_ids,
             asset_media_types=asset_media_types,
         )
-    memory_tools_enabled = any(
-        name
-        in {
-            "manage_user_memory",
-            "recall_user_memory",
-            "manage_project_memory",
-            "recall_project_memory",
-        }
-        for name in (t.name for t in tools)
-    )
+    memory_tools_enabled = any(tool.name in _MEMORY_TOOL_NAMES for tool in tools)
     injection = await build_memory_injection(
         MemoryInjectionRequest(
             domain="canvas",
@@ -82,6 +85,7 @@ async def build_canvas_agent(
         memory_blocks_text=injection.memory_blocks_text,
         memory_ops_brief=injection.ops_brief_text,
         reference_index=reference_index,
+        skill_library=skill_library,
     )
     store = get_memory_store()
     graph = build_canvas_agent_graph(

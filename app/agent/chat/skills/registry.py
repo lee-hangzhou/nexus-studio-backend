@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
-SKILLS_DIR = Path(__file__).resolve().parent
+from app.agent.runtime.skills.frontmatter import parse_skill_frontmatter
 
-_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
+SKILLS_DIR = Path(__file__).resolve().parent
 
 
 @dataclass(frozen=True)
@@ -48,29 +47,9 @@ class SkillRegistry:
         cls._entries = None
 
     @classmethod
-    def _parse_frontmatter(cls, text: str) -> dict[str, str]:
-        match = _FRONTMATTER_RE.match(text)
-        if not match:
-            raise RuntimeError("Skill frontmatter missing or malformed")
-        meta: dict[str, str] = {}
-        for line in match.group(1).splitlines():
-            if not line.strip() or line.strip().startswith("#"):
-                continue
-            if ":" not in line:
-                continue
-            key, raw = line.split(":", 1)
-            value = raw.strip()
-            if (value.startswith('"') and value.endswith('"')) or (
-                value.startswith("'") and value.endswith("'")
-            ):
-                value = value[1:-1]
-            meta[key.strip()] = value
-        return meta
-
-    @classmethod
     def _parse_skill_md(cls, path: Path, *, expected_name: str) -> SkillEntry:
         text = path.read_text(encoding="utf-8")
-        meta = cls._parse_frontmatter(text)
+        meta, _body = parse_skill_frontmatter(text)
 
         name = meta.get("name")
         description = meta.get("description")

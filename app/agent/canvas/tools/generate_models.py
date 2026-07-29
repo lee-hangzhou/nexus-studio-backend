@@ -50,7 +50,9 @@ def build_list_generate_models_tool(
         description=(
             "List generation models for one media kind. Args: kind='image', kind='video', or kind='audio'. "
             "Do not pass multiple kinds in one call. "
-            "Returns model_id values for submit_node_generation. "
+            "Returns items[] with model_id and param_options "
+            "(ratios, resolutions, counts, durations, reference_modes, material_limits). "
+            "Use param_options when choosing submit fields. "
             "Each kind at most once per user turn with substantive success. "
             "A second call with the same kind returns error_type=tool_loop_exhausted (duplicate call guard). "
             "Check prior ToolMessage in this turn before calling."

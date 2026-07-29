@@ -172,12 +172,16 @@ def build_submit_node_generation_tool(*, project_id: int, episode_id: int, user_
         coroutine=_run,
         name="submit_node_generation",
         description=(
+            "REQUIRED this turn: call read_canvas_skill(name=\"canvas_generation\") before this tool. "
+            "Listing/querying alone does not waive the read. "
             "Start image/video/audio generation. Required: node_id (UUID from query or patch), "
-            "kind (image|video|audio), prompt, model_id. "
-            "For audio/TTS also pass voice_id when known. "
+            "kind (image|video|audio), prompt, model_id from list_generate_models. "
+            "Call list_generate_models first; pick ratio/resolution/duration/count/reference_mode "
+            "from that model's param_options. "
+            "Video requires reference_mode and duration. Audio may need voice_id. "
+            "In manual mode, confirm-card edits to prompt/config win. "
             "If the node already has a generation in progress, returns node_generation_in_progress — "
             "do not retry or create a replacement node. "
-            'Example: {"node_id":"<uuid>","kind":"video","prompt":"...","model_id":"..."}. '
             "Progress via generation_progress SSE."
         ),
         args_schema=SubmitNodeGenerationInput,

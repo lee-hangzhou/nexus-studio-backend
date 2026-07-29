@@ -11,6 +11,7 @@ from app.agent.chat.turn.stale_cleanup import clear_stale_active_turns_on_startu
 from app.agent.runtime.background import background_supervisor
 from app.agent.runtime.checkpointer import create_checkpointer, set_chat_checkpointer
 from app.agent.runtime.memory_store import set_memory_store
+from app.agent.runtime.skills.registry import CanvasSkillRegistry
 from app.agent.runtime.stream.replay import replay_store
 from app.server.infra.database import db
 from app.server.infra.gateway import gateway_client
@@ -51,6 +52,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         skills = SkillRegistry.load()
         logger.info("SkillRegistry loaded", skill_count=len(skills), skill_names=[s.name for s in skills])
+
+        canvas_skills = CanvasSkillRegistry.load()
+        logger.info(
+            "CanvasSkillRegistry loaded",
+            skill_count=len(canvas_skills),
+            skill_names=[s.name for s in canvas_skills],
+        )
 
         await try_refresh_model_catalog()
         validate_memory_extract_config()

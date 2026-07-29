@@ -267,6 +267,7 @@ def test_manual_confirm_tools_exclude_edge_tool() -> None:
     assert "apply_canvas_patch" in tools
     assert "submit_node_generation" in tools
     assert "apply_canvas_edge_operation" not in tools
+    assert "apply_canvas_arrange" not in tools
 
 
 def test_dump_client_writable_strips_projection_and_nulls() -> None:

@@ -26,9 +26,14 @@ CANVAS_TOOL_NAMES = frozenset(
     {
         "query_canvas_nodes",
         "apply_canvas_patch",
+        "apply_canvas_edge_operation",
+        "apply_canvas_arrange",
         "list_generate_models",
         "submit_node_generation",
         "list_node_generations",
+        "inspect_node_media",
+        "inspect_turn_media",
+        "read_canvas_skill",
     }
 )
 
@@ -74,6 +79,7 @@ def _parse_json_object(text: str) -> dict | None:
 
 
 def _canvas_preview(tool_name: str, output: str, *, ok: bool) -> str:
+    """生成画布工具用户可见摘要"""
     if not ok:
         return "画布操作未完成"
     data = _parse_json_object(output)
@@ -88,16 +94,24 @@ def _canvas_preview(tool_name: str, output: str, *, ok: bool) -> str:
         return "已读取画布"
     if tool_name == "apply_canvas_patch":
         return "已更新画布"
+    if tool_name == "apply_canvas_edge_operation":
+        return "已更新连线"
+    if tool_name == "apply_canvas_arrange":
+        return "已整理画布布局"
     if tool_name == "list_generate_models":
         if data is not None:
-            models = data.get("models")
-            if isinstance(models, list):
-                return f"已查询 {len(models)} 个可用模型"
+            items = data.get("items")
+            if isinstance(items, list):
+                return f"已查询 {len(items)} 个可用模型"
         return "已查询可用模型"
     if tool_name == "submit_node_generation":
         return "已提交生成任务"
     if tool_name == "list_node_generations":
         return "已查询生成状态"
+    if tool_name in {"inspect_node_media", "inspect_turn_media"}:
+        return "已完成视觉理解"
+    if tool_name == "read_canvas_skill":
+        return "已读取画布技能"
     return "已完成"
 
 

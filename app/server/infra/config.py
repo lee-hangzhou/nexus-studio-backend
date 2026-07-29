@@ -231,6 +231,7 @@ class Settings(BaseSettings):
     CANVAS_TURN_LOCK_TTL_SEC: int = Field(default=1800)
     CANVAS_HEARTBEAT_INTERVAL_SEC: int = Field(default=15)
     CANVAS_DEFAULT_VIDEO_DURATION_SEC: int = Field(default=5, ge=3, le=15)
+    CANVAS_ARRANGE_MAX_OPS: int = Field(default=200, ge=1)
     CANVAS_MANUAL_CONFIRM_TOOLS: str = Field(
         default=f"apply_canvas_patch,submit_node_generation,{WRITE_USER_SKILL_FILE}",
     )
