@@ -31,6 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && echo "Asia/Shanghai" > /etc/timezone
 COPY --from=build /root/.local /root/.local
 ENV PATH=/root/.local/bin:$PATH
+COPY pyproject.toml ./
 COPY app/ ./app/
 COPY scripts/ ./scripts/
 COPY db/ ./db/
