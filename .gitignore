@@ -36,8 +36,6 @@ coverage.xml
 .env.*
 !deploy/.env.prod.example
 !deploy/.env.prod
-deploy/.compose.env
-!deploy/.compose.env.example
 .venv
 env/
 venv/

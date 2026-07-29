@@ -13,9 +13,9 @@ from app.server.infra.config import settings
 def _record() -> BrowserSessionRecord:
     return BrowserSessionRecord(
         container_id="child-id",
-        ws_endpoint_in_container="ws://dream-drama-browser-42:3333/",
+        ws_endpoint_in_container="ws://nexus-studio-browser-42:3333/",
         ws_endpoint_host="ws://127.0.0.1:49100/",
-        driver_endpoint_in_container="http://dream-drama-browser-42:3334",
+        driver_endpoint_in_container="http://nexus-studio-browser-42:3334",
         driver_endpoint_host="http://127.0.0.1:49101",
         idle_deadline=123.0,
     )
@@ -30,7 +30,7 @@ def test_driver_endpoint_selects_network_in_container_and_mapping_on_host(monkey
     record = _record()
 
     monkeypatch.setattr(container_client, "_backend_runs_in_container", lambda: True)
-    assert container_client._base_url(record) == "http://dream-drama-browser-42:3334"
+    assert container_client._base_url(record) == "http://nexus-studio-browser-42:3334"
 
     monkeypatch.setattr(container_client, "_backend_runs_in_container", lambda: False)
     assert container_client._base_url(record) == "http://127.0.0.1:49101"
@@ -52,8 +52,8 @@ def test_legacy_loopback_record_is_upgraded_to_docker_network_endpoint(monkeypat
     )
 
     assert record is not None
-    assert record.ws_endpoint_in_container == "ws://dream-drama-browser-42:3333/"
-    assert record.driver_endpoint_in_container == "http://dream-drama-browser-42:3334"
+    assert record.ws_endpoint_in_container == "ws://nexus-studio-browser-42:3333/"
+    assert record.driver_endpoint_in_container == "http://nexus-studio-browser-42:3334"
 
 
 @pytest.mark.asyncio

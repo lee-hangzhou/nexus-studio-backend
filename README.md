@@ -56,83 +56,55 @@ importing Python code from this repository. See
 
 ## Container Images
 
-Build the backend and the two runtime images used by Chat tools:
+```bash
+make docker-images-build   # backend + chat-sandbox + browser-session
+```
+
+Frontend image is built in the frontend repository:
 
 ```bash
-make docker-backend-build
-make docker-sandbox-build
-make docker-browser-build
+docker build -t nexus-studio-prod-frontend .
 ```
 
-`make docker-images-build` builds all three. The frontend image is built by the
-frontend repository. Defaults used by the production Compose file are:
+Image names used by Compose / runtime defaults:
 
 ```text
-dream-drama-prod-backend:latest
-dream-drama-prod-frontend:latest
-dream-drama-chat-sandbox:latest
-dream-drama-browser-session:latest
+nexus-studio-prod-backend
+nexus-studio-prod-frontend
+nexus-studio-chat-sandbox:latest
+nexus-studio-browser-session:latest
 ```
-
-For releases, set `BACKEND_IMAGE` and `FRONTEND_IMAGE` in
-`deploy/.compose.env` to immutable registry tags such as Git commit SHAs. Pass
-the same backend tag to `make BACKEND_IMAGE=... docker-backend-build` when
-building locally.
 
 ## Production Compose
 
-The combined Compose file stays here because the frontend Nginx container
-proxies `/api/` to the `backend` service name. Both main services are image-only;
-there are no cross-repository build contexts.
+Same pattern as `union_lm`: one Compose file, one `deploy/.env.prod`, deploy with Make.
+The Compose file lives here because the frontend Nginx proxies `/api/` to the
+`backend` service name.
 
-Prepare the host once:
-
-```bash
-cp deploy/.compose.env.example deploy/.compose.env
-cp deploy/.env.prod.example deploy/.env.prod
-make docker-prep
-```
-
-`deploy/.compose.env` contains only image tags, `FRONTEND_BIND`, and the Docker
-network name. `deploy/.env.prod` contains secrets and environment-specific
-overrides only; tuning knobs live as defaults in `app/server/infra/config.py`.
-Both real files are ignored by Git and Docker build contexts and must never be
-committed. The checked-in Compose default and template preserve the current
-frontend binding at `127.0.0.1:82`.
-
-The checked-in `.compose.env.example` intentionally uses
-`BACKEND_ENV_FILE=.env.prod.example` so CI can validate Compose without secrets.
-After copying it for production, change that line to:
-
-```dotenv
-BACKEND_ENV_FILE=.env.prod
-```
-
-Validate and start:
+Prepare once on the host:
 
 ```bash
-make docker-config-check
-make docker-config
+cp deploy/.env.prod.example deploy/.env.prod   # fill secrets
+# ensure external network union-lm-network exists (union_lm already running)
+# build frontend image in the frontend repo (tag nexus-studio-prod-frontend)
+```
+
+Deploy:
+
+```bash
 make docker-up
 make docker-logs
 ```
 
-Every Compose command uses `--env-file deploy/.compose.env` for orchestration
-variables. The backend service separately loads `deploy/.env.prod` through its
-`env_file`, so Compose interpolation does not depend on runtime secrets. The
-default application network is `dream-drama-network`; the external
-`union-lm-network` must already exist. `make docker-up` never rebuilds the two
-main service images. Ensure the selected backend and frontend image tags exist
-locally or have been pulled before starting. The backend also requires Docker
-socket access and these host paths:
+`make docker-up` creates host workspace dirs, builds sandbox/browser images,
+then `docker compose up -d --build` for backend + frontend. Backend secrets come
+from `deploy/.env.prod` only. Application network is `nexus-studio-network`;
+external `union-lm-network` must already exist. Host bind mounts:
 
 ```text
 /var/lib/nexus-studio/chat-workspaces
 /var/lib/nexus-studio/sandbox-packages
 ```
-
-Those paths are mounted at the identical absolute paths inside the backend
-because child containers are created through the host Docker daemon.
 
 ## Repository Layout
 

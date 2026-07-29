@@ -13,7 +13,7 @@ from app.server.infra.config import settings
 from app.server.infra.logger import logger
 from app.server.infra.redis import redis_client
 
-_CONTAINER_NAME_PREFIX = "dream-drama-browser-"
+_CONTAINER_NAME_PREFIX = "nexus-studio-browser-"
 CONTAINER_WORKSPACE_ROOT = "/workspace"
 
 

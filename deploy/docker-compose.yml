@@ -1,32 +1,35 @@
-name: dream-drama-prod
+name: nexus-studio-prod
 
 services:
   frontend:
-    container_name: dream-drama-prod-frontend
-    image: ${FRONTEND_IMAGE:-dream-drama-prod-frontend:latest}
+    container_name: nexus-studio-prod-frontend
+    image: nexus-studio-prod-frontend
     ports:
-      - "${FRONTEND_BIND:-127.0.0.1:82}:80"
+      - "127.0.0.1:82:80"
     depends_on:
       - backend
     networks:
-      - dream-drama-network
+      - nexus-studio-network
     restart: unless-stopped
 
   backend:
-    container_name: dream-drama-prod-backend
-    image: ${BACKEND_IMAGE:-dream-drama-prod-backend:latest}
+    container_name: nexus-studio-prod-backend
+    image: nexus-studio-prod-backend
+    build:
+      context: ..
+      dockerfile: Dockerfile
     env_file:
-      - ${BACKEND_ENV_FILE:-.env.prod}
+      - .env.prod
     environment:
       # Browser 子容器必须加入 backend 所在的固定网络，才能通过容器 DNS 通信。
-      CHAT_BROWSER_DOCKER_NETWORK: ${DEPLOY_NETWORK:-dream-drama-network}
+      CHAT_BROWSER_DOCKER_NETWORK: nexus-studio-network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       # 与 CHAT_WORKSPACE_ROOT 同路径，供 backend 内 docker run -v 挂载到宿主机
       - /var/lib/nexus-studio/chat-workspaces:/var/lib/nexus-studio/chat-workspaces
       - /var/lib/nexus-studio/sandbox-packages:/var/lib/nexus-studio/sandbox-packages
     networks:
-      - dream-drama-network
+      - nexus-studio-network
       - union-lm-network
     restart: unless-stopped
     stop_grace_period: 40s
@@ -38,8 +41,8 @@ services:
       start_period: 40s
 
 networks:
-  dream-drama-network:
-    name: ${DEPLOY_NETWORK:-dream-drama-network}
+  nexus-studio-network:
+    name: nexus-studio-network
     driver: bridge
   union-lm-network:
     external: true

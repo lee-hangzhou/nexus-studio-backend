@@ -3,14 +3,14 @@
 	        docker-config-check docker-config docker-up docker-down docker-logs docker-restart \
 	        db-schema db-reset contracts contracts-check type-check
 
-BACKEND_IMAGE ?= dream-drama-prod-backend:latest
-CHAT_SANDBOX_IMAGE ?= dream-drama-chat-sandbox:latest
-CHAT_BROWSER_IMAGE ?= dream-drama-browser-session:latest
+ROOT_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+BACKEND_IMAGE ?= nexus-studio-prod-backend
+CHAT_SANDBOX_IMAGE ?= nexus-studio-chat-sandbox:latest
+CHAT_BROWSER_IMAGE ?= nexus-studio-browser-session:latest
 CHAT_WORKSPACE_ROOT ?= /var/lib/nexus-studio/chat-workspaces
 SANDBOX_PACKAGES_ROOT ?= /var/lib/nexus-studio/sandbox-packages
-COMPOSE_ENV_FILE ?= deploy/.compose.env
-COMPOSE_FILE ?= deploy/docker-compose.yml
-DOCKER_COMPOSE = docker compose --env-file $(COMPOSE_ENV_FILE) -f $(COMPOSE_FILE)
+COMPOSE_FILE := $(ROOT_DIR)deploy/docker-compose.yml
+DOCKER_COMPOSE = docker compose -f $(COMPOSE_FILE)
 
 # ── 本地开发（conda activate dream-drama-env） ─────────────────────────────
 
@@ -34,11 +34,11 @@ help:
 	@echo "  make docker-sandbox-build   构建 execute_python 沙箱镜像"
 	@echo "  make docker-browser-build   构建 browser run-server 镜像"
 	@echo "  make docker-images-build    构建 backend + 两个运行时镜像"
-	@echo "  make docker-config-check    使用已提交模板校验 Compose"
-	@echo "  make docker-config          校验生产 Compose 配置"
-	@echo "  make docker-up              使用已有主服务镜像启动生产容器"
+	@echo "  make docker-config-check    校验 Compose 配置"
+	@echo "  make docker-config          打印 Compose 配置"
+	@echo "  make docker-up              构建并启动生产容器（需已有 frontend 镜像）"
 	@echo "  make docker-down            停止生产容器"
-	@echo "  make docker-restart         使用已有镜像重启生产容器"
+	@echo "  make docker-restart         重启生产容器"
 	@echo "  make docker-logs            查看后端日志"
 
 install:
@@ -94,7 +94,7 @@ type-check:
 		app/contracts \
 		app/server/generation/services/service.py
 
-# ── 生产部署 ──────────────────────────────────────────────────────────────
+# ── 生产部署（与 union_lm 相同：make docker-up）────────────────────────────
 
 docker-prep:
 	mkdir -p $(CHAT_WORKSPACE_ROOT) $(SANDBOX_PACKAGES_ROOT)
@@ -111,19 +111,19 @@ docker-browser-build:
 docker-images-build: docker-backend-build docker-sandbox-build docker-browser-build
 
 docker-config-check:
-	docker compose --env-file deploy/.compose.env.example -f $(COMPOSE_FILE) config --quiet
+	@test -f deploy/.env.prod || cp deploy/.env.prod.example deploy/.env.prod
+	$(DOCKER_COMPOSE) config --quiet
 
 docker-config:
 	$(DOCKER_COMPOSE) config
 
-docker-up: docker-prep
-	$(DOCKER_COMPOSE) up -d --no-build
+docker-up: docker-prep docker-sandbox-build docker-browser-build
+	$(DOCKER_COMPOSE) up -d --build
 
 docker-down:
 	$(DOCKER_COMPOSE) down
 
-docker-restart: docker-down docker-prep
-	$(DOCKER_COMPOSE) up -d --no-build
+docker-restart: docker-down docker-up
 
 docker-logs:
 	$(DOCKER_COMPOSE) logs -f backend

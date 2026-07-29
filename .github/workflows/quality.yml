@@ -24,4 +24,4 @@ jobs:
       - run: make type-check
       - run: python scripts/export_contracts.py --check
       - run: make docker-config-check
-      - run: docker build --tag dream-drama-backend:ci .
+      - run: docker build --tag nexus-studio-prod-backend:ci .

@@ -14,7 +14,7 @@ URL pin / `active_page_url`。
 ```bash
 make docker-browser-build
 # 或
-docker build -t dream-drama-browser-session:latest -f deploy/browser-session/Dockerfile deploy/browser-session
+docker build -t nexus-studio-browser-session:latest -f deploy/browser-session/Dockerfile deploy/browser-session
 ```
 
 与沙箱一并构建：
@@ -29,7 +29,7 @@ make docker-images-build
 |------|------|
 | `CHAT_BROWSER_ENABLED` | 是否注册浏览器工具 |
 | `CHAT_BROWSER_INPROCESS` | **生产与本地联调均为 `false`** |
-| `CHAT_BROWSER_IMAGE` | 默认 `dream-drama-browser-session:latest` |
+| `CHAT_BROWSER_IMAGE` | 默认 `nexus-studio-browser-session:latest` |
 | `CHAT_BROWSER_DOCKER_NETWORK` | 容器网络，默认 `bridge` |
 | `CHAT_BROWSER_RUN_SERVER_PORT` | run-server 端口，默认 `3333` |
 | `CHAT_BROWSER_DRIVER_PORT` | session driver 端口，默认 `3334` |
@@ -38,9 +38,9 @@ make docker-images-build
 ## 自检
 
 ```bash
-docker images dream-drama-browser-session
+docker images nexus-studio-browser-session
 # 触发一次 browser 任务后
-docker ps | grep dream-drama-browser-
+docker ps | grep nexus-studio-browser-
 # 容器内 driver 健康检查（host_port 以 docker port 为准）
 curl -s "http://127.0.0.1:<driver_host_port>/health"
 ```

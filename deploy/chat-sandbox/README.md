@@ -1,13 +1,10 @@
 # Chat Python 沙箱镜像
 
-在 **dream-drama-env** 环境中构建：
-
 ```bash
-conda activate dream-drama-env
-docker build -t dream-drama-chat-sandbox:latest -f deploy/chat-sandbox/Dockerfile deploy/chat-sandbox
+docker build -t nexus-studio-chat-sandbox:latest -f deploy/chat-sandbox/Dockerfile deploy/chat-sandbox
 ```
 
-后端通过 `CHAT_SANDBOX_IMAGE`（默认 `dream-drama-chat-sandbox:latest`）运行 `execute_python` 工具。
+后端通过 `CHAT_SANDBOX_IMAGE`（默认 `nexus-studio-chat-sandbox:latest`）运行 `execute_python` 工具。
 
 ## 镜像内容
 
@@ -21,7 +18,7 @@ docker build -t dream-drama-chat-sandbox:latest -f deploy/chat-sandbox/Dockerfil
 ## LibreOffice 基准（手动）
 
 ```bash
-docker run --rm -v "$PWD":/workspace dream-drama-chat-sandbox:latest \
+docker run --rm -v "$PWD":/workspace nexus-studio-chat-sandbox:latest \
   /bin/sh -c "soffice --headless --convert-to pdf --outdir /tmp /workspace/test.docx && ls -la /tmp"
 ```
 

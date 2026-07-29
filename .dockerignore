@@ -4,7 +4,6 @@
 .env.*
 **/.env
 **/.env.*
-**/.compose.env
 **/__pycache__/
 **/*.py[cod]
 .pytest_cache/
