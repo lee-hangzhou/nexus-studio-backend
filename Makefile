@@ -12,7 +12,6 @@ SANDBOX_PACKAGES_ROOT ?= /var/lib/nexus-studio/sandbox-packages
 COMPOSE_FILE := $(ROOT_DIR)deploy/docker-compose.yml
 DOCKER_COMPOSE = docker compose -f $(COMPOSE_FILE)
 
-# ── 本地开发（conda activate dream-drama-env） ─────────────────────────────
 
 help:
 	@echo "本地开发:"
