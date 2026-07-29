@@ -23,8 +23,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       # 与 CHAT_WORKSPACE_ROOT 同路径，供 backend 内 docker run -v 挂载到宿主机
-      - /var/lib/dream-drama/chat-workspaces:/var/lib/dream-drama/chat-workspaces
-      - /var/lib/dream-drama/sandbox-packages:/var/lib/dream-drama/sandbox-packages
+      - /var/lib/nexus-studio/chat-workspaces:/var/lib/nexus-studio/chat-workspaces
+      - /var/lib/nexus-studio/sandbox-packages:/var/lib/nexus-studio/sandbox-packages
     networks:
       - dream-drama-network
       - union-lm-network

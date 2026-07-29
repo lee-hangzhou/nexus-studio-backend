@@ -127,8 +127,8 @@ locally or have been pulled before starting. The backend also requires Docker
 socket access and these host paths:
 
 ```text
-/var/lib/dream-drama/chat-workspaces
-/var/lib/dream-drama/sandbox-packages
+/var/lib/nexus-studio/chat-workspaces
+/var/lib/nexus-studio/sandbox-packages
 ```
 
 Those paths are mounted at the identical absolute paths inside the backend

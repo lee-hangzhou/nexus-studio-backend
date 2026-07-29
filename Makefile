@@ -6,8 +6,8 @@
 BACKEND_IMAGE ?= dream-drama-prod-backend:latest
 CHAT_SANDBOX_IMAGE ?= dream-drama-chat-sandbox:latest
 CHAT_BROWSER_IMAGE ?= dream-drama-browser-session:latest
-CHAT_WORKSPACE_ROOT ?= /var/lib/dream-drama/chat-workspaces
-SANDBOX_PACKAGES_ROOT ?= /var/lib/dream-drama/sandbox-packages
+CHAT_WORKSPACE_ROOT ?= /var/lib/nexus-studio/chat-workspaces
+SANDBOX_PACKAGES_ROOT ?= /var/lib/nexus-studio/sandbox-packages
 COMPOSE_ENV_FILE ?= deploy/.compose.env
 COMPOSE_FILE ?= deploy/docker-compose.yml
 DOCKER_COMPOSE = docker compose --env-file $(COMPOSE_ENV_FILE) -f $(COMPOSE_FILE)
