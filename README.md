@@ -19,7 +19,8 @@ The existing Conda environment is named `dream-drama-env`:
 ```bash
 conda activate dream-drama-env
 pip install -r requirements.txt
-cp .env.example .env
+# create ignored .env with secrets / local overrides only
+# (defaults live in app/server/infra/config.py)
 make dev
 ```
 
@@ -93,7 +94,8 @@ make docker-prep
 ```
 
 `deploy/.compose.env` contains only image tags, `FRONTEND_BIND`, and the Docker
-network name. `deploy/.env.prod` contains backend runtime settings and secrets.
+network name. `deploy/.env.prod` contains secrets and environment-specific
+overrides only; tuning knobs live as defaults in `app/server/infra/config.py`.
 Both real files are ignored by Git and Docker build contexts and must never be
 committed. The checked-in Compose default and template preserve the current
 frontend binding at `127.0.0.1:82`.
