@@ -267,9 +267,11 @@ class GatewayChatModel(BaseChatModel):
         assembled_think_content = "".join(
             p.text for p in assembled.token_pieces if p.lane == "think"
         )
+        # additional_kwargs 必须带上非法 tool 元数据: LC 原生 invalid_tool_calls 在 chunk merge 时会丢
         final_message = AIMessageChunk(
             content="",
             tool_calls=list(assembled.message.tool_calls or []),
+            additional_kwargs=dict(assembled.message.additional_kwargs or {}),
         )
         yield ChatGenerationChunk(
             message=final_message,

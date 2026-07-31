@@ -32,6 +32,7 @@ class TurnAgentEventRecorder:
     tool_steps: list[ToolStepMetadata] = field(default_factory=list)
     final_persisted: bool = False
     last_model_message: AIMessage | None = None
+    last_invalid_tool_calls: list[InvalidToolCallMetadata] = field(default_factory=list)
     last_step_index: int = 0
 
     async def record(
@@ -88,6 +89,7 @@ class TurnAgentEventRecorder:
             )
             for item in event.invalid_tool_calls
         ]
+        self.last_invalid_tool_calls = list(invalid_tool_calls)
         request_meta = ToolRequestMetadata(
             turn_context=self.observation.turn_context,
             invalid_tool_calls=invalid_tool_calls,

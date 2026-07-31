@@ -7,6 +7,11 @@ from typing import Any
 from langchain_core.messages import AIMessage, AIMessageChunk
 from langchain_core.outputs import ChatGenerationChunk
 
+from app.agent.chat.agent.invalid_tool_args import (
+    INVALID_TOOL_CALLS_KWARG,
+    invalid_tool_calls_payload,
+    payload_to_kwargs,
+)
 from app.agent.chat.llm.tag_stream import push_tag_aware_text
 from app.agent.chat.llm.thinking import ThinkingConfig, ThinkingMode, ThinkTagStreamState, TokenPiece
 from app.server.infra.gateway_errors import GatewayChatError
@@ -163,21 +168,37 @@ class OpenAIStreamAssembler:
             try:
                 args = json.loads(raw_args)
             except json.JSONDecodeError as exc:
-                raise GatewayChatError(
-                    "gateway_protocol_error",
-                    "streamed tool arguments are not valid JSON",
-                    retryable=False,
-                ) from exc
-            if not isinstance(args, dict):
-                raise GatewayChatError(
-                    "gateway_protocol_error",
-                    "streamed tool arguments must be an object",
-                    retryable=False,
+                invalid_calls.append(
+                    InvalidToolCall(
+                        call_id=call_id,
+                        name=name,
+                        raw_arguments=raw_args,
+                        parse_error=f"streamed tool arguments are not valid JSON: {exc.msg}",
+                    )
                 )
+                continue
+            if not isinstance(args, dict):
+                invalid_calls.append(
+                    InvalidToolCall(
+                        call_id=call_id,
+                        name=name,
+                        raw_arguments=raw_args,
+                        parse_error="streamed tool arguments must be an object",
+                    )
+                )
+                continue
             valid_calls.append({"id": call_id, "name": name, "args": args})
 
         content = "".join(p.text for p in self._token_pieces if p.lane == "answer")
-        message = AIMessage(content=content, tool_calls=valid_calls)
+        invalid_payload = invalid_tool_calls_payload(invalid_calls)
+        additional_kwargs: dict[str, Any] = {}
+        if invalid_payload:
+            additional_kwargs[INVALID_TOOL_CALLS_KWARG] = payload_to_kwargs(invalid_payload)
+        message = AIMessage(
+            content=content,
+            tool_calls=valid_calls,
+            additional_kwargs=additional_kwargs,
+        )
         return AssembledStep(
             message=message,
             invalid_tool_calls=invalid_calls,

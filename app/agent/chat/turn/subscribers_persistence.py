@@ -75,9 +75,11 @@ class ChatPersistenceSubscriber:
             "gateway_empty_stream",
             "gateway_upstream_timeout",
             "gateway_upstream_failed",
+            "gateway_protocol_error",
             TurnTerminatedBy.GATEWAY_UPSTREAM_TIMEOUT.value,
             TurnTerminatedBy.GATEWAY_EMPTY_STREAM.value,
             TurnTerminatedBy.GATEWAY_UPSTREAM_FAILED.value,
+            TurnTerminatedBy.GATEWAY_PROTOCOL_ERROR.value,
         }
         fail_message = (
             "模型服务暂时无响应，请重试" if gateway_error else (event.error or "turn failed")

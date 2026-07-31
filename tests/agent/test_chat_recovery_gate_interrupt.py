@@ -19,6 +19,7 @@ class _FakeRecorder:
     tool_steps: list[ToolStepMetadata] = field(default_factory=list)
     final_persisted: bool = False
     last_model_message: object | None = None
+    last_invalid_tool_calls: list[object] = field(default_factory=list)
 
 
 def _hook(*, tool_steps: list[ToolStepMetadata]) -> ChatRecoveryHook:
@@ -103,3 +104,54 @@ async def test_before_complete_still_fails_empty_after_tools_without_gate() -> N
             await hook.before_complete(event, state=state)
             is TurnTerminatedBy.GATEWAY_UPSTREAM_FAILED
         )
+
+
+@pytest.mark.asyncio
+async def test_before_complete_recovers_when_last_step_only_had_invalid_tool_args() -> None:
+    """末步仅非法 tool args 时走 invalid_tool_arguments recovery, 不当作用户可见 turn 失败."""
+    from langchain_core.messages import AIMessage
+
+    from app.agent.runtime.tools.result import INVALID_ARGUMENTS
+
+    hook = _hook(
+        tool_steps=[
+            ToolStepMetadata(
+                call_id="c_ok",
+                name="read_file",
+                ok=True,
+                result_preview="ok",
+            ),
+            ToolStepMetadata(
+                call_id="call_1",
+                name="execute_python",
+                ok=False,
+                error_type=INVALID_ARGUMENTS,
+                result_preview="参数解析失败",
+                args={"parse_error": "streamed tool arguments are not valid JSON"},
+            ),
+        ]
+    )
+    hook.recorder.last_model_message = AIMessage(content="", tool_calls=[])
+    hook.recorder.last_invalid_tool_calls = [
+        SimpleNamespace(
+            call_id="call_1",
+            name="execute_python",
+            parse_error="streamed tool arguments are not valid JSON: Unterminated string",
+        )
+    ]
+    event = TurnCompletedEvent(turn_id="t1", step_index=4, messages=[])
+    state = RunState()
+    with (
+        patch(
+            "app.agent.chat.turn.recovery_hook.has_pending_user_gate",
+            new=AsyncMock(return_value=False),
+        ),
+        patch.object(
+            hook,
+            "_attempt_recovery",
+            new=AsyncMock(return_value=True),
+        ) as recover,
+    ):
+        assert await hook.before_complete(event, state=state) is None
+        recover.assert_awaited_once()
+        assert recover.await_args.kwargs["reason"] == "invalid_tool_arguments"

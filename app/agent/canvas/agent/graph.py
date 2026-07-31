@@ -7,6 +7,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.base import BaseStore
 
+from app.agent.chat.agent.invalid_tool_args_middleware import InvalidToolArgsMiddleware
 from app.agent.chat.llm.gateway_chat_model import GatewayChatModel
 from app.server.infra.config import settings
 
@@ -23,6 +24,7 @@ def build_canvas_agent_graph(
 ) -> CompiledStateGraph:
     """创建画布 Agent 图, 含摘要中间件与手动确认中间件"""
     middleware = [
+        InvalidToolArgsMiddleware(),
         SummarizationMiddleware(
             model=summarization_llm or llm,
             trigger=("tokens", settings.canvas_max_tokens_before_summary),

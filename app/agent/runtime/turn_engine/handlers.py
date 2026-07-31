@@ -276,13 +276,15 @@ class TurnEventHandlers:
             if not valid_calls:
                 first = event.invalid_tool_calls[0]
                 if self.config.heal_invalid_tool_calls:
+                    # 用户确认 (2026-07-31): 非法 tool args 不打穿 turn
+                    # 观察面发合成 tool 错误帧; chat/canvas middleware 注回消息态供同轮重试
+                    # graph 仍无最终回答时, before_complete 才允许 empty recovery 兜底
                     logger.warning(
                         "turn.tool_parse_healed",
                         turn_id=self.turn_id,
                         tool_name=first.name,
                         parse_error=first.parse_error,
                     )
-                    # Do not fail the turn — let completion / recovery produce a user answer.
                 else:
                     logger.error(
                         "turn.tool_parse_fatal",

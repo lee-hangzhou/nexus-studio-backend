@@ -422,3 +422,52 @@ async def test_handlers_heal_invalid_tool_calls_by_default() -> None:
     )
     assert result.action == "continue"
     fail.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_handlers_heal_streamed_invalid_tool_argument_json_without_failing_turn() -> None:
+    """流式非法 tool JSON 走 heal 合成 tool 错误帧, 不 TurnFailed."""
+    from app.agent.runtime.agent.events import InvalidToolCall, ModelStepFinishedEvent
+    from app.agent.runtime.turn_engine.events import ToolFinished, ToolStarted
+
+    guards = TurnGuards(
+        max_model_steps=10,
+        max_tool_calls=50,
+        wall_clock_sec=60,
+        tool_repeat_guard=3,
+    )
+    config = MagicMock()
+    config.guards = guards
+    config.emit_invalid_tool_call_frames = True
+    config.heal_invalid_tool_calls = True
+    fail = AsyncMock()
+    emitted: list[object] = []
+    handlers = TurnEventHandlers(
+        turn_id="t1",
+        config=config,
+        state=RunState(),
+        broadcast=emitted.append,
+        barrier=AsyncMock(),
+        fail=fail,
+    )
+    result = await handlers._handle_model_step_finished(
+        ModelStepFinishedEvent(
+            turn_id="t1",
+            step_index=3,
+            ai_message=AIMessage(content="", tool_calls=[]),
+            invalid_tool_calls=[
+                InvalidToolCall(
+                    call_id="call_1",
+                    name="execute_python",
+                    raw_arguments='{"code": "unterm',
+                    parse_error="streamed tool arguments are not valid JSON: Unterminated string",
+                )
+            ],
+        )
+    )
+    assert result.action == "continue"
+    fail.assert_not_awaited()
+    assert any(isinstance(e, ToolStarted) and e.synthetic for e in emitted)
+    assert any(
+        isinstance(e, ToolFinished) and e.synthetic and e.tool_error for e in emitted
+    )

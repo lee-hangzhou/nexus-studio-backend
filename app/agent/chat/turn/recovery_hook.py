@@ -83,6 +83,23 @@ class ChatRecoveryHook:
         # Gate SSE is emitted on TurnCompleted → Chat persistence (force_interrupted).
         if self.agent is not None and await has_pending_user_gate(self.agent, self.config):
             return TurnTerminatedBy.INTERRUPTED
+        if self.recorder.last_invalid_tool_calls and not (
+            last is not None and last.tool_calls
+        ):
+            # 用户确认兜底: middleware 同轮重试后若仍无助手正文, 走 empty recovery, 不标 GATEWAY_UPSTREAM_FAILED
+            messages = list(event.messages)
+            ok = await self._attempt_recovery(
+                messages,
+                reason="invalid_tool_arguments",
+                state=state,
+            )
+            if ok:
+                return None
+            if self.recovery_cancelled:
+                return TurnTerminatedBy.CANCELLED
+            if self.recovery_exhausted:
+                return TurnTerminatedBy.AGENT_RECOVERY_EXHAUSTED
+            return None
         if self.recorder.tool_steps:
             return TurnTerminatedBy.GATEWAY_UPSTREAM_FAILED
         messages = list(event.messages)

@@ -8,6 +8,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.base import BaseStore
 
 from app.agent.chat.agent.gate_solo_middleware import GateSoloBatchMiddleware
+from app.agent.chat.agent.invalid_tool_args_middleware import InvalidToolArgsMiddleware
 from app.agent.chat.agent.prompts import DEFAULT_CHAT_SYSTEM
 from app.agent.chat.llm.gateway_chat_model import GatewayChatModel
 from app.server.infra.config import settings
@@ -22,7 +23,9 @@ def build_chat_agent(
     store: BaseStore | None = None,
     summarization_llm: GatewayChatModel | None = None,
 ) -> CompiledStateGraph:
+    """组装 Chat Agent 图, 含非法 tool 参数注回与 gate solo 中间件"""
     middleware: list = [
+        InvalidToolArgsMiddleware(),
         GateSoloBatchMiddleware(),
         SummarizationMiddleware(
             model=summarization_llm or llm,

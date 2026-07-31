@@ -41,6 +41,29 @@ def test_malformed_sse_and_incomplete_tool_calls_stop_model_step() -> None:
         assembler.finish()
 
 
+def test_invalid_streamed_tool_arguments_become_invalid_tool_calls() -> None:
+    """非法 tool args JSON 进入 invalid_tool_calls, 可被 agent heal, 不是打穿 turn 的协议错."""
+    assembler = OpenAIStreamAssembler(thinking=ThinkingConfig())
+    assembler.feed_sse_data(
+        '{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1",'
+        '"function":{"name":"execute_python","arguments":"{\\"code\\": \\"unterm"}}]}}]}'
+    )
+    assembler.feed_sse_data('{"choices":[{"delta":{},"finish_reason":"length"}]}')
+
+    assembled = assembler.finish()
+
+    assert assembled.message.tool_calls == []
+    assert len(assembled.invalid_tool_calls) == 1
+    inv = assembled.invalid_tool_calls[0]
+    assert inv.call_id == "call_1"
+    assert inv.name == "execute_python"
+    assert inv.raw_arguments.startswith('{"code":')
+    assert "valid JSON" in inv.parse_error or "JSON" in inv.parse_error
+    assert assembled.finish_reason == "length"
+    assert assembled.message.additional_kwargs.get("invalid_tool_calls")
+    assert assembled.message.additional_kwargs["invalid_tool_calls"][0]["id"] == "call_1"
+
+
 def test_usage_only_sse_frame_accepts_additive_fields_without_interrupting_stream() -> None:
     assembler = OpenAIStreamAssembler(thinking=ThinkingConfig())
 
