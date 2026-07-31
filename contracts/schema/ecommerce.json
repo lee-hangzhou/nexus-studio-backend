@@ -1,0 +1,2787 @@
+{
+  "$defs": {
+    "AdsReportDiagnosis": {
+      "additionalProperties": false,
+      "properties": {
+        "computed_kpis": {
+          "items": {
+            "$ref": "#/$defs/ComputedKpi"
+          },
+          "title": "Computed Kpis",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "data_quality_issues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Data Quality Issues",
+          "type": "array"
+        },
+        "diagnoses": {
+          "items": {
+            "$ref": "#/$defs/DiagnosisEntry"
+          },
+          "title": "Diagnoses",
+          "type": "array"
+        },
+        "expert_id": {
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "period": {
+          "title": "Period",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "recommended_experiments": {
+          "items": {
+            "$ref": "#/$defs/RecommendedExperiment"
+          },
+          "title": "Recommended Experiments",
+          "type": "array"
+        },
+        "report_import_id": {
+          "title": "Report Import Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "ecom-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "expert_id",
+        "created_at",
+        "report_import_id",
+        "period",
+        "data_quality_issues",
+        "computed_kpis",
+        "diagnoses",
+        "recommended_experiments"
+      ],
+      "title": "AdsReportDiagnosis",
+      "type": "object"
+    },
+    "AdsStrategyBrief": {
+      "additionalProperties": false,
+      "properties": {
+        "assumptions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "budget_amount_fen": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Budget Amount Fen"
+        },
+        "campaign_briefs": {
+          "items": {
+            "$ref": "#/$defs/CampaignBriefEntry"
+          },
+          "title": "Campaign Briefs",
+          "type": "array"
+        },
+        "channel_allocation": {
+          "items": {
+            "$ref": "#/$defs/ChannelAllocation"
+          },
+          "title": "Channel Allocation",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "expert_id": {
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "freshness_warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Freshness Warnings",
+          "type": "array"
+        },
+        "objective": {
+          "title": "Objective",
+          "type": "string"
+        },
+        "platform_scope": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Platform Scope",
+          "type": "array"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "report_period": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Report Period"
+        },
+        "schema_version": {
+          "default": "ecom-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "target_kpis": {
+          "items": {
+            "$ref": "#/$defs/KpiTarget"
+          },
+          "title": "Target Kpis",
+          "type": "array"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "expert_id",
+        "created_at",
+        "objective",
+        "platform_scope",
+        "target_kpis",
+        "channel_allocation",
+        "campaign_briefs",
+        "assumptions",
+        "freshness_warnings"
+      ],
+      "title": "AdsStrategyBrief",
+      "type": "object"
+    },
+    "AnomalyItem": {
+      "additionalProperties": false,
+      "properties": {
+        "dimension_key": {
+          "title": "Dimension Key",
+          "type": "string"
+        },
+        "evidence_ref": {
+          "title": "Evidence Ref",
+          "type": "string"
+        },
+        "metric": {
+          "title": "Metric",
+          "type": "string"
+        },
+        "observed_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Observed Value"
+        },
+        "rule": {
+          "title": "Rule",
+          "type": "string"
+        },
+        "severity": {
+          "title": "Severity",
+          "type": "string"
+        },
+        "threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Threshold"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metric",
+        "dimension_key",
+        "observed_value",
+        "unit",
+        "rule",
+        "severity",
+        "evidence_ref"
+      ],
+      "title": "AnomalyItem",
+      "type": "object"
+    },
+    "AnomalyList": {
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "expert_id": {
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/AnomalyItem"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "period": {
+          "title": "Period",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "ecom-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "expert_id",
+        "created_at",
+        "period",
+        "items"
+      ],
+      "title": "AnomalyList",
+      "type": "object"
+    },
+    "CalendarEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "activity": {
+          "title": "Activity",
+          "type": "string"
+        },
+        "date": {
+          "title": "Date",
+          "type": "string"
+        },
+        "owner": {
+          "title": "Owner",
+          "type": "string"
+        }
+      },
+      "required": [
+        "date",
+        "activity",
+        "owner"
+      ],
+      "title": "CalendarEntry",
+      "type": "object"
+    },
+    "CampaignBriefEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "objective": {
+          "title": "Objective",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "objective"
+      ],
+      "title": "CampaignBriefEntry",
+      "type": "object"
+    },
+    "CampaignPlanDoc": {
+      "additionalProperties": false,
+      "properties": {
+        "assumptions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "audience": {
+          "title": "Audience",
+          "type": "string"
+        },
+        "budget_amount_fen": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Budget Amount Fen"
+        },
+        "calendar": {
+          "items": {
+            "$ref": "#/$defs/CalendarEntry"
+          },
+          "title": "Calendar",
+          "type": "array"
+        },
+        "channels": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Channels",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "dependencies": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "end_date": {
+          "title": "End Date",
+          "type": "string"
+        },
+        "expert_id": {
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "kpi_targets": {
+          "items": {
+            "$ref": "#/$defs/KpiTarget"
+          },
+          "title": "Kpi Targets",
+          "type": "array"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "objective": {
+          "title": "Objective",
+          "type": "string"
+        },
+        "offer": {
+          "title": "Offer",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "ecom-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "start_date": {
+          "title": "Start Date",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "expert_id",
+        "created_at",
+        "name",
+        "objective",
+        "audience",
+        "start_date",
+        "end_date",
+        "offer",
+        "channels",
+        "message",
+        "calendar",
+        "kpi_targets",
+        "assumptions",
+        "dependencies"
+      ],
+      "title": "CampaignPlanDoc",
+      "type": "object"
+    },
+    "ChannelAllocation": {
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "title": "Channel",
+          "type": "string"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "share_bps": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Share Bps"
+        }
+      },
+      "required": [
+        "channel"
+      ],
+      "title": "ChannelAllocation",
+      "type": "object"
+    },
+    "ChartArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "chart_id": {
+          "title": "Chart Id",
+          "type": "string"
+        },
+        "chart_type": {
+          "title": "Chart Type",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "expert_id": {
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "metrics_snapshot_id": {
+          "title": "Metrics Snapshot Id",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "ecom-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "series": {
+          "items": {
+            "$ref": "#/$defs/ChartSeries"
+          },
+          "title": "Series",
+          "type": "array"
+        },
+        "source_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "storage_key": {
+          "title": "Storage Key",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "expert_id",
+        "created_at",
+        "chart_id",
+        "metrics_snapshot_id",
+        "chart_type",
+        "series",
+        "unit",
+        "storage_key"
+      ],
+      "title": "ChartArtifact",
+      "type": "object"
+    },
+    "ChartSeries": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "points": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Points",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "points"
+      ],
+      "title": "ChartSeries",
+      "type": "object"
+    },
+    "CompetitorEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "positioning": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Positioning"
+        },
+        "price_observation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Price Observation"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "CompetitorEntry",
+      "type": "object"
+    },
+    "ComplianceCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "rule_id": {
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id",
+        "status",
+        "message"
+      ],
+      "title": "ComplianceCheck",
+      "type": "object"
+    },
+    "ComputedKpi": {
+      "additionalProperties": false,
+      "properties": {
+        "formula_version": {
+          "default": "ecom-v1",
+          "title": "Formula Version",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "unavailable_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unavailable Reason"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "unit"
+      ],
+      "title": "ComputedKpi",
+      "type": "object"
+    },
+    "CreativeBrief": {
+      "additionalProperties": false,
+      "properties": {
+        "audience": {
+          "title": "Audience",
+          "type": "string"
+        },
+        "brand_constraints": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Brand Constraints",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "expert_id": {
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "messages": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Messages",
+          "type": "array"
+        },
+        "objective": {
+          "title": "Objective",
+          "type": "string"
+        },
+        "placements": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Placements",
+          "type": "array"
+        },
+        "prohibited_claims": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Prohibited Claims",
+          "type": "array"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "reference_asset_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reference Asset Ids",
+          "type": "array"
+        },
+        "required_assets": {
+          "items": {
+            "$ref": "#/$defs/RequiredAsset"
+          },
+          "title": "Required Assets",
+          "type": "array"
+        },
+        "schema_version": {
+          "default": "ecom-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sku_id": {
+          "title": "Sku Id",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "expert_id",
+        "created_at",
+        "sku_id",
+        "objective",
+        "placements",
+        "audience",
+        "messages",
+        "required_assets",
+        "brand_constraints",
+        "prohibited_claims"
+      ],
+      "title": "CreativeBrief",
+      "type": "object"
+    },
+    "DailyOrWeeklyReview": {
+      "additionalProperties": false,
+      "properties": {
+        "anomalies": {
+          "items": {
+            "$ref": "#/$defs/ReviewAnomaly"
+          },
+          "title": "Anomalies",
+          "type": "array"
+        },
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/ReviewChange"
+          },
+          "title": "Changes",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "expert_id": {
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "metrics_snapshot_id": {
+          "title": "Metrics Snapshot Id",
+          "type": "string"
+        },
+        "period": {
+          "title": "Period",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "recommendations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Recommendations",
+          "type": "array"
+        },
+        "schema_version": {
+          "default": "ecom-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "unavailable_metrics": {
+          "items": {
+            "$ref": "#/$defs/UnavailableMetric"
+          },
+          "title": "Unavailable Metrics",
+          "type": "array"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "expert_id",
+        "created_at",
+        "period",
+        "metrics_snapshot_id",
+        "summary",
+        "changes",
+        "anomalies",
+        "recommendations",
+        "unavailable_metrics"
+      ],
+      "title": "DailyOrWeeklyReview",
+      "type": "object"
+    },
+    "DatasetVersion": {
+      "additionalProperties": false,
+      "properties": {
+        "import_id": {
+          "title": "Import Id",
+          "type": "string"
+        },
+        "report_type": {
+          "title": "Report Type",
+          "type": "string"
+        },
+        "row_count": {
+          "minimum": 0,
+          "title": "Row Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "report_type",
+        "import_id",
+        "row_count"
+      ],
+      "title": "DatasetVersion",
+      "type": "object"
+    },
+    "DetailModule": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "type": {
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "content"
+      ],
+      "title": "DetailModule",
+      "type": "object"
+    },
+    "DiagnosisEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Fields",
+          "type": "array"
+        },
+        "problem": {
+          "title": "Problem",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence_fields",
+        "problem"
+      ],
+      "title": "DiagnosisEntry",
+      "type": "object"
+    },
+    "EmailMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "title": "Body",
+          "type": "string"
+        },
+        "cta": {
+          "title": "Cta",
+          "type": "string"
+        },
+        "offset": {
+          "title": "Offset",
+          "type": "string"
+        },
+        "subject": {
+          "title": "Subject",
+          "type": "string"
+        }
+      },
+      "required": [
+        "offset",
+        "subject",
+        "body",
+        "cta"
+      ],
+      "title": "EmailMessage",
+      "type": "object"
+    },
+    "EmailSequenceDraft": {
+      "additionalProperties": false,
+      "properties": {
+        "audience": {
+          "title": "Audience",
+          "type": "string"
+        },
+        "channel": {
+          "const": "email_offsite",
+          "default": "email_offsite",
+          "title": "Channel",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "expert_id": {
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "messages": {
+          "items": {
+            "$ref": "#/$defs/EmailMessage"
+          },
+          "title": "Messages",
+          "type": "array"
+        },
+        "not_taobao_crm": {
+          "const": true,
+          "default": true,
+          "title": "Not Taobao Crm",
+          "type": "boolean"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "ecom-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "stop_conditions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Stop Conditions",
+          "type": "array"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "trigger": {
+          "title": "Trigger",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "expert_id",
+        "created_at",
+        "audience",
+        "trigger",
+        "messages",
+        "stop_conditions"
+      ],
+      "title": "EmailSequenceDraft",
+      "type": "object"
+    },
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "accessed_at": {
+          "format": "date-time",
+          "title": "Accessed At",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "title",
+        "accessed_at"
+      ],
+      "title": "EvidenceRef",
+      "type": "object"
+    },
+    "GenerationAssetRef": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_id": {
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "expert_id": {
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "generation_task_id": {
+          "title": "Generation Task Id",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "request_hash": {
+          "title": "Request Hash",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "ecom-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sku_id": {
+          "title": "Sku Id",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "storage_key": {
+          "title": "Storage Key",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "version": {
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "expert_id",
+        "created_at",
+        "asset_id",
+        "sku_id",
+        "generation_task_id",
+        "kind",
+        "model_id",
+        "request_hash",
+        "storage_key",
+        "version",
+        "status"
+      ],
+      "title": "GenerationAssetRef",
+      "type": "object"
+    },
+    "KpiTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "metric": {
+          "title": "Metric",
+          "type": "string"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "metric",
+        "value",
+        "unit"
+      ],
+      "title": "KpiTarget",
+      "type": "object"
+    },
+    "ListingCopyVersion": {
+      "additionalProperties": false,
+      "properties": {
+        "compliance_checks": {
+          "items": {
+            "$ref": "#/$defs/ComplianceCheck"
+          },
+          "title": "Compliance Checks",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "detail_modules": {
+          "items": {
+            "$ref": "#/$defs/DetailModule"
+          },
+          "title": "Detail Modules",
+          "type": "array"
+        },
+        "expert_id": {
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Keywords",
+          "type": "array"
+        },
+        "locale": {
+          "title": "Locale",
+          "type": "string"
+        },
+        "platform": {
+          "enum": [
+            "taobao",
+            "tmall"
+          ],
+          "title": "Platform",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "ecom-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "selling_points": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Selling Points",
+          "type": "array"
+        },
+        "sku_id": {
+          "title": "Sku Id",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "status": {
+          "const": "draft",
+          "default": "draft",
+          "title": "Status",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "version": {
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "expert_id",
+        "created_at",
+        "id",
+        "sku_id",
+        "version",
+        "platform",
+        "locale",
+        "title",
+        "selling_points",
+        "keywords",
+        "detail_modules",
+        "compliance_checks"
+      ],
+      "title": "ListingCopyVersion",
+      "type": "object"
+    },
+    "MarketCompetitorBrief": {
+      "additionalProperties": false,
+      "properties": {
+        "assumptions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "competitors": {
+          "items": {
+            "$ref": "#/$defs/CompetitorEntry"
+          },
+          "title": "Competitors",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "expert_id": {
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "findings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "market_scope": {
+          "title": "Market Scope",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "recommended_handoffs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Recommended Handoffs",
+          "type": "array"
+        },
+        "risks": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Risks",
+          "type": "array"
+        },
+        "schema_version": {
+          "default": "ecom-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "expert_id",
+        "created_at",
+        "question",
+        "market_scope",
+        "assumptions",
+        "evidence",
+        "competitors",
+        "findings",
+        "risks",
+        "recommended_handoffs"
+      ],
+      "title": "MarketCompetitorBrief",
+      "type": "object"
+    },
+    "MetricAvailability": {
+      "additionalProperties": false,
+      "description": "指标可用性标记（前端不得把缺失显示为 0）",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "raw_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Value"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "unavailable",
+            "unsupported",
+            "unit_unverified",
+            "reauth_required"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "status"
+      ],
+      "title": "MetricAvailability",
+      "type": "object"
+    },
+    "MetricEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "formula_version": {
+          "default": "ecom-v1",
+          "title": "Formula Version",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "unavailable_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unavailable Reason"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "unit"
+      ],
+      "title": "MetricEntry",
+      "type": "object"
+    },
+    "MetricsSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "data_quality_issues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Data Quality Issues",
+          "type": "array"
+        },
+        "dataset_versions": {
+          "items": {
+            "$ref": "#/$defs/DatasetVersion"
+          },
+          "title": "Dataset Versions",
+          "type": "array"
+        },
+        "dimensions": {
+          "additionalProperties": true,
+          "title": "Dimensions",
+          "type": "object"
+        },
+        "expert_id": {
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "metrics": {
+          "items": {
+            "$ref": "#/$defs/MetricEntry"
+          },
+          "title": "Metrics",
+          "type": "array"
+        },
+        "period": {
+          "title": "Period",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "ecom-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "timezone": {
+          "const": "Asia/Shanghai",
+          "default": "Asia/Shanghai",
+          "title": "Timezone",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "expert_id",
+        "created_at",
+        "period",
+        "dataset_versions",
+        "metrics"
+      ],
+      "title": "MetricsSnapshot",
+      "type": "object"
+    },
+    "PublishChange": {
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "After"
+        },
+        "before": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Before"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "PublishChange",
+      "type": "object"
+    },
+    "PublishDiff": {
+      "additionalProperties": false,
+      "properties": {
+        "base_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Version"
+        },
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/PublishChange"
+          },
+          "title": "Changes",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "expert_id": {
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "idempotency_key": {
+          "title": "Idempotency Key",
+          "type": "string"
+        },
+        "item_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Item Id"
+        },
+        "operation": {
+          "enum": [
+            "publish",
+            "edit",
+            "list",
+            "unlist"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "payload_hash": {
+          "title": "Payload Hash",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "ecom-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "shop_connection_id": {
+          "title": "Shop Connection Id",
+          "type": "string"
+        },
+        "sku_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sku Ids",
+          "type": "array"
+        },
+        "source_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "target_version": {
+          "title": "Target Version",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "expert_id",
+        "created_at",
+        "operation",
+        "shop_connection_id",
+        "sku_ids",
+        "target_version",
+        "changes",
+        "idempotency_key",
+        "payload_hash",
+        "expires_at"
+      ],
+      "title": "PublishDiff",
+      "type": "object"
+    },
+    "PublishReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "audit_log_ref": {
+          "title": "Audit Log Ref",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "executed_at": {
+          "format": "date-time",
+          "title": "Executed At",
+          "type": "string"
+        },
+        "expert_id": {
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "idempotency_key": {
+          "title": "Idempotency Key",
+          "type": "string"
+        },
+        "operation": {
+          "enum": [
+            "publish",
+            "edit",
+            "list",
+            "unlist"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "payload_hash": {
+          "title": "Payload Hash",
+          "type": "string"
+        },
+        "platform_item_id": {
+          "title": "Platform Item Id",
+          "type": "string"
+        },
+        "platform_response_code": {
+          "title": "Platform Response Code",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "ecom-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "shop_connection_id": {
+          "title": "Shop Connection Id",
+          "type": "string"
+        },
+        "sku_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sku Ids",
+          "type": "array"
+        },
+        "source_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "expert_id",
+        "created_at",
+        "operation",
+        "shop_connection_id",
+        "platform_item_id",
+        "sku_ids",
+        "request_id",
+        "idempotency_key",
+        "payload_hash",
+        "status",
+        "executed_at",
+        "platform_response_code",
+        "audit_log_ref"
+      ],
+      "title": "PublishReceipt",
+      "type": "object"
+    },
+    "RecommendedExperiment": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "hypothesis": {
+          "title": "Hypothesis",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hypothesis",
+        "action"
+      ],
+      "title": "RecommendedExperiment",
+      "type": "object"
+    },
+    "RequiredAsset": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "minimum": 1,
+          "title": "Count",
+          "type": "integer"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "ratio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ratio"
+        }
+      },
+      "required": [
+        "kind",
+        "count"
+      ],
+      "title": "RequiredAsset",
+      "type": "object"
+    },
+    "ReviewAnomaly": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "metric": {
+          "title": "Metric",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metric",
+        "description"
+      ],
+      "title": "ReviewAnomaly",
+      "type": "object"
+    },
+    "ReviewChange": {
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "After"
+        },
+        "before": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Before"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field"
+      ],
+      "title": "ReviewChange",
+      "type": "object"
+    },
+    "ShopConnectionPublic": {
+      "additionalProperties": false,
+      "description": "对外店铺连接视图：无 Token/secret",
+      "properties": {
+        "app_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "self_dev",
+                "subscription_isv"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "App Type"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At"
+        },
+        "semantic_permissions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Semantic Permissions",
+          "type": "array"
+        },
+        "shop_connection_id": {
+          "title": "Shop Connection Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "connected",
+            "REAUTH_REQUIRED",
+            "disconnected",
+            "unsupported"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "shop_connection_id",
+        "status"
+      ],
+      "title": "ShopConnectionPublic",
+      "type": "object"
+    },
+    "SkuCostRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "currency": {
+          "const": "CNY",
+          "default": "CNY",
+          "title": "Currency",
+          "type": "string"
+        },
+        "effective_from": {
+          "format": "date-time",
+          "title": "Effective From",
+          "type": "string"
+        },
+        "fulfillment_cost_fen": {
+          "minimum": 0,
+          "title": "Fulfillment Cost Fen",
+          "type": "integer"
+        },
+        "other_variable_cost_fen": {
+          "minimum": 0,
+          "title": "Other Variable Cost Fen",
+          "type": "integer"
+        },
+        "platform_fee_rate_bps": {
+          "minimum": 0,
+          "title": "Platform Fee Rate Bps",
+          "type": "integer"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "purchase_cost_fen": {
+          "minimum": 0,
+          "title": "Purchase Cost Fen",
+          "type": "integer"
+        },
+        "schema_version": {
+          "default": "ecom-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sku_id": {
+          "title": "Sku Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "sku_id",
+        "effective_from",
+        "purchase_cost_fen",
+        "fulfillment_cost_fen",
+        "platform_fee_rate_bps",
+        "other_variable_cost_fen"
+      ],
+      "title": "SkuCostRecord",
+      "type": "object"
+    },
+    "SkuRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Item Id"
+        },
+        "platform": {
+          "anyOf": [
+            {
+              "enum": [
+                "taobao",
+                "tmall"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Platform"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "ecom-v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sku_id": {
+          "title": "Sku Id",
+          "type": "string"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        }
+      },
+      "required": [
+        "project_id",
+        "sku_id"
+      ],
+      "title": "SkuRecord",
+      "type": "object"
+    },
+    "TaobaoAdsDailyNormalized": {
+      "additionalProperties": false,
+      "description": "万相台日报：金额字段 UNIT_UNVERIFIED，只存 raw_string，禁止自动 fen",
+      "properties": {
+        "ad_group_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ad Group Id"
+        },
+        "ad_group_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ad Group Name"
+        },
+        "attributed_orders": {
+          "minimum": 0,
+          "title": "Attributed Orders",
+          "type": "integer"
+        },
+        "campaign_id": {
+          "title": "Campaign Id",
+          "type": "string"
+        },
+        "campaign_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Campaign Name"
+        },
+        "clicks": {
+          "minimum": 0,
+          "title": "Clicks",
+          "type": "integer"
+        },
+        "impressions": {
+          "minimum": 0,
+          "title": "Impressions",
+          "type": "integer"
+        },
+        "official_ctr": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Official Ctr"
+        },
+        "official_cvr": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Official Cvr"
+        },
+        "official_roi": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Official Roi"
+        },
+        "revenue_raw": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revenue Raw"
+        },
+        "shop_id": {
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "spend_raw": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spend Raw"
+        },
+        "stat_date": {
+          "title": "Stat Date",
+          "type": "string"
+        },
+        "unit_status": {
+          "anyOf": [
+            {
+              "const": "UNIT_UNVERIFIED",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit Status"
+        }
+      },
+      "required": [
+        "shop_id",
+        "stat_date",
+        "campaign_id",
+        "impressions",
+        "clicks",
+        "attributed_orders"
+      ],
+      "title": "TaobaoAdsDailyNormalized",
+      "type": "object"
+    },
+    "TaobaoInventorySnapshotNormalized": {
+      "additionalProperties": false,
+      "properties": {
+        "available_qty": {
+          "minimum": 0,
+          "title": "Available Qty",
+          "type": "integer"
+        },
+        "inbound_qty": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inbound Qty"
+        },
+        "item_id": {
+          "title": "Item Id",
+          "type": "string"
+        },
+        "locked_qty": {
+          "minimum": 0,
+          "title": "Locked Qty",
+          "type": "integer"
+        },
+        "shop_id": {
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "sku_id": {
+          "title": "Sku Id",
+          "type": "string"
+        },
+        "snapshot_at": {
+          "format": "date-time",
+          "title": "Snapshot At",
+          "type": "string"
+        },
+        "warehouse_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Warehouse Id"
+        }
+      },
+      "required": [
+        "shop_id",
+        "snapshot_at",
+        "item_id",
+        "sku_id",
+        "available_qty",
+        "locked_qty"
+      ],
+      "title": "TaobaoInventorySnapshotNormalized",
+      "type": "object"
+    },
+    "TaobaoOrderLineNormalized": {
+      "additionalProperties": false,
+      "properties": {
+        "buyer_region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Buyer Region"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "currency": {
+          "const": "CNY",
+          "default": "CNY",
+          "title": "Currency",
+          "type": "string"
+        },
+        "discount_amount_fen": {
+          "default": 0,
+          "title": "Discount Amount Fen",
+          "type": "integer"
+        },
+        "item_amount_fen": {
+          "title": "Item Amount Fen",
+          "type": "integer"
+        },
+        "item_id": {
+          "title": "Item Id",
+          "type": "string"
+        },
+        "order_id": {
+          "title": "Order Id",
+          "type": "string"
+        },
+        "order_status": {
+          "title": "Order Status",
+          "type": "string"
+        },
+        "paid_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Paid At"
+        },
+        "quantity": {
+          "minimum": 0,
+          "title": "Quantity",
+          "type": "integer"
+        },
+        "refund_amount_fen": {
+          "default": 0,
+          "title": "Refund Amount Fen",
+          "type": "integer"
+        },
+        "shipping_amount_fen": {
+          "default": 0,
+          "title": "Shipping Amount Fen",
+          "type": "integer"
+        },
+        "shop_id": {
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "sku_id": {
+          "title": "Sku Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "shop_id",
+        "order_id",
+        "item_id",
+        "sku_id",
+        "created_at",
+        "quantity",
+        "item_amount_fen",
+        "order_status"
+      ],
+      "title": "TaobaoOrderLineNormalized",
+      "type": "object"
+    },
+    "TaobaoProductDailyNormalized": {
+      "additionalProperties": false,
+      "properties": {
+        "add_to_cart_users": {
+          "minimum": 0,
+          "title": "Add To Cart Users",
+          "type": "integer"
+        },
+        "detail_views": {
+          "minimum": 0,
+          "title": "Detail Views",
+          "type": "integer"
+        },
+        "favorites": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Favorites"
+        },
+        "impressions": {
+          "minimum": 0,
+          "title": "Impressions",
+          "type": "integer"
+        },
+        "item_id": {
+          "title": "Item Id",
+          "type": "string"
+        },
+        "paid_amount_fen": {
+          "minimum": 0,
+          "title": "Paid Amount Fen",
+          "type": "integer"
+        },
+        "paid_buyers": {
+          "minimum": 0,
+          "title": "Paid Buyers",
+          "type": "integer"
+        },
+        "paid_orders": {
+          "minimum": 0,
+          "title": "Paid Orders",
+          "type": "integer"
+        },
+        "paid_quantity": {
+          "minimum": 0,
+          "title": "Paid Quantity",
+          "type": "integer"
+        },
+        "refund_amount_fen": {
+          "minimum": 0,
+          "title": "Refund Amount Fen",
+          "type": "integer"
+        },
+        "search_visitors": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Search Visitors"
+        },
+        "shop_id": {
+          "title": "Shop Id",
+          "type": "string"
+        },
+        "sku_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sku Id"
+        },
+        "stat_date": {
+          "title": "Stat Date",
+          "type": "string"
+        },
+        "visitors": {
+          "minimum": 0,
+          "title": "Visitors",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "shop_id",
+        "stat_date",
+        "item_id",
+        "impressions",
+        "visitors",
+        "detail_views",
+        "add_to_cart_users",
+        "paid_buyers",
+        "paid_orders",
+        "paid_quantity",
+        "paid_amount_fen",
+        "refund_amount_fen"
+      ],
+      "title": "TaobaoProductDailyNormalized",
+      "type": "object"
+    },
+    "UnavailableMetric": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "reason"
+      ],
+      "title": "UnavailableMetric",
+      "type": "object"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/MarketCompetitorBrief"
+    },
+    {
+      "$ref": "#/$defs/ListingCopyVersion"
+    },
+    {
+      "$ref": "#/$defs/CreativeBrief"
+    },
+    {
+      "$ref": "#/$defs/GenerationAssetRef"
+    },
+    {
+      "$ref": "#/$defs/CampaignPlanDoc"
+    },
+    {
+      "$ref": "#/$defs/EmailSequenceDraft"
+    },
+    {
+      "$ref": "#/$defs/AdsStrategyBrief"
+    },
+    {
+      "$ref": "#/$defs/AdsReportDiagnosis"
+    },
+    {
+      "$ref": "#/$defs/MetricsSnapshot"
+    },
+    {
+      "$ref": "#/$defs/MetricAvailability"
+    },
+    {
+      "$ref": "#/$defs/ShopConnectionPublic"
+    },
+    {
+      "$ref": "#/$defs/DailyOrWeeklyReview"
+    },
+    {
+      "$ref": "#/$defs/AnomalyList"
+    },
+    {
+      "$ref": "#/$defs/ChartArtifact"
+    },
+    {
+      "$ref": "#/$defs/PublishDiff"
+    },
+    {
+      "$ref": "#/$defs/PublishReceipt"
+    },
+    {
+      "$ref": "#/$defs/SkuRecord"
+    },
+    {
+      "$ref": "#/$defs/SkuCostRecord"
+    },
+    {
+      "$ref": "#/$defs/TaobaoOrderLineNormalized"
+    },
+    {
+      "$ref": "#/$defs/TaobaoProductDailyNormalized"
+    },
+    {
+      "$ref": "#/$defs/TaobaoInventorySnapshotNormalized"
+    },
+    {
+      "$ref": "#/$defs/TaobaoAdsDailyNormalized"
+    }
+  ]
+}

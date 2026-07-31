@@ -1,0 +1,3074 @@
+{
+  "$defs": {
+    "ArtifactSubmissionView": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "size_bytes": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size Bytes"
+        },
+        "storage_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Storage Key"
+        },
+        "storage_type": {
+          "$ref": "#/$defs/WorkshopArtifactStorageType"
+        }
+      },
+      "required": [
+        "name",
+        "storage_type"
+      ],
+      "title": "ArtifactSubmissionView",
+      "type": "object"
+    },
+    "ArtifactsPublishedPayloadView": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_names": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Artifact Names",
+          "type": "array"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "artifact_names"
+      ],
+      "title": "ArtifactsPublishedPayloadView",
+      "type": "object"
+    },
+    "ChatSelectedExpertView": {
+      "additionalProperties": false,
+      "properties": {
+        "avatar_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avatar Id"
+        },
+        "conversation_id": {
+          "title": "Conversation Id",
+          "type": "integer"
+        },
+        "expert_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expert Key"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        }
+      },
+      "required": [
+        "conversation_id"
+      ],
+      "title": "ChatSelectedExpertView",
+      "type": "object"
+    },
+    "ClearChatSelectedExpertRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "conversation_id": {
+          "minimum": 1,
+          "title": "Conversation Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "conversation_id"
+      ],
+      "title": "ClearChatSelectedExpertRequest",
+      "type": "object"
+    },
+    "ExpertDirectoryEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "applicable_tasks": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Applicable Tasks",
+          "type": "array"
+        },
+        "avatar_id": {
+          "title": "Avatar Id",
+          "type": "string"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "expert",
+          "default": "expert",
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "role_phrase": {
+          "title": "Role Phrase",
+          "type": "string"
+        },
+        "scenes": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Scenes",
+          "type": "array"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "key",
+        "name",
+        "role_phrase",
+        "tags",
+        "scenes",
+        "avatar_id"
+      ],
+      "title": "ExpertDirectoryEntry",
+      "type": "object"
+    },
+    "ExpertDirectoryResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ExpertDirectoryEntry"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "ExpertDirectoryResponse",
+      "type": "object"
+    },
+    "ExpertTeamDirectoryEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "applicable_tasks": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Applicable Tasks",
+          "type": "array"
+        },
+        "avatar_id": {
+          "title": "Avatar Id",
+          "type": "string"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "team",
+          "default": "team",
+          "title": "Kind",
+          "type": "string"
+        },
+        "member_keys": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Member Keys",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "role_phrase": {
+          "title": "Role Phrase",
+          "type": "string"
+        },
+        "scenes": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Scenes",
+          "type": "array"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "key",
+        "name",
+        "role_phrase",
+        "tags",
+        "scenes",
+        "avatar_id",
+        "member_keys"
+      ],
+      "title": "ExpertTeamDirectoryEntry",
+      "type": "object"
+    },
+    "ExpertTeamDirectoryResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ExpertTeamDirectoryEntry"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "ExpertTeamDirectoryResponse",
+      "type": "object"
+    },
+    "GetChatSelectedExpertRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "conversation_id": {
+          "minimum": 1,
+          "title": "Conversation Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "conversation_id"
+      ],
+      "title": "GetChatSelectedExpertRequest",
+      "type": "object"
+    },
+    "ScheduleBlockedPayloadView": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "message",
+        "reasons"
+      ],
+      "title": "ScheduleBlockedPayloadView",
+      "type": "object"
+    },
+    "ScheduleStartedPayloadView": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "schedule_id": {
+          "title": "Schedule Id",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "trigger_key": {
+          "title": "Trigger Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schedule_id",
+        "task_id",
+        "trigger_key",
+        "message"
+      ],
+      "title": "ScheduleStartedPayloadView",
+      "type": "object"
+    },
+    "ScheduleSummaryPayloadView": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "message"
+      ],
+      "title": "ScheduleSummaryPayloadView",
+      "type": "object"
+    },
+    "SetChatSelectedExpertRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "conversation_id": {
+          "minimum": 1,
+          "title": "Conversation Id",
+          "type": "integer"
+        },
+        "expert_key": {
+          "minLength": 1,
+          "title": "Expert Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "conversation_id",
+        "expert_key"
+      ],
+      "title": "SetChatSelectedExpertRequest",
+      "type": "object"
+    },
+    "ShopConnectionPublic": {
+      "additionalProperties": false,
+      "description": "对外店铺连接视图：无 Token/secret",
+      "properties": {
+        "app_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "self_dev",
+                "subscription_isv"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "App Type"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At"
+        },
+        "semantic_permissions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Semantic Permissions",
+          "type": "array"
+        },
+        "shop_connection_id": {
+          "title": "Shop Connection Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "connected",
+            "REAUTH_REQUIRED",
+            "disconnected",
+            "unsupported"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "shop_connection_id",
+        "status"
+      ],
+      "title": "ShopConnectionPublic",
+      "type": "object"
+    },
+    "WorkshopAddPresetRequest": {
+      "additionalProperties": false,
+      "description": "将平台预置专家加入项目名册（保留 preset_key，供运行时挂载）",
+      "properties": {
+        "preset_key": {
+          "minLength": 1,
+          "title": "Preset Key",
+          "type": "string"
+        },
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "preset_key"
+      ],
+      "title": "WorkshopAddPresetRequest",
+      "type": "object"
+    },
+    "WorkshopArtifactListRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "title": "WorkshopArtifactListRequest",
+      "type": "object"
+    },
+    "WorkshopArtifactListResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/WorkshopArtifactView"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "WorkshopArtifactListResponse",
+      "type": "object"
+    },
+    "WorkshopArtifactStorageType": {
+      "description": "工坊产物存储类型",
+      "enum": [
+        "db",
+        "oss",
+        "filesystem"
+      ],
+      "title": "WorkshopArtifactStorageType",
+      "type": "string"
+    },
+    "WorkshopArtifactView": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "size_bytes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size Bytes"
+        },
+        "storage_key": {
+          "title": "Storage Key",
+          "type": "string"
+        },
+        "storage_type": {
+          "$ref": "#/$defs/WorkshopArtifactStorageType"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Task Id"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "task_id",
+        "name",
+        "storage_type",
+        "storage_key",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "WorkshopArtifactView",
+      "type": "object"
+    },
+    "WorkshopAssignTaskExpertRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "expert_id": {
+          "minLength": 1,
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "task_id": {
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "expert_id"
+      ],
+      "title": "WorkshopAssignTaskExpertRequest",
+      "type": "object"
+    },
+    "WorkshopAuthorizeOperationRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "$ref": "#/$defs/WorkshopToolCapability"
+        },
+        "operation_kind": {
+          "minLength": 1,
+          "title": "Operation Kind",
+          "type": "string"
+        },
+        "payload_hash": {
+          "minLength": 1,
+          "title": "Payload Hash",
+          "type": "string"
+        },
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "task_id": {
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "capability",
+        "operation_kind",
+        "payload_hash"
+      ],
+      "title": "WorkshopAuthorizeOperationRequest",
+      "type": "object"
+    },
+    "WorkshopAuthorizedOperationListResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/WorkshopAuthorizedOperationView"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "WorkshopAuthorizedOperationListResponse",
+      "type": "object"
+    },
+    "WorkshopAuthorizedOperationView": {
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "$ref": "#/$defs/WorkshopToolCapability"
+        },
+        "consumed_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Consumed At"
+        },
+        "granted_at": {
+          "title": "Granted At",
+          "type": "string"
+        },
+        "granted_by": {
+          "title": "Granted By",
+          "type": "integer"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "operation_kind": {
+          "title": "Operation Kind",
+          "type": "string"
+        },
+        "payload_hash": {
+          "title": "Payload Hash",
+          "type": "string"
+        },
+        "revoked_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revoked At"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "task_id",
+        "capability",
+        "operation_kind",
+        "payload_hash",
+        "granted_by",
+        "granted_at"
+      ],
+      "title": "WorkshopAuthorizedOperationView",
+      "type": "object"
+    },
+    "WorkshopBeginShopAuthView": {
+      "additionalProperties": false,
+      "properties": {
+        "authorize_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Authorize Url"
+        },
+        "shop_connection_id": {
+          "title": "Shop Connection Id",
+          "type": "string"
+        },
+        "status": {
+          "const": "authorizing",
+          "default": "authorizing",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "shop_connection_id"
+      ],
+      "title": "WorkshopBeginShopAuthView",
+      "type": "object"
+    },
+    "WorkshopCompleteScheduledRunRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/ArtifactSubmissionView"
+          },
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "covered_goals": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Covered Goals",
+          "type": "array"
+        },
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "task_id": {
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id"
+      ],
+      "title": "WorkshopCompleteScheduledRunRequest",
+      "type": "object"
+    },
+    "WorkshopConfirmCustomExpertRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "proposal_id": {
+          "minLength": 1,
+          "title": "Proposal Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "proposal_id"
+      ],
+      "title": "WorkshopConfirmCustomExpertRequest",
+      "type": "object"
+    },
+    "WorkshopConfirmTaskProposalRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "proposal_id": {
+          "minLength": 1,
+          "title": "Proposal Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "proposal_id"
+      ],
+      "title": "WorkshopConfirmTaskProposalRequest",
+      "type": "object"
+    },
+    "WorkshopConfirmWorkflowRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "workflow_id": {
+          "minLength": 1,
+          "title": "Workflow Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "workflow_id"
+      ],
+      "title": "WorkshopConfirmWorkflowRequest",
+      "type": "object"
+    },
+    "WorkshopConnectorDirectoryResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/WorkshopConnectorEntry"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "WorkshopConnectorDirectoryResponse",
+      "type": "object"
+    },
+    "WorkshopConnectorEntry": {
+      "additionalProperties": false,
+      "description": "可验证连接器目录项（状态来自真实 data_sources，非静态冒充）",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "disconnected",
+            "authorizing",
+            "connected",
+            "reauth_required",
+            "permission_denied",
+            "syncing",
+            "sync_failed",
+            "incomplete",
+            "unsupported"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "name",
+        "description",
+        "status"
+      ],
+      "title": "WorkshopConnectorEntry",
+      "type": "object"
+    },
+    "WorkshopCopyPresetRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "preset_key": {
+          "minLength": 1,
+          "title": "Preset Key",
+          "type": "string"
+        },
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "preset_key",
+        "name"
+      ],
+      "title": "WorkshopCopyPresetRequest",
+      "type": "object"
+    },
+    "WorkshopCreateProjectRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "group_chat_id": {
+          "minimum": 1,
+          "title": "Group Chat Id",
+          "type": "integer"
+        },
+        "initial_expert_keys": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Initial Expert Keys",
+          "type": "array"
+        },
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "group_chat_id"
+      ],
+      "title": "WorkshopCreateProjectRequest",
+      "type": "object"
+    },
+    "WorkshopCreateScheduleRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "authorized_capabilities": {
+          "items": {
+            "$ref": "#/$defs/WorkshopToolCapability"
+          },
+          "title": "Authorized Capabilities",
+          "type": "array"
+        },
+        "cron": {
+          "minLength": 1,
+          "title": "Cron",
+          "type": "string"
+        },
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "timezone": {
+          "minLength": 1,
+          "title": "Timezone",
+          "type": "string"
+        },
+        "workflow_id": {
+          "minLength": 1,
+          "title": "Workflow Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "workflow_id",
+        "cron",
+        "timezone"
+      ],
+      "title": "WorkshopCreateScheduleRequest",
+      "type": "object"
+    },
+    "WorkshopCreateTaskProposalView": {
+      "additionalProperties": false,
+      "properties": {
+        "goals": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Goals",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "required_artifacts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Artifacts",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/WorkshopProposalStatus"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "title",
+        "goals",
+        "required_artifacts",
+        "status"
+      ],
+      "title": "WorkshopCreateTaskProposalView",
+      "type": "object"
+    },
+    "WorkshopDataSourceStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "last_synced_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Synced At"
+        },
+        "status": {
+          "enum": [
+            "disconnected",
+            "authorizing",
+            "connected",
+            "reauth_required",
+            "permission_denied",
+            "syncing",
+            "sync_failed",
+            "incomplete"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "status"
+      ],
+      "title": "WorkshopDataSourceStatus",
+      "type": "object"
+    },
+    "WorkshopDataSourcesView": {
+      "additionalProperties": false,
+      "properties": {
+        "quality_issues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Quality Issues",
+          "type": "array"
+        },
+        "shop": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ShopConnectionPublic"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/WorkshopDataSourceStatus"
+          },
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "title": "WorkshopDataSourcesView",
+      "type": "object"
+    },
+    "WorkshopDeclineCustomExpertRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "proposal_id": {
+          "minLength": 1,
+          "title": "Proposal Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "proposal_id"
+      ],
+      "title": "WorkshopDeclineCustomExpertRequest",
+      "type": "object"
+    },
+    "WorkshopDeclineTaskProposalRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "proposal_id": {
+          "minLength": 1,
+          "title": "Proposal Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "proposal_id"
+      ],
+      "title": "WorkshopDeclineTaskProposalRequest",
+      "type": "object"
+    },
+    "WorkshopDraftWorkflowRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/WorkshopWorkflowStepView"
+          },
+          "minItems": 1,
+          "title": "Steps",
+          "type": "array"
+        }
+      },
+      "required": [
+        "project_id",
+        "name",
+        "steps"
+      ],
+      "title": "WorkshopDraftWorkflowRequest",
+      "type": "object"
+    },
+    "WorkshopEventKind": {
+      "description": "工坊可观察事件种类",
+      "enum": [
+        "schedule_started",
+        "schedule_summary",
+        "artifacts_published",
+        "schedule_blocked"
+      ],
+      "title": "WorkshopEventKind",
+      "type": "string"
+    },
+    "WorkshopEventListResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/WorkshopEventView"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "WorkshopEventListResponse",
+      "type": "object"
+    },
+    "WorkshopEventView": {
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "event_key": {
+          "title": "Event Key",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/WorkshopEventKind"
+        },
+        "payload": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScheduleStartedPayloadView"
+            },
+            {
+              "$ref": "#/$defs/ScheduleSummaryPayloadView"
+            },
+            {
+              "$ref": "#/$defs/ArtifactsPublishedPayloadView"
+            },
+            {
+              "$ref": "#/$defs/ScheduleBlockedPayloadView"
+            }
+          ],
+          "title": "Payload"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Task Id"
+        }
+      },
+      "required": [
+        "event_key",
+        "project_id",
+        "task_id",
+        "kind",
+        "payload",
+        "created_at"
+      ],
+      "title": "WorkshopEventView",
+      "type": "object"
+    },
+    "WorkshopExpertKind": {
+      "description": "专家岗位类型",
+      "enum": [
+        "advisor",
+        "executor"
+      ],
+      "title": "WorkshopExpertKind",
+      "type": "string"
+    },
+    "WorkshopExpertProposalIdView": {
+      "additionalProperties": false,
+      "properties": {
+        "proposal_id": {
+          "title": "Proposal Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposal_id"
+      ],
+      "title": "WorkshopExpertProposalIdView",
+      "type": "object"
+    },
+    "WorkshopGrantExternalAuthRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "items": {
+            "$ref": "#/$defs/WorkshopToolCapability"
+          },
+          "minItems": 1,
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "task_id": {
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "capabilities"
+      ],
+      "title": "WorkshopGrantExternalAuthRequest",
+      "type": "object"
+    },
+    "WorkshopGroupChatIdRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "group_chat_id": {
+          "minimum": 1,
+          "title": "Group Chat Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "group_chat_id"
+      ],
+      "title": "WorkshopGroupChatIdRequest",
+      "type": "object"
+    },
+    "WorkshopImportErrorListResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/WorkshopImportErrorView"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "unsupported_template": {
+          "default": false,
+          "title": "Unsupported Template",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "WorkshopImportErrorListResponse",
+      "type": "object"
+    },
+    "WorkshopImportErrorView": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "row_index": {
+          "title": "Row Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "row_index",
+        "code",
+        "message"
+      ],
+      "title": "WorkshopImportErrorView",
+      "type": "object"
+    },
+    "WorkshopInviteDirectoryExpertView": {
+      "additionalProperties": false,
+      "properties": {
+        "beta": {
+          "default": false,
+          "title": "Beta",
+          "type": "boolean"
+        },
+        "deliverable_types": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Deliverable Types",
+          "type": "array"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/WorkshopExpertKind"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "name",
+        "kind"
+      ],
+      "title": "WorkshopInviteDirectoryExpertView",
+      "type": "object"
+    },
+    "WorkshopInviteDirectoryResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/WorkshopInviteDirectoryExpertView"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "WorkshopInviteDirectoryResponse",
+      "type": "object"
+    },
+    "WorkshopInviteExpertRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "expert_id": {
+          "minLength": 1,
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "expert_id"
+      ],
+      "title": "WorkshopInviteExpertRequest",
+      "type": "object"
+    },
+    "WorkshopManualRunResultView": {
+      "additionalProperties": false,
+      "properties": {
+        "task": {
+          "$ref": "#/$defs/WorkshopTaskView"
+        },
+        "used_light_confirmation": {
+          "title": "Used Light Confirmation",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "task",
+        "used_light_confirmation"
+      ],
+      "title": "WorkshopManualRunResultView",
+      "type": "object"
+    },
+    "WorkshopManualRunWorkflowRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "authorized_capabilities": {
+          "items": {
+            "$ref": "#/$defs/WorkshopToolCapability"
+          },
+          "title": "Authorized Capabilities",
+          "type": "array"
+        },
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "workflow_id": {
+          "minLength": 1,
+          "title": "Workflow Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "workflow_id"
+      ],
+      "title": "WorkshopManualRunWorkflowRequest",
+      "type": "object"
+    },
+    "WorkshopOkView": {
+      "additionalProperties": false,
+      "properties": {
+        "ok": {
+          "const": true,
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        }
+      },
+      "title": "WorkshopOkView",
+      "type": "object"
+    },
+    "WorkshopPendingProposalListResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/WorkshopCreateTaskProposalView"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "WorkshopPendingProposalListResponse",
+      "type": "object"
+    },
+    "WorkshopProjectByChatResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkshopProjectView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "WorkshopProjectByChatResponse",
+      "type": "object"
+    },
+    "WorkshopProjectIdRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "title": "WorkshopProjectIdRequest",
+      "type": "object"
+    },
+    "WorkshopProjectListResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/WorkshopProjectView"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "WorkshopProjectListResponse",
+      "type": "object"
+    },
+    "WorkshopProjectView": {
+      "additionalProperties": false,
+      "properties": {
+        "group_chat_id": {
+          "title": "Group Chat Id",
+          "type": "integer"
+        },
+        "host_role": {
+          "$ref": "#/$defs/WorkshopRole"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "user_id": {
+          "title": "User Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "user_id",
+        "name",
+        "group_chat_id",
+        "host_role"
+      ],
+      "title": "WorkshopProjectView",
+      "type": "object"
+    },
+    "WorkshopProposalStatus": {
+      "description": "立任务/定制专家提议状态",
+      "enum": [
+        "pending",
+        "confirmed",
+        "declined"
+      ],
+      "title": "WorkshopProposalStatus",
+      "type": "string"
+    },
+    "WorkshopProposeCustomExpertRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/WorkshopExpertKind"
+        },
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "name",
+        "kind"
+      ],
+      "title": "WorkshopProposeCustomExpertRequest",
+      "type": "object"
+    },
+    "WorkshopProposeTaskRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "goals": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Goals",
+          "type": "array"
+        },
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "required_artifacts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Artifacts",
+          "type": "array"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "title",
+        "goals"
+      ],
+      "title": "WorkshopProposeTaskRequest",
+      "type": "object"
+    },
+    "WorkshopRecordCapabilityUseRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "$ref": "#/$defs/WorkshopToolCapability"
+        },
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "task_id": {
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "capability"
+      ],
+      "title": "WorkshopRecordCapabilityUseRequest",
+      "type": "object"
+    },
+    "WorkshopRemoveExpertRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "expert_id": {
+          "minLength": 1,
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "expert_id"
+      ],
+      "title": "WorkshopRemoveExpertRequest",
+      "type": "object"
+    },
+    "WorkshopRole": {
+      "description": "工坊参与角色",
+      "enum": [
+        "single_agent",
+        "host",
+        "advisor",
+        "executor"
+      ],
+      "title": "WorkshopRole",
+      "type": "string"
+    },
+    "WorkshopRoomMembersResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "expert_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Expert Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "expert_ids"
+      ],
+      "title": "WorkshopRoomMembersResponse",
+      "type": "object"
+    },
+    "WorkshopRosterExpertView": {
+      "additionalProperties": false,
+      "properties": {
+        "avatar_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avatar Id"
+        },
+        "beta": {
+          "default": false,
+          "title": "Beta",
+          "type": "boolean"
+        },
+        "capability_allowlist": {
+          "items": {
+            "$ref": "#/$defs/WorkshopToolCapability"
+          },
+          "title": "Capability Allowlist",
+          "type": "array"
+        },
+        "deliverable_types": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Deliverable Types",
+          "type": "array"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/WorkshopExpertKind"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "preset_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Preset Key"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "role_phrase": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role Phrase"
+        },
+        "skill_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Skill Refs",
+          "type": "array"
+        },
+        "source_preset_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Preset Key"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "name",
+        "kind"
+      ],
+      "title": "WorkshopRosterExpertView",
+      "type": "object"
+    },
+    "WorkshopRosterListResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/WorkshopRosterExpertView"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "WorkshopRosterListResponse",
+      "type": "object"
+    },
+    "WorkshopScheduleIdRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "schedule_id": {
+          "minLength": 1,
+          "title": "Schedule Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "schedule_id"
+      ],
+      "title": "WorkshopScheduleIdRequest",
+      "type": "object"
+    },
+    "WorkshopScheduleListResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/WorkshopScheduleView"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "WorkshopScheduleListResponse",
+      "type": "object"
+    },
+    "WorkshopScheduleRunView": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "schedule_id": {
+          "title": "Schedule Id",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "trigger_key": {
+          "title": "Trigger Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "schedule_id",
+        "trigger_key",
+        "task_id"
+      ],
+      "title": "WorkshopScheduleRunView",
+      "type": "object"
+    },
+    "WorkshopScheduleTriggerResultView": {
+      "additionalProperties": false,
+      "properties": {
+        "event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Event Ids",
+          "type": "array"
+        },
+        "requires_external_auth_popup": {
+          "title": "Requires External Auth Popup",
+          "type": "boolean"
+        },
+        "run": {
+          "$ref": "#/$defs/WorkshopScheduleRunView"
+        },
+        "task": {
+          "$ref": "#/$defs/WorkshopTaskView"
+        }
+      },
+      "required": [
+        "task",
+        "run",
+        "event_ids",
+        "requires_external_auth_popup"
+      ],
+      "title": "WorkshopScheduleTriggerResultView",
+      "type": "object"
+    },
+    "WorkshopScheduleView": {
+      "additionalProperties": false,
+      "properties": {
+        "authorized_at": {
+          "title": "Authorized At",
+          "type": "string"
+        },
+        "authorized_external_capabilities": {
+          "items": {
+            "$ref": "#/$defs/WorkshopToolCapability"
+          },
+          "title": "Authorized External Capabilities",
+          "type": "array"
+        },
+        "cron": {
+          "title": "Cron",
+          "type": "string"
+        },
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "next_run_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Next Run At"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "timezone": {
+          "title": "Timezone",
+          "type": "string"
+        },
+        "workflow_id": {
+          "title": "Workflow Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "workflow_id",
+        "cron",
+        "timezone",
+        "enabled",
+        "authorized_at",
+        "authorized_external_capabilities",
+        "next_run_at"
+      ],
+      "title": "WorkshopScheduleView",
+      "type": "object"
+    },
+    "WorkshopScheduledCompletionResultView": {
+      "additionalProperties": false,
+      "properties": {
+        "event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Event Ids",
+          "type": "array"
+        },
+        "task_status": {
+          "$ref": "#/$defs/WorkshopTaskStatus"
+        }
+      },
+      "required": [
+        "task_status",
+        "event_ids"
+      ],
+      "title": "WorkshopScheduledCompletionResultView",
+      "type": "object"
+    },
+    "WorkshopTaskAssignmentListResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/WorkshopTaskAssignmentView"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "WorkshopTaskAssignmentListResponse",
+      "type": "object"
+    },
+    "WorkshopTaskAssignmentView": {
+      "additionalProperties": false,
+      "properties": {
+        "expert_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Expert Ids",
+          "type": "array"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "expert_ids"
+      ],
+      "title": "WorkshopTaskAssignmentView",
+      "type": "object"
+    },
+    "WorkshopTaskIdRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "task_id": {
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id"
+      ],
+      "title": "WorkshopTaskIdRequest",
+      "type": "object"
+    },
+    "WorkshopTaskListResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/WorkshopTaskView"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "WorkshopTaskListResponse",
+      "type": "object"
+    },
+    "WorkshopTaskStatus": {
+      "description": "工坊任务状态",
+      "enum": [
+        "aligning",
+        "awaiting_go",
+        "authorized",
+        "executing",
+        "blocked",
+        "re_aligning",
+        "reviewing",
+        "done",
+        "failed",
+        "cancelled"
+      ],
+      "title": "WorkshopTaskStatus",
+      "type": "string"
+    },
+    "WorkshopTaskView": {
+      "additionalProperties": false,
+      "properties": {
+        "external_auth": {
+          "items": {
+            "$ref": "#/$defs/WorkshopToolCapability"
+          },
+          "title": "External Auth",
+          "type": "array"
+        },
+        "goals": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Goals",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "required_artifacts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Artifacts",
+          "type": "array"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "integer"
+        },
+        "schedule_authorized": {
+          "title": "Schedule Authorized",
+          "type": "boolean"
+        },
+        "schedule_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Schedule Id"
+        },
+        "status": {
+          "$ref": "#/$defs/WorkshopTaskStatus"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "title",
+        "goals",
+        "required_artifacts",
+        "status",
+        "schedule_id",
+        "schedule_authorized",
+        "external_auth",
+        "revision"
+      ],
+      "title": "WorkshopTaskView",
+      "type": "object"
+    },
+    "WorkshopTeamSelectRequiresUpgradeView": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "requires_upgrade": {
+          "const": true,
+          "default": true,
+          "title": "Requires Upgrade",
+          "type": "boolean"
+        },
+        "team_key": {
+          "title": "Team Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "team_key",
+        "message"
+      ],
+      "title": "WorkshopTeamSelectRequiresUpgradeView",
+      "type": "object"
+    },
+    "WorkshopToolCapability": {
+      "description": "角色工具能力枚举（硬白名单用）",
+      "enum": [
+        "web_search",
+        "web_fetch_readonly",
+        "read_uploads",
+        "write_temp_workspace",
+        "read_project_files",
+        "write_project_files",
+        "browser_read",
+        "browser_write",
+        "sandbox_execute",
+        "mcp",
+        "draft_workflow",
+        "create_schedule",
+        "request_external_auth",
+        "propose_invite",
+        "invite_expert",
+        "raise_auth_popup",
+        "taobao_store_write",
+        "generation_list_models",
+        "generation_submit"
+      ],
+      "title": "WorkshopToolCapability",
+      "type": "string"
+    },
+    "WorkshopTriggerScheduleRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "schedule_id": {
+          "minLength": 1,
+          "title": "Schedule Id",
+          "type": "string"
+        },
+        "trigger_key": {
+          "minLength": 1,
+          "title": "Trigger Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "schedule_id",
+        "trigger_key"
+      ],
+      "title": "WorkshopTriggerScheduleRequest",
+      "type": "object"
+    },
+    "WorkshopTurnTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "expert_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expert Id"
+        },
+        "speaker_role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speaker Role"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
+        }
+      },
+      "title": "WorkshopTurnTarget",
+      "type": "object"
+    },
+    "WorkshopUnassignTaskExpertRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "expert_id": {
+          "minLength": 1,
+          "title": "Expert Id",
+          "type": "string"
+        },
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "task_id": {
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "expert_id"
+      ],
+      "title": "WorkshopUnassignTaskExpertRequest",
+      "type": "object"
+    },
+    "WorkshopUpgradeFromExpertRequest": {
+      "additionalProperties": false,
+      "description": "从单专家邀请原地升级为项目",
+      "properties": {
+        "carried_message_count": {
+          "minimum": 0,
+          "title": "Carried Message Count",
+          "type": "integer"
+        },
+        "conversation_id": {
+          "minimum": 1,
+          "title": "Conversation Id",
+          "type": "integer"
+        },
+        "expert_key": {
+          "minLength": 1,
+          "title": "Expert Key",
+          "type": "string"
+        },
+        "project_name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Project Name",
+          "type": "string"
+        },
+        "seed_goal": {
+          "default": "",
+          "title": "Seed Goal",
+          "type": "string"
+        }
+      },
+      "required": [
+        "conversation_id",
+        "expert_key",
+        "project_name",
+        "carried_message_count"
+      ],
+      "title": "WorkshopUpgradeFromExpertRequest",
+      "type": "object"
+    },
+    "WorkshopUpgradeFromTeamRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "conversation_id": {
+          "minimum": 1,
+          "title": "Conversation Id",
+          "type": "integer"
+        },
+        "team_key": {
+          "minLength": 1,
+          "title": "Team Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "conversation_id",
+        "team_key"
+      ],
+      "title": "WorkshopUpgradeFromTeamRequest",
+      "type": "object"
+    },
+    "WorkshopUpgradeRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "carried_message_count": {
+          "minimum": 0,
+          "title": "Carried Message Count",
+          "type": "integer"
+        },
+        "group_chat_id": {
+          "minimum": 1,
+          "title": "Group Chat Id",
+          "type": "integer"
+        },
+        "initial_expert_keys": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Initial Expert Keys",
+          "type": "array"
+        },
+        "project_name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Project Name",
+          "type": "string"
+        },
+        "seed_goal": {
+          "default": "",
+          "title": "Seed Goal",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_chat_id",
+        "project_name",
+        "carried_message_count"
+      ],
+      "title": "WorkshopUpgradeRequest",
+      "type": "object"
+    },
+    "WorkshopUpgradeResultView": {
+      "additionalProperties": false,
+      "properties": {
+        "carried_message_count": {
+          "title": "Carried Message Count",
+          "type": "integer"
+        },
+        "group_chat_id": {
+          "title": "Group Chat Id",
+          "type": "integer"
+        },
+        "pending_task_proposal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkshopCreateTaskProposalView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "project": {
+          "$ref": "#/$defs/WorkshopProjectView"
+        }
+      },
+      "required": [
+        "project",
+        "group_chat_id",
+        "carried_message_count"
+      ],
+      "title": "WorkshopUpgradeResultView",
+      "type": "object"
+    },
+    "WorkshopWakeDashboardView": {
+      "additionalProperties": false,
+      "properties": {
+        "group_chat_id": {
+          "title": "Group Chat Id",
+          "type": "integer"
+        },
+        "pinned_task_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Pinned Task Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "group_chat_id",
+        "pinned_task_ids"
+      ],
+      "title": "WorkshopWakeDashboardView",
+      "type": "object"
+    },
+    "WorkshopWeakAcceptRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/ArtifactSubmissionView"
+          },
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "covered_goals": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Covered Goals",
+          "type": "array"
+        },
+        "project_id": {
+          "minLength": 1,
+          "title": "Project Id",
+          "type": "string"
+        },
+        "task_id": {
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id"
+      ],
+      "title": "WorkshopWeakAcceptRequest",
+      "type": "object"
+    },
+    "WorkshopWeakAcceptResultView": {
+      "additionalProperties": false,
+      "properties": {
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "passed"
+      ],
+      "title": "WorkshopWeakAcceptResultView",
+      "type": "object"
+    },
+    "WorkshopWorkflowListResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/WorkshopWorkflowView"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "WorkshopWorkflowListResponse",
+      "type": "object"
+    },
+    "WorkshopWorkflowSource": {
+      "description": "工作流草稿来源",
+      "enum": [
+        "agent",
+        "user"
+      ],
+      "title": "WorkshopWorkflowSource",
+      "type": "string"
+    },
+    "WorkshopWorkflowStatus": {
+      "description": "工坊工作流定义状态",
+      "enum": [
+        "draft",
+        "saved"
+      ],
+      "title": "WorkshopWorkflowStatus",
+      "type": "string"
+    },
+    "WorkshopWorkflowStepView": {
+      "additionalProperties": false,
+      "properties": {
+        "external_capabilities": {
+          "items": {
+            "$ref": "#/$defs/WorkshopToolCapability"
+          },
+          "title": "External Capabilities",
+          "type": "array"
+        },
+        "required_artifact_names": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Artifact Names",
+          "type": "array"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "title": "WorkshopWorkflowStepView",
+      "type": "object"
+    },
+    "WorkshopWorkflowView": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "integer"
+        },
+        "source": {
+          "$ref": "#/$defs/WorkshopWorkflowSource"
+        },
+        "status": {
+          "$ref": "#/$defs/WorkshopWorkflowStatus"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/WorkshopWorkflowStepView"
+          },
+          "title": "Steps",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "name",
+        "steps",
+        "status",
+        "source",
+        "revision"
+      ],
+      "title": "WorkshopWorkflowView",
+      "type": "object"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/WorkshopCreateProjectRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopProjectIdRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopGroupChatIdRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopProjectByChatResponse"
+    },
+    {
+      "$ref": "#/$defs/WorkshopUpgradeRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopProjectView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopProjectListResponse"
+    },
+    {
+      "$ref": "#/$defs/WorkshopUpgradeResultView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopWakeDashboardView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopRosterExpertView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopRosterListResponse"
+    },
+    {
+      "$ref": "#/$defs/WorkshopRoomMembersResponse"
+    },
+    {
+      "$ref": "#/$defs/WorkshopCopyPresetRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopAddPresetRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopProposeCustomExpertRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopConfirmCustomExpertRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopDeclineCustomExpertRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopExpertProposalIdView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopInviteDirectoryExpertView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopInviteDirectoryResponse"
+    },
+    {
+      "$ref": "#/$defs/WorkshopInviteExpertRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopRemoveExpertRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopAssignTaskExpertRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopAuthorizeOperationRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopAuthorizedOperationView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopAuthorizedOperationListResponse"
+    },
+    {
+      "$ref": "#/$defs/WorkshopUnassignTaskExpertRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopCreateTaskProposalView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopPendingProposalListResponse"
+    },
+    {
+      "$ref": "#/$defs/WorkshopProposeTaskRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopConfirmTaskProposalRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopDeclineTaskProposalRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopTaskIdRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopTaskView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopTaskListResponse"
+    },
+    {
+      "$ref": "#/$defs/WorkshopGrantExternalAuthRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopRecordCapabilityUseRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopWeakAcceptRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopWeakAcceptResultView"
+    },
+    {
+      "$ref": "#/$defs/ArtifactSubmissionView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopArtifactView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopArtifactListRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopArtifactListResponse"
+    },
+    {
+      "$ref": "#/$defs/WorkshopWorkflowStepView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopDraftWorkflowRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopConfirmWorkflowRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopWorkflowView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopWorkflowListResponse"
+    },
+    {
+      "$ref": "#/$defs/WorkshopManualRunWorkflowRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopManualRunResultView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopCreateScheduleRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopScheduleIdRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopScheduleView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopScheduleListResponse"
+    },
+    {
+      "$ref": "#/$defs/WorkshopScheduleRunView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopTriggerScheduleRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopScheduleTriggerResultView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopCompleteScheduledRunRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopScheduledCompletionResultView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopEventView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopEventListResponse"
+    },
+    {
+      "$ref": "#/$defs/WorkshopOkView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopTaskAssignmentView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopTaskAssignmentListResponse"
+    },
+    {
+      "$ref": "#/$defs/WorkshopDataSourcesView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopDataSourceStatus"
+    },
+    {
+      "$ref": "#/$defs/WorkshopImportErrorView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopImportErrorListResponse"
+    },
+    {
+      "$ref": "#/$defs/WorkshopBeginShopAuthView"
+    },
+    {
+      "$ref": "#/$defs/ExpertDirectoryEntry"
+    },
+    {
+      "$ref": "#/$defs/ExpertDirectoryResponse"
+    },
+    {
+      "$ref": "#/$defs/WorkshopConnectorDirectoryResponse"
+    },
+    {
+      "$ref": "#/$defs/ExpertTeamDirectoryEntry"
+    },
+    {
+      "$ref": "#/$defs/ExpertTeamDirectoryResponse"
+    },
+    {
+      "$ref": "#/$defs/ChatSelectedExpertView"
+    },
+    {
+      "$ref": "#/$defs/SetChatSelectedExpertRequest"
+    },
+    {
+      "$ref": "#/$defs/ClearChatSelectedExpertRequest"
+    },
+    {
+      "$ref": "#/$defs/GetChatSelectedExpertRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopUpgradeFromTeamRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopUpgradeFromExpertRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopTeamSelectRequiresUpgradeView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopTurnTarget"
+    }
+  ]
+}

@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, UUID4, model_validator
 
+from app.contracts.workshop import WorkshopTurnTarget
 from app.contracts.turn_content import (
     TurnContentBlock,
     TurnMaterialBlock,
@@ -72,6 +73,7 @@ class MessageStreamRequest(BaseModel):
     enable_tools: bool = True
     client_turn_id: Optional[str] = None
     project_id: Optional[int] = None
+    turn_target: Optional[WorkshopTurnTarget] = None
 
     @model_validator(mode="after")
     def _validate_turn_input(self) -> MessageStreamRequest:

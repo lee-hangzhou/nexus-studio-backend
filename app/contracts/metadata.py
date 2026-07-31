@@ -93,6 +93,11 @@ class AssistantMessageMetadata(MetadataContract):
     tool_audit: list[ToolAuditMetadata] = Field(default_factory=list)
     recovery: ToolRecoveryMetadata = Field(default_factory=ToolRecoveryMetadata)
     artifacts: list[ArtifactMetadata] = Field(default_factory=list)
+    speaker_role: str | None = None
+    expert_id: str | None = None
+    expert_name: str | None = None
+    avatar: str | None = None
+    task_id: str | None = None
 
 
 class UserMessageMetadata(MetadataContract):

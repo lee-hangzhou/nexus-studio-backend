@@ -1,0 +1,118 @@
+{
+  "skills": {
+    "customer-research": {
+      "repo": "coreyhaines31/marketingskills",
+      "path": "skills/customer-research/SKILL.md",
+      "commit": "7868cb9251fad80a73d26e488a5ad5f6c4a9f335",
+      "license": "MIT"
+    },
+    "competitive-brief": {
+      "repo": "anthropics/knowledge-work-plugins",
+      "path": "marketing/skills/competitive-brief/SKILL.md",
+      "commit": "01a9cec39b961236e2d99fa2db9b22b534fa27a9",
+      "license": "Apache-2.0"
+    },
+    "competitor-profiling": {
+      "repo": "coreyhaines31/marketingskills",
+      "path": "skills/competitor-profiling/SKILL.md",
+      "commit": "7868cb9251fad80a73d26e488a5ad5f6c4a9f335",
+      "license": "MIT"
+    },
+    "ecommerce-competitor-analysis": {
+      "repo": "nexscope-ai/eCommerce-Skills",
+      "path": "ecommerce-competitor-analysis/SKILL.md",
+      "commit": "56f3288dd1ba3ae7cae43d369115a915229e510b",
+      "license": "MIT"
+    },
+    "product-description-generator": {
+      "repo": "nexscope-ai/eCommerce-Skills",
+      "path": "product-description-generator/SKILL.md",
+      "commit": "56f3288dd1ba3ae7cae43d369115a915229e510b",
+      "license": "MIT"
+    },
+    "cro": {
+      "repo": "coreyhaines31/marketingskills",
+      "path": "skills/cro/SKILL.md",
+      "commit": "7868cb9251fad80a73d26e488a5ad5f6c4a9f335",
+      "license": "MIT"
+    },
+    "ecom-landing-pages": {
+      "repo": "kgelster/awesome-ecom-skills",
+      "path": "skills/ecom-landing-pages/SKILL.md",
+      "commit": "6d6f1d4e5e0f9ece9e66a3c859d5fbbc99558688",
+      "license": "MIT"
+    },
+    "ad-creative": {
+      "repo": "coreyhaines31/marketingskills",
+      "path": "skills/ad-creative/SKILL.md",
+      "commit": "7868cb9251fad80a73d26e488a5ad5f6c4a9f335",
+      "license": "MIT"
+    },
+    "campaign-plan": {
+      "repo": "anthropics/knowledge-work-plugins",
+      "path": "marketing/skills/campaign-plan/SKILL.md",
+      "commit": "01a9cec39b961236e2d99fa2db9b22b534fa27a9",
+      "license": "Apache-2.0"
+    },
+    "ecommerce-marketing-strategy-builder": {
+      "repo": "nexscope-ai/eCommerce-Skills",
+      "path": "ecommerce-marketing-strategy-builder/SKILL.md",
+      "commit": "56f3288dd1ba3ae7cae43d369115a915229e510b",
+      "license": "MIT"
+    },
+    "email-sequence": {
+      "repo": "anthropics/knowledge-work-plugins",
+      "path": "marketing/skills/email-sequence/SKILL.md",
+      "commit": "01a9cec39b961236e2d99fa2db9b22b534fa27a9",
+      "license": "Apache-2.0"
+    },
+    "ads": {
+      "repo": "coreyhaines31/marketingskills",
+      "path": "skills/ads/SKILL.md",
+      "commit": "7868cb9251fad80a73d26e488a5ad5f6c4a9f335",
+      "license": "MIT"
+    },
+    "ecommerce-ppc-strategy-planner": {
+      "repo": "nexscope-ai/eCommerce-Skills",
+      "path": "ecommerce-ppc-strategy-planner/SKILL.md",
+      "commit": "56f3288dd1ba3ae7cae43d369115a915229e510b",
+      "license": "MIT"
+    },
+    "performance-report": {
+      "repo": "anthropics/knowledge-work-plugins",
+      "path": "marketing/skills/performance-report/SKILL.md",
+      "commit": "01a9cec39b961236e2d99fa2db9b22b534fa27a9",
+      "license": "Apache-2.0"
+    },
+    "warehouse-optimization": {
+      "repo": "nexscope-ai/eCommerce-Skills",
+      "path": "warehouse-optimization/SKILL.md",
+      "commit": "56f3288dd1ba3ae7cae43d369115a915229e510b",
+      "license": "MIT"
+    },
+    "pricing": {
+      "repo": "coreyhaines31/marketingskills",
+      "path": "skills/pricing/SKILL.md",
+      "commit": "7868cb9251fad80a73d26e488a5ad5f6c4a9f335",
+      "license": "MIT"
+    },
+    "taobao-listing-official-rules": {
+      "repo": "open.taobao.com",
+      "path": "official-schema-title-rules",
+      "commit": "doc-ref-2026-07-30",
+      "license": "Official-Method"
+    },
+    "taobao-open-platform-publish": {
+      "repo": "open.taobao.com",
+      "path": "official-publish-runbook",
+      "commit": "doc-ref-2026-07-30",
+      "license": "Official-Method"
+    },
+    "browser": {
+      "repo": "nexus-studio-backend",
+      "path": "app/agent/chat/skills/browser/SKILL.md",
+      "commit": "local-chat-browser-skill",
+      "license": "Project"
+    }
+  }
+}

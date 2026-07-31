@@ -1,7 +1,10 @@
 from app.agent.chat.service import ChatService
 from app.agent.runtime.ports import configure_ports
+from app.server.assets.persistence.repository import AssetRepository
 from app.server.assets.services.service import asset_service
+from app.server.chat.persistence.attachment_repository import ChatAttachmentRepository
 from app.server.generation.binding import bind_generation_service
+from app.server.generation.persistence.repository import GenerateTaskRepository
 from app.server.generation.services import GenerationService
 from app.server.infra.cache import app_cache
 from app.server.infra.gateway import gateway_client
@@ -14,10 +17,14 @@ from app.server.ports.adapters import (
     UserSkillPortAdapter,
 )
 from app.server.ports.product import AssetsPort, CanvasPort, ChatPort, GenerationPort, UserSkillPort
-from app.server.assets.persistence.repository import AssetRepository
-from app.server.chat.persistence.attachment_repository import ChatAttachmentRepository
-from app.server.generation.persistence.repository import GenerateTaskRepository
 from app.server.skills.services import user_skill_service
+from app.server.workshop.persistence.repository import WorkshopRepository
+from app.server.workshop.services.task_orchestrator import WorkshopTaskOrchestrator
+from app.server.workshop.services.workflow_schedule_service import (
+    WorkshopWorkflowScheduleService,
+)
+from app.server.workshop.services.workshop_project_service import WorkshopProjectService
+from app.server.chat.services.selected_expert.service import ChatSelectedExpertService
 
 chat_service = ChatService()
 generation_service = GenerationService(
@@ -44,12 +51,26 @@ configure_ports(
     user_skills=user_skill_port,
 )
 
+workshop_repository = WorkshopRepository()
+workshop_project_service = WorkshopProjectService(workshop_repository)
+chat_selected_expert_service = ChatSelectedExpertService(workshop_project_service)
+workshop_task_orchestrator = WorkshopTaskOrchestrator(workshop_repository)
+workshop_workflow_schedule_service = WorkshopWorkflowScheduleService(
+    repository=workshop_repository,
+    orchestrator=workshop_task_orchestrator,
+)
+
 __all__ = [
     "assets_port",
     "canvas_port",
     "chat_port",
     "chat_service",
+    "chat_selected_expert_service",
     "generation_port",
     "generation_service",
     "user_skill_port",
+    "workshop_project_service",
+    "workshop_repository",
+    "workshop_task_orchestrator",
+    "workshop_workflow_schedule_service",
 ]

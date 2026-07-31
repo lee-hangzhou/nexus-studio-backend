@@ -46,13 +46,13 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         if not auth_header:
             return json_error_response(
                 code=int(ErrorCode.INVALID_TOKEN),
-                msg="Missing authorization header",
+                msg="请先登录",
             )
 
         if not auth_header.startswith("Bearer "):
             return json_error_response(
                 code=int(ErrorCode.INVALID_TOKEN),
-                msg="Invalid authorization header format",
+                msg="登录状态无效，请重新登录",
             )
 
         token = auth_header[7:]
@@ -61,13 +61,13 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         if not payload:
             return json_error_response(
                 code=int(ErrorCode.INVALID_TOKEN),
-                msg="Invalid or expired token",
+                msg="登录已过期，请重新登录",
             )
 
         if payload.get("type") != "access":
             return json_error_response(
                 code=int(ErrorCode.INVALID_TOKEN),
-                msg="Invalid token type",
+                msg="登录状态无效，请重新登录",
             )
 
         sub = payload.get("sub")

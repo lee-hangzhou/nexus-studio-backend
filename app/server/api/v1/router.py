@@ -11,6 +11,7 @@ from app.server.api.v1.endpoints import (
     projects,
     user_skills,
     users,
+    workshop,
 )
 
 api_router = APIRouter()
@@ -25,3 +26,4 @@ api_router.include_router(episodes.router, prefix="/episodes", tags=["episodes"]
 api_router.include_router(canvas.router, prefix="/canvas", tags=["canvas"])
 api_router.include_router(assets.router, prefix="/assets", tags=["assets"])
 api_router.include_router(user_skills.router, prefix="/user-skills", tags=["user-skills"])
+api_router.include_router(workshop.router, prefix="/workshop", tags=["workshop"])

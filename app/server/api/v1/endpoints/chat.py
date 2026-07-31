@@ -22,7 +22,15 @@ from app.agent.runtime.stream.replay import (
     stream_replay,
     validate_replay_cursor,
 )
-from app.composition import chat_service, user_skill_port
+from app.composition import chat_service, user_skill_port, chat_selected_expert_service
+from app.contracts.workshop import (
+    ClearChatSelectedExpertRequest,
+    ExpertDirectoryResponse,
+    ExpertTeamDirectoryResponse,
+    GetChatSelectedExpertRequest,
+    SetChatSelectedExpertRequest,
+    ChatSelectedExpertView,
+)
 from app.contracts.turn_content import (
     TurnUserInput,
     compile_human_text,
@@ -227,6 +235,7 @@ async def stream_message(request: Request, body: MessageStreamRequest) -> Stream
                     project_id=body.project_id,
                     enable_tools=body.enable_tools,
                     client_turn_id=body.client_turn_id,
+                    turn_target=body.turn_target,
                     cancel_event=cancel_event,
                     selected_skills=selected_skills,
                 ),
@@ -578,3 +587,40 @@ async def attach_attachment(request: Request, body: ConversationAttachmentAction
         attachment_id=body.attachment_id,
     )
     return Response(data={"ok": True})
+
+
+@router.post("/conversation/selected-expert/get")
+async def get_selected_expert(
+    request: Request, body: GetChatSelectedExpertRequest
+) -> Response[ChatSelectedExpertView]:
+    user_id: int = request.state.user_id
+    result = await chat_selected_expert_service.get_selected_expert(
+        user_id=user_id,
+        conversation_id=body.conversation_id,
+    )
+    return Response(data=result)
+
+
+@router.post("/conversation/selected-expert/set")
+async def set_selected_expert(
+    request: Request, body: SetChatSelectedExpertRequest
+) -> Response[ChatSelectedExpertView]:
+    user_id: int = request.state.user_id
+    result = await chat_selected_expert_service.set_selected_expert(
+        user_id=user_id,
+        conversation_id=body.conversation_id,
+        expert_key=body.expert_key,
+    )
+    return Response(data=result)
+
+
+@router.post("/conversation/selected-expert/clear")
+async def clear_selected_expert(
+    request: Request, body: ClearChatSelectedExpertRequest
+) -> Response[ChatSelectedExpertView]:
+    user_id: int = request.state.user_id
+    result = await chat_selected_expert_service.clear_selected_expert(
+        user_id=user_id,
+        conversation_id=body.conversation_id,
+    )
+    return Response(data=result)

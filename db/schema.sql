@@ -185,9 +185,13 @@ CREATE TABLE IF NOT EXISTS chat_conversations (
   status INTEGER NOT NULL,
   active_turn_id VARCHAR(64),
   active_turn_started_at TIMESTAMPTZ,
+  selected_expert_key VARCHAR(128),
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_chat_conversations_id_user
+  ON chat_conversations (id, user_id);
 
 CREATE INDEX IF NOT EXISTS idx_chat_conversations_user_updated
   ON chat_conversations (user_id, updated_at DESC);
@@ -390,3 +394,419 @@ CREATE TRIGGER trg_user_skill_entries_updated_at
 BEFORE UPDATE ON user_skill_entries
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
+
+CREATE TABLE IF NOT EXISTS workshop_projects (
+  id VARCHAR(64) PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  group_chat_id BIGINT NOT NULL,
+  brief JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uk_workshop_projects_group_chat UNIQUE (group_chat_id),
+  CONSTRAINT fk_workshop_projects_group_chat_user
+    FOREIGN KEY (group_chat_id, user_id)
+    REFERENCES chat_conversations(id, user_id) ON DELETE RESTRICT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_chat_conversations_id_user
+  ON chat_conversations (id, user_id);
+
+ALTER TABLE workshop_projects
+  DROP CONSTRAINT IF EXISTS fk_workshop_projects_group_chat;
+ALTER TABLE workshop_projects
+  DROP CONSTRAINT IF EXISTS fk_workshop_projects_group_chat_user;
+ALTER TABLE workshop_projects
+  ADD CONSTRAINT fk_workshop_projects_group_chat_user
+  FOREIGN KEY (group_chat_id, user_id)
+  REFERENCES chat_conversations(id, user_id) ON DELETE RESTRICT;
+
+CREATE INDEX IF NOT EXISTS idx_workshop_projects_user_updated
+  ON workshop_projects (user_id, updated_at DESC, id DESC);
+
+DROP TRIGGER IF EXISTS trg_workshop_projects_updated_at ON workshop_projects;
+CREATE TRIGGER trg_workshop_projects_updated_at
+BEFORE UPDATE ON workshop_projects
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+CREATE TABLE IF NOT EXISTS workshop_experts (
+  id VARCHAR(64) PRIMARY KEY,
+  project_id VARCHAR(64) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  kind VARCHAR(16) NOT NULL,
+  preset_key VARCHAR(64),
+  source_preset_key VARCHAR(64),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT ck_workshop_experts_kind CHECK (kind IN ('advisor', 'executor')),
+  CONSTRAINT fk_workshop_experts_project
+    FOREIGN KEY (project_id) REFERENCES workshop_projects(id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workshop_experts_project_preset
+  ON workshop_experts (project_id, preset_key)
+  WHERE preset_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_workshop_experts_project_created
+  ON workshop_experts (project_id, created_at, id);
+
+DROP TRIGGER IF EXISTS trg_workshop_experts_updated_at ON workshop_experts;
+CREATE TRIGGER trg_workshop_experts_updated_at
+BEFORE UPDATE ON workshop_experts
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+CREATE TABLE IF NOT EXISTS workshop_task_proposals (
+  id VARCHAR(64) PRIMARY KEY,
+  project_id VARCHAR(64) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  goals JSONB NOT NULL,
+  required_artifacts JSONB NOT NULL DEFAULT '[]',
+  status VARCHAR(16) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT ck_workshop_task_proposals_status
+    CHECK (status IN ('pending', 'confirmed', 'declined')),
+  CONSTRAINT fk_workshop_task_proposals_project
+    FOREIGN KEY (project_id) REFERENCES workshop_projects(id) ON DELETE CASCADE
+);
+
+ALTER TABLE workshop_task_proposals
+  ADD COLUMN IF NOT EXISTS required_artifacts JSONB NOT NULL DEFAULT '[]';
+
+CREATE INDEX IF NOT EXISTS idx_workshop_task_proposals_project_status
+  ON workshop_task_proposals (project_id, status, created_at);
+
+DROP TRIGGER IF EXISTS trg_workshop_task_proposals_updated_at
+  ON workshop_task_proposals;
+CREATE TRIGGER trg_workshop_task_proposals_updated_at
+BEFORE UPDATE ON workshop_task_proposals
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+CREATE TABLE IF NOT EXISTS workshop_expert_proposals (
+  id VARCHAR(64) PRIMARY KEY,
+  project_id VARCHAR(64) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  kind VARCHAR(16) NOT NULL,
+  source_preset_key VARCHAR(64),
+  status VARCHAR(16) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT ck_workshop_expert_proposals_kind
+    CHECK (kind IN ('advisor', 'executor')),
+  CONSTRAINT ck_workshop_expert_proposals_status
+    CHECK (status IN ('pending', 'confirmed', 'declined')),
+  CONSTRAINT fk_workshop_expert_proposals_project
+    FOREIGN KEY (project_id) REFERENCES workshop_projects(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_workshop_expert_proposals_project_status
+  ON workshop_expert_proposals (project_id, status, created_at);
+
+DROP TRIGGER IF EXISTS trg_workshop_expert_proposals_updated_at
+  ON workshop_expert_proposals;
+CREATE TRIGGER trg_workshop_expert_proposals_updated_at
+BEFORE UPDATE ON workshop_expert_proposals
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+CREATE TABLE IF NOT EXISTS workshop_tasks (
+  id VARCHAR(64) PRIMARY KEY,
+  project_id VARCHAR(64) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  goals JSONB NOT NULL,
+  required_artifacts JSONB NOT NULL DEFAULT '[]',
+  status VARCHAR(32) NOT NULL,
+  schedule_id VARCHAR(64),
+  schedule_authorized BOOLEAN NOT NULL DEFAULT FALSE,
+  external_auth JSONB NOT NULL DEFAULT '[]',
+  revision BIGINT NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT ck_workshop_tasks_status CHECK (
+    status IN (
+      'aligning', 'awaiting_go', 'authorized', 'executing',
+      'blocked', 're_aligning', 'reviewing', 'done', 'failed', 'cancelled'
+    )
+  ),
+  CONSTRAINT ck_workshop_tasks_revision CHECK (revision >= 1),
+  CONSTRAINT fk_workshop_tasks_project
+    FOREIGN KEY (project_id) REFERENCES workshop_projects(id) ON DELETE CASCADE
+);
+
+ALTER TABLE workshop_tasks
+  ADD COLUMN IF NOT EXISTS required_artifacts JSONB NOT NULL DEFAULT '[]';
+
+ALTER TABLE workshop_tasks DROP CONSTRAINT IF EXISTS ck_workshop_tasks_status;
+ALTER TABLE workshop_tasks ADD CONSTRAINT ck_workshop_tasks_status CHECK (
+  status IN (
+    'aligning', 'awaiting_go', 'authorized', 'executing',
+    'blocked', 're_aligning', 'reviewing', 'done', 'failed', 'cancelled'
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_workshop_tasks_project_status_updated
+  ON workshop_tasks (project_id, status, updated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_workshop_tasks_project_created
+  ON workshop_tasks (project_id, created_at, id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workshop_tasks_project_id
+  ON workshop_tasks (project_id, id);
+
+DROP TRIGGER IF EXISTS trg_workshop_tasks_updated_at ON workshop_tasks;
+CREATE TRIGGER trg_workshop_tasks_updated_at
+BEFORE UPDATE ON workshop_tasks
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+CREATE TABLE IF NOT EXISTS workshop_task_experts (
+  id BIGSERIAL PRIMARY KEY,
+  project_id VARCHAR(64) NOT NULL,
+  task_id VARCHAR(64) NOT NULL,
+  expert_id VARCHAR(64) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uk_workshop_task_experts_task_expert UNIQUE (task_id, expert_id),
+  CONSTRAINT fk_workshop_task_experts_project
+    FOREIGN KEY (project_id) REFERENCES workshop_projects(id) ON DELETE CASCADE,
+  CONSTRAINT fk_workshop_task_experts_task
+    FOREIGN KEY (task_id) REFERENCES workshop_tasks(id) ON DELETE CASCADE,
+  CONSTRAINT fk_workshop_task_experts_expert
+    FOREIGN KEY (expert_id) REFERENCES workshop_experts(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_workshop_task_experts_project_task
+  ON workshop_task_experts (project_id, task_id);
+
+CREATE TABLE IF NOT EXISTS workshop_workflows (
+  id VARCHAR(64) PRIMARY KEY,
+  project_id VARCHAR(64) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  steps JSONB NOT NULL,
+  status VARCHAR(16) NOT NULL,
+  source VARCHAR(16) NOT NULL DEFAULT 'user',
+  revision BIGINT NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT ck_workshop_workflows_status CHECK (status IN ('draft', 'saved')),
+  CONSTRAINT ck_workshop_workflows_source CHECK (source IN ('agent', 'user')),
+  CONSTRAINT ck_workshop_workflows_revision CHECK (revision >= 1),
+  CONSTRAINT fk_workshop_workflows_project
+    FOREIGN KEY (project_id) REFERENCES workshop_projects(id) ON DELETE CASCADE
+);
+
+ALTER TABLE workshop_workflows
+  ADD COLUMN IF NOT EXISTS source VARCHAR(16) NOT NULL DEFAULT 'user';
+ALTER TABLE workshop_workflows DROP CONSTRAINT IF EXISTS ck_workshop_workflows_source;
+ALTER TABLE workshop_workflows
+  ADD CONSTRAINT ck_workshop_workflows_source CHECK (source IN ('agent', 'user'));
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workshop_workflows_project_id
+  ON workshop_workflows (project_id, id);
+
+CREATE INDEX IF NOT EXISTS idx_workshop_workflows_project_status_updated
+  ON workshop_workflows (project_id, status, updated_at DESC, id DESC);
+
+DROP TRIGGER IF EXISTS trg_workshop_workflows_updated_at ON workshop_workflows;
+CREATE TRIGGER trg_workshop_workflows_updated_at
+BEFORE UPDATE ON workshop_workflows
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+CREATE TABLE IF NOT EXISTS workshop_schedules (
+  id VARCHAR(64) PRIMARY KEY,
+  project_id VARCHAR(64) NOT NULL,
+  workflow_id VARCHAR(64) NOT NULL,
+  cron VARCHAR(128) NOT NULL,
+  timezone VARCHAR(64) NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  authorized_at TIMESTAMPTZ NOT NULL,
+  authorized_external_capabilities JSONB NOT NULL DEFAULT '[]',
+  next_run_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_workshop_schedules_project
+    FOREIGN KEY (project_id) REFERENCES workshop_projects(id) ON DELETE CASCADE,
+  CONSTRAINT fk_workshop_schedules_workflow_project
+    FOREIGN KEY (project_id, workflow_id)
+    REFERENCES workshop_workflows(project_id, id) ON DELETE CASCADE
+);
+
+ALTER TABLE workshop_schedules
+  ADD COLUMN IF NOT EXISTS authorized_external_capabilities JSONB NOT NULL DEFAULT '[]';
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workshop_workflows_project_id
+  ON workshop_workflows (project_id, id);
+
+ALTER TABLE workshop_schedules
+  DROP CONSTRAINT IF EXISTS fk_workshop_schedules_workflow;
+ALTER TABLE workshop_schedules
+  DROP CONSTRAINT IF EXISTS fk_workshop_schedules_workflow_project;
+ALTER TABLE workshop_schedules
+  ADD CONSTRAINT fk_workshop_schedules_workflow_project
+  FOREIGN KEY (project_id, workflow_id)
+  REFERENCES workshop_workflows(project_id, id) ON DELETE CASCADE;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workshop_schedules_project_id
+  ON workshop_schedules (project_id, id);
+
+ALTER TABLE workshop_tasks
+  DROP CONSTRAINT IF EXISTS fk_workshop_tasks_schedule_project;
+ALTER TABLE workshop_tasks
+  ADD CONSTRAINT fk_workshop_tasks_schedule_project
+  FOREIGN KEY (project_id, schedule_id)
+  REFERENCES workshop_schedules(project_id, id)
+  ON DELETE RESTRICT;
+
+CREATE INDEX IF NOT EXISTS idx_workshop_schedules_enabled_next_run
+  ON workshop_schedules (enabled, next_run_at)
+  WHERE enabled = TRUE;
+CREATE INDEX IF NOT EXISTS idx_workshop_schedules_project_updated
+  ON workshop_schedules (project_id, updated_at DESC, id DESC);
+
+DROP TRIGGER IF EXISTS trg_workshop_schedules_updated_at ON workshop_schedules;
+CREATE TRIGGER trg_workshop_schedules_updated_at
+BEFORE UPDATE ON workshop_schedules
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+CREATE TABLE IF NOT EXISTS workshop_artifacts (
+  id VARCHAR(64) PRIMARY KEY,
+  project_id VARCHAR(64) NOT NULL,
+  task_id VARCHAR(64),
+  name VARCHAR(512) NOT NULL,
+  storage_type VARCHAR(16) NOT NULL,
+  storage_key VARCHAR(1024) NOT NULL,
+  size_bytes BIGINT,
+  metadata JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT ck_workshop_artifacts_storage_type
+    CHECK (storage_type IN ('db', 'oss', 'filesystem')),
+  CONSTRAINT ck_workshop_artifacts_size_bytes
+    CHECK (size_bytes IS NULL OR size_bytes > 0),
+  CONSTRAINT fk_workshop_artifacts_project
+    FOREIGN KEY (project_id) REFERENCES workshop_projects(id) ON DELETE CASCADE,
+  CONSTRAINT fk_workshop_artifacts_task_project
+    FOREIGN KEY (project_id, task_id)
+    REFERENCES workshop_tasks(project_id, id) ON DELETE CASCADE
+);
+
+ALTER TABLE workshop_artifacts
+  ADD COLUMN IF NOT EXISTS size_bytes BIGINT;
+ALTER TABLE workshop_artifacts DROP CONSTRAINT IF EXISTS ck_workshop_artifacts_size_bytes;
+ALTER TABLE workshop_artifacts
+  ADD CONSTRAINT ck_workshop_artifacts_size_bytes
+  CHECK (size_bytes IS NULL OR size_bytes > 0);
+
+ALTER TABLE workshop_artifacts
+  DROP CONSTRAINT IF EXISTS fk_workshop_artifacts_task;
+ALTER TABLE workshop_artifacts
+  DROP CONSTRAINT IF EXISTS fk_workshop_artifacts_task_project;
+ALTER TABLE workshop_artifacts
+  ADD CONSTRAINT fk_workshop_artifacts_task_project
+  FOREIGN KEY (project_id, task_id)
+  REFERENCES workshop_tasks(project_id, id) ON DELETE CASCADE;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workshop_artifacts_task_name
+  ON workshop_artifacts (task_id, name)
+  WHERE task_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_workshop_artifacts_project_created
+  ON workshop_artifacts (project_id, created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_workshop_artifacts_task_created
+  ON workshop_artifacts (task_id, created_at DESC, id DESC)
+  WHERE task_id IS NOT NULL;
+
+DROP TRIGGER IF EXISTS trg_workshop_artifacts_updated_at ON workshop_artifacts;
+CREATE TRIGGER trg_workshop_artifacts_updated_at
+BEFORE UPDATE ON workshop_artifacts
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+CREATE TABLE IF NOT EXISTS workshop_events (
+  id BIGSERIAL PRIMARY KEY,
+  event_key VARCHAR(64) NOT NULL,
+  project_id VARCHAR(64) NOT NULL,
+  task_id VARCHAR(64),
+  kind VARCHAR(64) NOT NULL,
+  payload JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uk_workshop_events_event_key UNIQUE (event_key),
+  CONSTRAINT fk_workshop_events_project
+    FOREIGN KEY (project_id) REFERENCES workshop_projects(id) ON DELETE CASCADE,
+  CONSTRAINT fk_workshop_events_task_project
+    FOREIGN KEY (project_id, task_id)
+    REFERENCES workshop_tasks(project_id, id) ON DELETE CASCADE
+);
+
+ALTER TABLE workshop_events
+  DROP CONSTRAINT IF EXISTS fk_workshop_events_task;
+ALTER TABLE workshop_events
+  DROP CONSTRAINT IF EXISTS fk_workshop_events_task_project;
+ALTER TABLE workshop_events
+  ADD CONSTRAINT fk_workshop_events_task_project
+  FOREIGN KEY (project_id, task_id)
+  REFERENCES workshop_tasks(project_id, id) ON DELETE CASCADE;
+
+CREATE INDEX IF NOT EXISTS idx_workshop_events_project_created
+  ON workshop_events (project_id, created_at, id);
+CREATE INDEX IF NOT EXISTS idx_workshop_events_task_created
+  ON workshop_events (task_id, created_at, id)
+  WHERE task_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS workshop_room_members (
+  id BIGSERIAL PRIMARY KEY,
+  project_id VARCHAR(64) NOT NULL,
+  expert_id VARCHAR(64) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uk_workshop_room_members_project_expert UNIQUE (project_id, expert_id),
+  CONSTRAINT fk_workshop_room_members_project
+    FOREIGN KEY (project_id) REFERENCES workshop_projects(id) ON DELETE CASCADE,
+  CONSTRAINT fk_workshop_room_members_expert
+    FOREIGN KEY (expert_id) REFERENCES workshop_experts(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_workshop_room_members_project
+  ON workshop_room_members (project_id, created_at, id);
+
+CREATE TABLE IF NOT EXISTS workshop_task_capability_uses (
+  id BIGSERIAL PRIMARY KEY,
+  project_id VARCHAR(64) NOT NULL,
+  task_id VARCHAR(64) NOT NULL,
+  capability VARCHAR(64) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uk_workshop_task_capability_uses_task_cap UNIQUE (task_id, capability),
+  CONSTRAINT fk_workshop_task_capability_uses_project
+    FOREIGN KEY (project_id) REFERENCES workshop_projects(id) ON DELETE CASCADE,
+  CONSTRAINT fk_workshop_task_capability_uses_task
+    FOREIGN KEY (task_id) REFERENCES workshop_tasks(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_workshop_task_capability_uses_task
+  ON workshop_task_capability_uses (task_id, created_at, id);
+
+CREATE TABLE IF NOT EXISTS workshop_schedule_runs (
+  id VARCHAR(64) PRIMARY KEY,
+  project_id VARCHAR(64) NOT NULL,
+  schedule_id VARCHAR(64) NOT NULL,
+  trigger_key VARCHAR(128) NOT NULL,
+  task_id VARCHAR(64) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uk_workshop_schedule_runs_schedule_trigger
+    UNIQUE (schedule_id, trigger_key),
+  CONSTRAINT fk_workshop_schedule_runs_project
+    FOREIGN KEY (project_id) REFERENCES workshop_projects(id) ON DELETE CASCADE,
+  CONSTRAINT fk_workshop_schedule_runs_schedule_project
+    FOREIGN KEY (project_id, schedule_id)
+    REFERENCES workshop_schedules(project_id, id) ON DELETE CASCADE,
+  CONSTRAINT fk_workshop_schedule_runs_task_project
+    FOREIGN KEY (project_id, task_id)
+    REFERENCES workshop_tasks(project_id, id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_workshop_schedule_runs_project_created
+  ON workshop_schedule_runs (project_id, created_at, id);
+
+ALTER TABLE chat_conversations
+  ADD COLUMN IF NOT EXISTS selected_expert_key VARCHAR(128);

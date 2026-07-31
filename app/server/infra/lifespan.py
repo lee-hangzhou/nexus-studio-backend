@@ -13,13 +13,17 @@ from app.agent.runtime.checkpointer import create_checkpointer, set_chat_checkpo
 from app.agent.runtime.memory_store import set_memory_store
 from app.agent.runtime.skills.registry import CanvasSkillRegistry
 from app.agent.runtime.stream.replay import replay_store
+from app.agent.workshop.skills.locks import assert_workshop_skill_locks
+from app.composition import workshop_workflow_schedule_service
+from app.server.canvas.services.episode_events import canvas_episode_events_bus
+from app.server.infra.config import settings
 from app.server.infra.database import db
 from app.server.infra.gateway import gateway_client
 from app.server.infra.logger import logger
 from app.server.infra.memory_store import create_memory_store
-from app.server.canvas.services.episode_events import canvas_episode_events_bus
 from app.server.infra.redis import redis_client
 from app.server.persistence import TORTOISE_ORM_MODEL_MODULES
+from app.server.workshop.services.schedule_ticker import run_workshop_schedule_ticker
 
 
 @asynccontextmanager
@@ -60,6 +64,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             skill_names=[s.name for s in canvas_skills],
         )
 
+        assert_workshop_skill_locks()
+        logger.info("Workshop ecommerce skill locks verified")
+
         await try_refresh_model_catalog()
         validate_memory_extract_config()
 
@@ -70,6 +77,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 "LangGraph checkpointer initialized for chat",
                 memory_store=memory_store is not None,
             )
+            if settings.WORKSHOP_SCHEDULE_TICKER_ENABLED:
+                background_supervisor.start(
+                    run_workshop_schedule_ticker(
+                        schedule_service=workshop_workflow_schedule_service,
+                        owner="workshop.schedule_ticker",
+                        tick_interval_sec=settings.WORKSHOP_SCHEDULE_TICK_INTERVAL_SEC,
+                        batch_size=settings.WORKSHOP_SCHEDULE_TICK_BATCH_SIZE,
+                        deadline_sec=settings.WORKSHOP_SCHEDULE_TICK_DEADLINE_SEC,
+                    ),
+                    name="workshop.schedule_ticker",
+                )
+                logger.info(
+                    "Workshop schedule ticker started",
+                    tick_interval_sec=settings.WORKSHOP_SCHEDULE_TICK_INTERVAL_SEC,
+                    batch_size=settings.WORKSHOP_SCHEDULE_TICK_BATCH_SIZE,
+                    deadline_sec=settings.WORKSHOP_SCHEDULE_TICK_DEADLINE_SEC,
+                )
             try:
                 yield
             finally:

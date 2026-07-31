@@ -49,6 +49,7 @@ async def stream_prepared_turn(prepared: PreparedTurn) -> AsyncIterator[str]:
         heal_invalid_tool_calls=prepared.heal_invalid_tool_calls,
         surface=prepared.surface,
         enrich_pending=prepared.enrich_pending,
+        sse_attribution=prepared.sse_attribution,
     ):
         yield chunk
 
@@ -78,6 +79,7 @@ async def stream_agent_turn(
     heal_invalid_tool_calls: bool = True,
     surface: str = SkillSurface.CHAT,
     enrich_pending: PendingEnrichFn | None = None,
+    sse_attribution: dict[str, str | None] | None = None,
 ) -> AsyncIterator[str]:
     """Low-level turn orchestration; prefer stream_prepared_turn / mount runner."""
     merged_subscribers: list[TurnSubscriber] = [
@@ -86,6 +88,7 @@ async def stream_agent_turn(
             preview_tool_result=preview_tool_result or default_preview,
             surface=surface,
             enrich_pending=enrich_pending,
+            sse_attribution=sse_attribution,
         ),
         *list(subscribers),
     ]

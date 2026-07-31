@@ -29,6 +29,8 @@ class ErrorCode(IntEnum):
     TASK_ALREADY_FINISHED = 40910
     TASK_CANCEL_FAILED = 40911
     USER_SKILL_REVISION_CONFLICT = 40912
+    WORKSHOP_CONFLICT = 40913
+    WORKSHOP_REQUIRES_UPGRADE = 40914
     RATE_LIMITED = 42901
     INTERNAL_ERROR = 50001
     GATEWAY_SUBMIT_ERROR = 50002
@@ -70,6 +72,8 @@ HTTP_STATUS_BY_ERROR_CODE: dict[ErrorCode, int] = {
     ErrorCode.TASK_ALREADY_FINISHED: 409,
     ErrorCode.TASK_CANCEL_FAILED: 409,
     ErrorCode.USER_SKILL_REVISION_CONFLICT: 409,
+    ErrorCode.WORKSHOP_CONFLICT: 409,
+    ErrorCode.WORKSHOP_REQUIRES_UPGRADE: 409,
     ErrorCode.RATE_LIMITED: 429,
     ErrorCode.GATEWAY_QUOTA_OR_RATE_LIMITED: 429,
     ErrorCode.INTERNAL_ERROR: 500,
@@ -110,5 +114,7 @@ DEFAULT_ERROR_MESSAGES: dict[ErrorCode, str] = {
     ErrorCode.EPISODE_LAST_REMAINING: "project must keep at least one episode",
     ErrorCode.CANVAS_EPISODE_BUSY: "canvas episode is busy",
     ErrorCode.CANVAS_SESSION_BUSY: "canvas session is busy",
+    ErrorCode.WORKSHOP_CONFLICT: "workshop conflict",
+    ErrorCode.WORKSHOP_REQUIRES_UPGRADE: "workshop upgrade required",
     ErrorCode.INTERNAL_ERROR: "Internal server error",
 }

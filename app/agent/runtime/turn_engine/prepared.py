@@ -1,5 +1,3 @@
-"""Prepared turn assembly — Mount / orchestrator hand this to the shared entry."""
-
 from __future__ import annotations
 
 import asyncio
@@ -23,7 +21,7 @@ from app.server.skills.domain.enums import SkillSurface
 
 @dataclass(frozen=True)
 class PreparedTurn:
-    """Everything TurnEngine needs after a surface Mount / orchestrator prepared the turn."""
+    """surface Mount/编排器准备完成后 TurnEngine 所需的全部输入"""
 
     agent: CompiledStateGraph
     turn_id: str
@@ -48,7 +46,9 @@ class PreparedTurn:
     heal_invalid_tool_calls: bool = True
     surface: str = SkillSurface.CHAT
     enrich_pending: PendingEnrichFn | None = None
+    sse_attribution: dict[str, str | None] | None = None
 
 
 def default_preview(tool_name: str, result: str, ok: bool) -> str:
+    """默认工具结果预览截断"""
     return summarize_tool_result(tool_name, result, ok=ok)

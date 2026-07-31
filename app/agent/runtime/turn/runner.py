@@ -1,5 +1,3 @@
-"""Mount-aware turn runner — unique product entry over AgentMountSpec."""
-
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -26,7 +24,7 @@ async def stream_agent_turn(
     is_resume: bool = False,
     turn_prepared: bool = False,
 ) -> AsyncIterator[str]:
-    """Schedule Mount callables + TurnEngine. No mount-name branches here."""
+    """调度 Mount 可调用项并进入 TurnEngine；此处不按 mount 名分支"""
     turn_id = ctx.turn_id
     try:
         if not turn_prepared and mount.prepare_turn is not None:
@@ -73,6 +71,11 @@ async def stream_agent_turn(
             if mount.resolve_runtime_scope_id is not None
             else getattr(ctx, "conversation_id", None)
         )
+        sse_attribution = (
+            mount.resolve_sse_attribution(ctx)
+            if mount.resolve_sse_attribution is not None
+            else getattr(ctx, "sse_attribution", None)
+        )
 
         prepared = PreparedTurn(
             agent=agent,
@@ -99,6 +102,7 @@ async def stream_agent_turn(
             enrich_pending=(
                 mount.build_enrich_pending(ctx) if mount.build_enrich_pending is not None else None
             ),
+            sse_attribution=sse_attribution if isinstance(sse_attribution, dict) else None,
         )
         async for chunk in stream_prepared_turn(prepared):
             yield chunk

@@ -17,6 +17,8 @@ from app.server.chat.schemas import (
 from app.agent.chat.turn.abort import TurnAbortReason, abort_user_turn, clear_stale_gate_ephemeral
 from app.agent.chat.turn.lock import conversation_turn_lock
 from app.agent.chat.turn.orchestrator import stream_turn
+from app.agent.workshop.turn.orchestrator import stream_workshop_turn
+from app.contracts.workshop import WorkshopTurnTarget
 from app.agent.chat.turn.resume import stream_chat_resume
 from app.contracts.turn_content import TurnUserInput
 from app.agent.chat.workspace import conversation_workspace
@@ -299,9 +301,33 @@ class ChatService:
         client_turn_id: Optional[str] = None,
         cancel_event: asyncio.Event,
         selected_skills: tuple[SelectedSkillDTO, ...] | None = None,
+        turn_target: WorkshopTurnTarget | None = None,
     ) -> AsyncIterator[str]:
         logger.info("chat.stream_turn.start", conversation_id=conversation_id, model=model_key, turn=turn_id)
         try:
+            from app.composition import workshop_project_service, workshop_task_orchestrator
+
+            project = await workshop_project_service.get_project_by_group_chat(
+                user_id=user_id,
+                group_chat_id=conversation_id,
+            )
+            if project is not None:
+                async for chunk in stream_workshop_turn(
+                    projects=workshop_project_service,
+                    orchestrator=workshop_task_orchestrator,
+                    project=project,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    turn_id=turn_id,
+                    content=content_text,
+                    model_key=model_key,
+                    enable_tools=enable_tools,
+                    cancel_event=cancel_event,
+                    turn_target=turn_target,
+                    selected_skills=selected_skills,
+                ):
+                    yield chunk
+                return
             async for chunk in stream_turn(
                 conversation=conversation,
                 user_id=user_id,

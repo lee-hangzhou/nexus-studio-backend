@@ -45,18 +45,20 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
         }
         for item in errors
     ]
+    field = ".".join(str(part) for part in summary[0]["loc"] if part != "body") if summary else ""
+    message = f"请求参数无效：{field}" if field else "请求参数无效，请检查后重试"
     return json_error_response(
         code=int(ErrorCode.INVALID_PARAMS),
-        msg="Validation error",
+        msg=message,
         data=summary,
     )
 
 
 async def http_error_handler(_request: Request, exc: StarletteHTTPException) -> JSONResponse:
-    detail = exc.detail if isinstance(exc.detail, str) else "HTTP error"
+    detail = exc.detail if isinstance(exc.detail, str) else "请求失败"
     return json_error_response(
         code=exc.status_code,
-        msg=detail or "HTTP error",
+        msg=detail or "请求失败",
         status_code=exc.status_code,
     )
 
@@ -70,7 +72,7 @@ async def generic_error_handler(request: Request, exc: Exception) -> JSONRespons
     )
     return json_error_response(
         code=int(ErrorCode.INTERNAL_ERROR),
-        msg="Internal server error",
+        msg="服务暂时不可用，请稍后重试",
     )
 
 

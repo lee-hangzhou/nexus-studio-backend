@@ -1,5 +1,3 @@
-"""Agent mount specification — runner only awaits callables, never branches on mount name."""
-
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
@@ -34,11 +32,12 @@ ResolveRepairFn = Callable[[Any], CheckpointRepairFn | None]
 ResolveModeFn = Callable[[Any], str | None]
 ResolveClientTurnIdFn = Callable[[Any], str | None]
 ResolveRuntimeScopeIdFn = Callable[[Any], int | str]
+ResolveSseAttributionFn = Callable[[Any], dict[str, str | None]]
 
 
 @dataclass(frozen=True)
 class AgentMountSpec:
-    """Surface differences for one agent turn. Runtime never switches on ``name``."""
+    """单次 agent turn 的 surface 差异；运行时不得按 name 分支"""
 
     name: str
     resolve_thread_id: ResolveThreadIdFn
@@ -58,3 +57,4 @@ class AgentMountSpec:
     resolve_mode: ResolveModeFn | None = None
     resolve_client_turn_id: ResolveClientTurnIdFn | None = None
     resolve_runtime_scope_id: ResolveRuntimeScopeIdFn | None = None
+    resolve_sse_attribution: ResolveSseAttributionFn | None = None

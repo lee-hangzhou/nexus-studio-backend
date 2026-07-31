@@ -1,5 +1,3 @@
-"""Chat AgentMountSpec — surface assembly via mount callables."""
-
 from __future__ import annotations
 
 import asyncio
@@ -18,6 +16,11 @@ from app.agent.chat.memory.store import chat_runnable_config
 from app.agent.chat.memory.turn_input import build_attachment_context_block
 from app.agent.chat.prompt.composer import PromptComposer
 from app.agent.chat.prompt.types import AttachmentBrief, TurnPromptContext
+from app.agent.chat.expert_turn import (
+    build_expert_identity_block,
+    intersect_chat_tools_with_profile,
+    profile_tool_names_for_chat,
+)
 from app.agent.chat.tools.build_turn_tools import build_chat_turn_tools
 from app.agent.chat.tools.lc_tools import ChatToolContext
 from app.agent.chat.tools.ui_preview import sanitize_tool_step_preview
@@ -118,9 +121,11 @@ class ChatMountContext:
     turn_start_messages: list[BaseMessage] | None = None
     recovery_hook: ChatRecoveryHook | None = None
     workspace: Path | None = None
+    sse_attribution: dict[str, str | None] | None = None
 
 
 def _thread_id(ctx: ChatMountContext) -> str:
+    """解析 Chat checkpoint thread id"""
     return f"{CHAT_CHECKPOINT_THREAD_PREFIX}-{ctx.conversation_id}"
 
 
@@ -233,6 +238,17 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
         tool_asset_ids=frozenset(compiled.tool_asset_ids),
         asset_media_types=asset_media_types,
     )
+    selected_expert_key = getattr(ctx.conversation, "selected_expert_key", None)
+    expert_identity_block = ""
+    if selected_expert_key:
+        allowed_names = profile_tool_names_for_chat(selected_expert_key)
+        tools = intersect_chat_tools_with_profile(tools, allowed_names)
+        expert_identity_block = build_expert_identity_block(selected_expert_key)
+        ctx.sse_attribution = {
+            "speaker_role": "expert",
+            "expert_id": selected_expert_key,
+            "task_id": None,
+        }
     attachment_briefs = [
         AttachmentBrief(
             attachment_id=row.id,
@@ -253,7 +269,6 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
         asset.media_type in {TurnMediaType.IMAGE, TurnMediaType.VIDEO}
         for asset in compiled.tool_asset_index
     )
-    spec = get_model_spec(ctx.model_key)
     prompt_ctx = TurnPromptContext(
         user_id=ctx.user_id,
         conversation_id=ctx.conversation_id,
@@ -296,6 +311,9 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
         turn_references_block=compiled.reference_index,
         attachment_context_block=attachment_context if turn_ctx.has_attachments else "",
     )
+    if expert_identity_block:
+        system_prompt = f"{expert_identity_block}\n\n{system_prompt}"
+    spec = get_model_spec(ctx.model_key)
     turn_human = HumanMessage(content=compiled.human_message)
     bind_attachment_ids = await chat_attachment_service.attachment_ids_for_asset_ids(
         user_id=ctx.user_id,
@@ -380,26 +398,31 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
 
 
 async def _build_agent(ctx: ChatMountContext) -> CompiledStateGraph:
+    """返回已准备好的 Chat agent 图"""
     assert ctx.agent is not None
     return ctx.agent
 
 
 def _build_guards(ctx: ChatMountContext) -> TurnGuards:
+    """返回 turn 守卫配置"""
     assert ctx.guards is not None
     return ctx.guards
 
 
 def _build_subscribers(ctx: ChatMountContext):
+    """组装 Chat 生命周期订阅者"""
     assert ctx.session is not None
     return build_chat_lifecycle_subscribers(ctx.session)
 
 
 def _build_runnable_config(ctx: ChatMountContext) -> RunnableConfig:
+    """返回 LangGraph runnable_config"""
     assert ctx.runnable_config is not None
     return ctx.runnable_config
 
 
 def _terminal_policy(ctx: ChatMountContext) -> SseTerminalPolicy:
+    """构造 SSE 终态策略"""
     assert ctx.persistence is not None
     persistence = ctx.persistence
     return SseTerminalPolicy(
@@ -410,23 +433,29 @@ def _terminal_policy(ctx: ChatMountContext) -> SseTerminalPolicy:
 
 
 def _recovery(ctx: ChatMountContext):
+    """返回恢复钩子"""
     return ctx.recovery_hook
 
 
 def _preview(_ctx: ChatMountContext):
+    """返回工具结果预览函数"""
     return lambda name, result, ok: sanitize_tool_step_preview(name, result, ok=ok)
 
 
 def _input_messages(ctx: ChatMountContext):
+    """返回本轮输入消息"""
     return ctx.input_messages
 
 
 def _heartbeat(_ctx: ChatMountContext) -> int:
+    """返回心跳间隔秒数"""
     return int(settings.CHAT_HEARTBEAT_INTERVAL_SEC)
 
 
 def _start_repair(ctx: ChatMountContext):
+    """返回 turn 开始时的 checkpoint 修复回调"""
     async def repair(agent, runnable_config, **kwargs):
+        """按原因修复 Chat checkpoint"""
         reason = kwargs.get("reason")
         await repair_chat_checkpoint_if_needed(
             agent,
@@ -440,7 +469,13 @@ def _start_repair(ctx: ChatMountContext):
 
 
 def _cleanup_repair(ctx: ChatMountContext):
+    """返回 turn 清理时的 checkpoint 修复回调"""
     return _start_repair(ctx)
+
+
+def _sse_attribution(ctx: ChatMountContext) -> dict[str, str | None]:
+    """返回 SSE 发言归因字段"""
+    return dict(ctx.sse_attribution or {})
 
 
 CHAT_MOUNT = AgentMountSpec(
@@ -459,4 +494,5 @@ CHAT_MOUNT = AgentMountSpec(
     resolve_on_turn_start_repair=_start_repair,
     resolve_on_turn_cleanup_repair=_cleanup_repair,
     resolve_client_turn_id=lambda ctx: ctx.client_turn_id,
+    resolve_sse_attribution=_sse_attribution,
 )

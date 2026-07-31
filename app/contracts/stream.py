@@ -26,6 +26,11 @@ class TokenFrame(StreamContract):
     type: Literal[StreamFrameType.TOKEN]
     channel: TokenChannel
     text: str
+    speaker_role: str | None = None
+    expert_id: str | None = None
+    expert_name: str | None = None
+    avatar: str | None = None
+    task_id: str | None = None
 
 
 class ToolStartFrame(StreamContract):
@@ -33,6 +38,11 @@ class ToolStartFrame(StreamContract):
     call_id: str
     name: str
     args: dict[str, Any] = Field(default_factory=dict)
+    speaker_role: str | None = None
+    expert_id: str | None = None
+    expert_name: str | None = None
+    avatar: str | None = None
+    task_id: str | None = None
 
 
 class ToolEndFrame(StreamContract):
@@ -42,12 +52,22 @@ class ToolEndFrame(StreamContract):
     ok: bool
     preview: str = ""
     data: ToolRecoveryFrameData | None = None
+    speaker_role: str | None = None
+    expert_id: str | None = None
+    expert_name: str | None = None
+    avatar: str | None = None
+    task_id: str | None = None
 
 
 class HeartbeatFrame(StreamContract):
     type: Literal[StreamFrameType.HEARTBEAT]
     ts: int
     turn_id: str | None = None
+    speaker_role: str | None = None
+    expert_id: str | None = None
+    expert_name: str | None = None
+    avatar: str | None = None
+    task_id: str | None = None
 
 
 class ErrorFrame(StreamContract):
@@ -56,12 +76,22 @@ class ErrorFrame(StreamContract):
     message: str
     turn_id: str | None = None
     data: dict[str, Any] | None = None
+    speaker_role: str | None = None
+    expert_id: str | None = None
+    expert_name: str | None = None
+    avatar: str | None = None
+    task_id: str | None = None
 
 
 class DoneFrame(StreamContract):
     type: Literal[StreamFrameType.DONE]
     turn_id: str
     message_ids: list[int] = Field(default_factory=list)
+    speaker_role: str | None = None
+    expert_id: str | None = None
+    expert_name: str | None = None
+    avatar: str | None = None
+    task_id: str | None = None
 
 
 class CancelledFrame(StreamContract):

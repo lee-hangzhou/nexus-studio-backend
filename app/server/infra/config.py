@@ -2,7 +2,7 @@ from enum import IntEnum
 from pathlib import Path
 from typing import List, Optional
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.server.infra.config_models import (
@@ -98,6 +98,11 @@ class Settings(BaseSettings):
     SMTP_USE_TLS: bool = Field(default=True)
 
     CORS_ORIGINS: str = Field(default="")
+
+    # 淘宝开放平台 OAuth（未配置时 begin_shop_auth fail closed）
+    TAOBAO_OAUTH_CLIENT_ID: str = Field(default="")
+    TAOBAO_OAUTH_CLIENT_SECRET: str = Field(default="")
+    TAOBAO_OAUTH_REDIRECT_URI: str = Field(default="")
 
     LOG_LEVEL: str = Field(default="INFO")
     LOG_FORMAT: str = Field(default="json")
@@ -250,6 +255,35 @@ class Settings(BaseSettings):
     SSE_DELTA_MAX_CHARS: int = Field(default=512, gt=0)
     CANVAS_TURN_CANCEL_WAIT_SEC: float = Field(default=12.0, gt=0)
     CHAT_TURN_CANCEL_WAIT_SEC: float = Field(default=12.0, gt=0)
+
+    # Workshop schedule ticker（秒为单位；PostgreSQL claim 保证多副本安全）
+    WORKSHOP_SCHEDULE_TICKER_ENABLED: bool = Field(default=True)
+    WORKSHOP_SCHEDULE_TICK_INTERVAL_SEC: float = Field(default=30.0, gt=0, le=3600)
+    WORKSHOP_SCHEDULE_TICK_BATCH_SIZE: int = Field(default=32, ge=1, le=500)
+    WORKSHOP_SCHEDULE_TICK_DEADLINE_SEC: float = Field(default=20.0, gt=0, le=300)
+
+    @model_validator(mode="after")
+    def validate_workshop_schedule_ticker(self) -> "Settings":
+        """校验工坊定时 ticker：deadline 必须短于间隔；生产拒绝危险值"""
+        if self.WORKSHOP_SCHEDULE_TICK_DEADLINE_SEC >= self.WORKSHOP_SCHEDULE_TICK_INTERVAL_SEC:
+            raise ValueError(
+                "WORKSHOP_SCHEDULE_TICK_DEADLINE_SEC must be < "
+                "WORKSHOP_SCHEDULE_TICK_INTERVAL_SEC"
+            )
+        if self.ENV.strip().lower() in {"prod", "production"}:
+            if self.WORKSHOP_SCHEDULE_TICK_INTERVAL_SEC < 5.0:
+                raise ValueError(
+                    "WORKSHOP_SCHEDULE_TICK_INTERVAL_SEC must be >= 5 in production"
+                )
+            if self.WORKSHOP_SCHEDULE_TICK_BATCH_SIZE > 200:
+                raise ValueError(
+                    "WORKSHOP_SCHEDULE_TICK_BATCH_SIZE must be <= 200 in production"
+                )
+            if self.WORKSHOP_SCHEDULE_TICK_DEADLINE_SEC < 1.0:
+                raise ValueError(
+                    "WORKSHOP_SCHEDULE_TICK_DEADLINE_SEC must be >= 1 in production"
+                )
+        return self
 
     @property
     def sse_replay_heartbeat_interval_sec(self) -> int:

@@ -1,14 +1,13 @@
-"""Persist turn outcomes and schedule title; never emit ERROR/DONE/CANCELLED."""
+"""Persist turn outcomes and emit title; never emit ERROR/DONE/CANCELLED."""
 
 from __future__ import annotations
-
-import asyncio
 
 from app.agent.chat.conversation_title import (
     generate_conversation_title_via_llm,
     is_first_user_message,
     is_placeholder_title,
 )
+from app.agent.chat.stream.frames import StreamFrameType, create_stream_frame
 from app.agent.chat.turn.gate_emit import emit_user_gates, has_pending_user_gate
 from app.agent.chat.turn.gate_suspend import persist_gate_suspend_tool_results
 from app.agent.chat.turn.persistence import finalize_assistant, finalize_published_deliverables
@@ -211,36 +210,32 @@ class ChatPersistenceSubscriber:
             message_ids=session.persistence.message_ids,
             terminated_by=session.terminated_by,
         )
+        # 必须在 DONE 之前推送，否则流已结束前端收不到标题
         if schedule_title:
-            asyncio.create_task(
-                _background_conversation_title(
+            try:
+                title_result = await generate_conversation_title_via_llm(
                     user_id=session.user_id,
                     conversation_id=session.conversation_id,
-                    content=session.content,
+                    user_content=session.content,
                     turn_asset_ids=session.turn_asset_ids,
                     model_key=session.model_key,
                 )
-            )
-
-
-async def _background_conversation_title(
-    *,
-    user_id: int,
-    conversation_id: int,
-    content: str,
-    turn_asset_ids: tuple[int, ...],
-    model_key: str,
-) -> None:
-    try:
-        await generate_conversation_title_via_llm(
-            user_id=user_id,
-            conversation_id=conversation_id,
-            user_content=content,
-            turn_asset_ids=turn_asset_ids,
-            model_key=model_key,
-        )
-    except Exception:
-        logger.exception(
-            "chat.conversation_title.background_failed",
-            conversation_id=conversation_id,
-        )
+            except Exception:
+                logger.exception(
+                    "chat.conversation_title.emit_failed",
+                    conversation_id=session.conversation_id,
+                )
+            else:
+                if (
+                    title_result.applied
+                    and title_result.title
+                    and title_result.updated_at
+                ):
+                    await emit(
+                        create_stream_frame(
+                            type=StreamFrameType.CONVERSATION_TITLE,
+                            conversation_id=session.conversation_id,
+                            title=title_result.title,
+                            updated_at=title_result.updated_at,
+                        )
+                    )

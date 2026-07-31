@@ -54,13 +54,23 @@ class SseTurnSubscriber:
         preview_tool_result: ToolPreviewFn | None = None,
         surface: str = SkillSurface.CHAT,
         enrich_pending: PendingEnrichFn | None = None,
+        sse_attribution: dict[str, str | None] | None = None,
     ) -> None:
         self._policy = policy or SseTerminalPolicy()
         self._preview = preview_tool_result or _default_preview
         self._surface = surface
         self._enrich_pending = enrich_pending
+        self._sse_attribution = {
+            key: value
+            for key, value in (sse_attribution or {}).items()
+            if value is not None
+        }
         self._failed_emitted = False
         self._done_emitted = False
+
+    async def _emit_frame(self, emit: TurnEmit, **payload: Any) -> None:
+        merged = {**payload, **self._sse_attribution}
+        await emit(create_stream_frame(**merged))
 
     async def _resolve_pending_operation(
         self,
@@ -78,25 +88,23 @@ class SseTurnSubscriber:
             channel = event.channel
             if isinstance(channel, str):
                 channel = TokenChannel(channel)
-            await emit(
-                create_stream_frame(
-                    type=StreamFrameType.TOKEN,
-                    protocol_version=settings.CHAT_SSE_PROTOCOL_VERSION,
-                    channel=channel,
-                    text=event.text,
-                )
+            await self._emit_frame(
+                emit,
+                type=StreamFrameType.TOKEN,
+                protocol_version=settings.CHAT_SSE_PROTOCOL_VERSION,
+                channel=channel,
+                text=event.text,
             )
             return
 
         if isinstance(event, ToolStarted):
-            await emit(
-                create_stream_frame(
-                    type=StreamFrameType.TOOL_START,
-                    protocol_version=settings.CHAT_SSE_PROTOCOL_VERSION,
-                    call_id=event.call_id,
-                    name=event.tool_name,
-                    args=event.tool_args,
-                )
+            await self._emit_frame(
+                emit,
+                type=StreamFrameType.TOOL_START,
+                protocol_version=settings.CHAT_SSE_PROTOCOL_VERSION,
+                call_id=event.call_id,
+                name=event.tool_name,
+                args=event.tool_args,
             )
             return
 
@@ -106,16 +114,15 @@ class SseTurnSubscriber:
                 event.tool_result,
                 not event.tool_error,
             )
-            await emit(
-                create_stream_frame(
-                    type=StreamFrameType.TOOL_END,
-                    protocol_version=settings.CHAT_SSE_PROTOCOL_VERSION,
-                    call_id=event.call_id,
-                    name=event.tool_name,
-                    ok=not event.tool_error,
-                    preview=preview,
-                    data={"error_code": event.error_class} if event.tool_error else {},
-                )
+            await self._emit_frame(
+                emit,
+                type=StreamFrameType.TOOL_END,
+                protocol_version=settings.CHAT_SSE_PROTOCOL_VERSION,
+                call_id=event.call_id,
+                name=event.tool_name,
+                ok=not event.tool_error,
+                preview=preview,
+                data={"error_code": event.error_class} if event.tool_error else {},
             )
             return
 
@@ -154,14 +161,13 @@ class SseTurnSubscriber:
                     message = TERMINATION_ERROR_MESSAGES.get(terminated, event.error)
                 except ValueError:
                     pass
-            await emit(
-                create_stream_frame(
-                    type=StreamFrameType.ERROR,
-                    protocol_version=settings.CHAT_SSE_PROTOCOL_VERSION,
-                    code=code,
-                    message=message,
-                    turn_id=event.turn_id,
-                )
+            await self._emit_frame(
+                emit,
+                type=StreamFrameType.ERROR,
+                protocol_version=settings.CHAT_SSE_PROTOCOL_VERSION,
+                code=code,
+                message=message,
+                turn_id=event.turn_id,
             )
             return
 
@@ -213,4 +219,4 @@ class SseTurnSubscriber:
         }
         if self._policy.message_ids is not None:
             payload["message_ids"] = list(self._policy.message_ids())
-        await emit(create_stream_frame(**payload))
+        await self._emit_frame(emit, **payload)

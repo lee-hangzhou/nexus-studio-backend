@@ -1116,6 +1116,42 @@
     "DoneFrame": {
       "additionalProperties": false,
       "properties": {
+        "avatar": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avatar"
+        },
+        "expert_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expert Id"
+        },
+        "expert_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expert Name"
+        },
         "message_ids": {
           "items": {
             "type": "integer"
@@ -1128,6 +1164,30 @@
           "minimum": 1,
           "title": "Protocol Version",
           "type": "integer"
+        },
+        "speaker_role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speaker Role"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
         },
         "turn_id": {
           "title": "Turn Id",
@@ -1149,6 +1209,18 @@
     "ErrorFrame": {
       "additionalProperties": false,
       "properties": {
+        "avatar": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avatar"
+        },
         "code": {
           "$ref": "#/$defs/StreamErrorCode"
         },
@@ -1165,6 +1237,30 @@
           "default": null,
           "title": "Data"
         },
+        "expert_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expert Id"
+        },
+        "expert_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expert Name"
+        },
         "message": {
           "title": "Message",
           "type": "string"
@@ -1174,6 +1270,30 @@
           "minimum": 1,
           "title": "Protocol Version",
           "type": "integer"
+        },
+        "speaker_role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speaker Role"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
         },
         "turn_id": {
           "anyOf": [
@@ -1286,11 +1406,71 @@
     "HeartbeatFrame": {
       "additionalProperties": false,
       "properties": {
+        "avatar": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avatar"
+        },
+        "expert_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expert Id"
+        },
+        "expert_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expert Name"
+        },
         "protocol_version": {
           "default": 2,
           "minimum": 1,
           "title": "Protocol Version",
           "type": "integer"
+        },
+        "speaker_role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speaker Role"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
         },
         "ts": {
           "title": "Ts",
@@ -1684,14 +1864,74 @@
     "TokenFrame": {
       "additionalProperties": false,
       "properties": {
+        "avatar": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avatar"
+        },
         "channel": {
           "$ref": "#/$defs/TokenChannel"
+        },
+        "expert_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expert Id"
+        },
+        "expert_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expert Name"
         },
         "protocol_version": {
           "default": 2,
           "minimum": 1,
           "title": "Protocol Version",
           "type": "integer"
+        },
+        "speaker_role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speaker Role"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
         },
         "text": {
           "title": "Text",
@@ -1714,6 +1954,18 @@
     "ToolEndFrame": {
       "additionalProperties": false,
       "properties": {
+        "avatar": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avatar"
+        },
         "call_id": {
           "title": "Call Id",
           "type": "string"
@@ -1728,6 +1980,30 @@
             }
           ],
           "default": null
+        },
+        "expert_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expert Id"
+        },
+        "expert_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expert Name"
         },
         "name": {
           "title": "Name",
@@ -1747,6 +2023,30 @@
           "minimum": 1,
           "title": "Protocol Version",
           "type": "integer"
+        },
+        "speaker_role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speaker Role"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
         },
         "type": {
           "const": "tool_end",
@@ -1914,9 +2214,45 @@
           "title": "Args",
           "type": "object"
         },
+        "avatar": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avatar"
+        },
         "call_id": {
           "title": "Call Id",
           "type": "string"
+        },
+        "expert_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expert Id"
+        },
+        "expert_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expert Name"
         },
         "name": {
           "title": "Name",
@@ -1927,6 +2263,30 @@
           "minimum": 1,
           "title": "Protocol Version",
           "type": "integer"
+        },
+        "speaker_role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speaker Role"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
         },
         "type": {
           "const": "tool_start",
