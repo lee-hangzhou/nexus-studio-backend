@@ -229,13 +229,9 @@ class GatewayChatModel(BaseChatModel):
                         )
                     if data == "[DONE]":
                         break
-                candidate = assembler.finish()
-                if not _assembled_has_output(candidate):
-                    raise GatewayChatError(
-                        "gateway_empty_stream",
-                        "gateway stream ended without model output",
-                    )
-                assembled = candidate
+                # 流正常结束但无 content/tool_calls 是合法空模型步，不是网关故障。
+                # 无 SSE 帧的传输空流仍由 gateway_client 抛 gateway_empty_stream。
+                assembled = assembler.finish()
                 break
             except (AppError, GatewayChatError) as exc:
                 if isinstance(exc, AppError):
@@ -285,9 +281,3 @@ class GatewayChatModel(BaseChatModel):
         )
 
 
-def _assembled_has_output(assembled: object) -> bool:
-    content = str(getattr(assembled.message, "content", "") or "").strip()
-    think = "".join(p.text for p in assembled.token_pieces if p.lane == "think").strip()
-    tool_calls = list(getattr(assembled.message, "tool_calls", None) or [])
-    invalid = list(getattr(assembled, "invalid_tool_calls", None) or [])
-    return bool(content or think or tool_calls or invalid)

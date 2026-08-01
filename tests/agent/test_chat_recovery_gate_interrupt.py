@@ -83,7 +83,8 @@ async def test_before_complete_interrupted_before_tool_end_has_empty_tool_steps(
 
 
 @pytest.mark.asyncio
-async def test_before_complete_still_fails_empty_after_tools_without_gate() -> None:
+async def test_before_complete_recovers_empty_after_tools_without_gate() -> None:
+    """工具已成功但无助手正文时走 empty recovery，不标 GATEWAY_UPSTREAM_FAILED。"""
     hook = _hook(
         tool_steps=[
             ToolStepMetadata(
@@ -96,14 +97,24 @@ async def test_before_complete_still_fails_empty_after_tools_without_gate() -> N
     )
     event = TurnCompletedEvent(turn_id="t1", step_index=1, messages=[])
     state = RunState()
-    with patch(
-        "app.agent.chat.turn.recovery_hook.has_pending_user_gate",
-        new=AsyncMock(return_value=False),
+    with (
+        patch(
+            "app.agent.chat.turn.recovery_hook.has_pending_user_gate",
+            new=AsyncMock(return_value=False),
+        ),
+        patch(
+            "app.agent.chat.turn.recovery_hook.has_pending_upgrade_invite",
+            new=AsyncMock(return_value=False),
+        ),
+        patch.object(
+            hook,
+            "_attempt_recovery",
+            new=AsyncMock(return_value=True),
+        ) as recover,
     ):
-        assert (
-            await hook.before_complete(event, state=state)
-            is TurnTerminatedBy.GATEWAY_UPSTREAM_FAILED
-        )
+        assert await hook.before_complete(event, state=state) is None
+        recover.assert_awaited_once()
+        assert recover.await_args.kwargs["reason"] == "empty_response"
 
 
 @pytest.mark.asyncio
@@ -144,6 +155,10 @@ async def test_before_complete_recovers_when_last_step_only_had_invalid_tool_arg
     with (
         patch(
             "app.agent.chat.turn.recovery_hook.has_pending_user_gate",
+            new=AsyncMock(return_value=False),
+        ),
+        patch(
+            "app.agent.chat.turn.recovery_hook.has_pending_upgrade_invite",
             new=AsyncMock(return_value=False),
         ),
         patch.object(

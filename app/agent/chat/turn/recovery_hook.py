@@ -105,8 +105,7 @@ class ChatRecoveryHook:
             if self.recovery_exhausted:
                 return TurnTerminatedBy.AGENT_RECOVERY_EXHAUSTED
             return None
-        if self.recorder.tool_steps:
-            return TurnTerminatedBy.GATEWAY_UPSTREAM_FAILED
+        # 有/无工具步都一样：空正文是合法空步，走 empty recovery，不当上游故障。
         messages = list(event.messages)
         ok = await self._attempt_recovery(messages, reason="empty_response", state=state)
         if ok:
