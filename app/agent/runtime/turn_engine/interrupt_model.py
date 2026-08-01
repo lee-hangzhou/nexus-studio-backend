@@ -89,6 +89,10 @@ def classify_interrupt_value(
     action_index_base: int = 0,
 ) -> list[InterruptKind]:
     """Classify one LangGraph interrupt value into typed HITL kinds."""
+    # 升级邀请由 Chat 侧单独发 SSE，不得落入 tool_approval 空 call_id 路径
+    if isinstance(value, dict) and value.get("upgrade_invite") is True:
+        return []
+
     payload = _InterruptValue.model_validate(value)
 
     if payload.gate_type is not None:
@@ -128,10 +132,16 @@ def classify_interrupt_value(
             )
         return out
 
+    call_id = payload.call_id or ""
+    name = payload.name or ""
+    if not call_id or not name:
+        raise ValueError(
+            "tool_approval interrupt requires non-empty call_id and name"
+        )
     return [
         PendingToolAction(
-            call_id=payload.call_id or "",
-            name=payload.name or "",
+            call_id=call_id,
+            name=name,
             summary=(
                 str(payload.summary)
                 if payload.summary is not None
@@ -141,7 +151,6 @@ def classify_interrupt_value(
             approval_index=action_index_base,
         )
     ]
-
 
 def parse_pending_tool_actions(
     interrupts: list[Any],

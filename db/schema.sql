@@ -186,6 +186,7 @@ CREATE TABLE IF NOT EXISTS chat_conversations (
   active_turn_id VARCHAR(64),
   active_turn_started_at TIMESTAMPTZ,
   selected_expert_key VARCHAR(128),
+  upgrade_invite_declined BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -810,3 +811,111 @@ CREATE INDEX IF NOT EXISTS idx_workshop_schedule_runs_project_created
 
 ALTER TABLE chat_conversations
   ADD COLUMN IF NOT EXISTS selected_expert_key VARCHAR(128);
+
+ALTER TABLE chat_conversations
+  ADD COLUMN IF NOT EXISTS upgrade_invite_declined BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS chat_upgrade_invite_proposals (
+  id BIGSERIAL PRIMARY KEY,
+  conversation_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  expert_keys JSONB NOT NULL,
+  primary_expert_key VARCHAR(128) NOT NULL,
+  rationale TEXT NOT NULL,
+  host_narration TEXT NOT NULL DEFAULT '',
+  source_user_text TEXT NOT NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'pending',
+  turn_id VARCHAR(64),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_upgrade_invite_proposals_conversation_user
+    FOREIGN KEY (conversation_id, user_id)
+    REFERENCES chat_conversations(id, user_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_upgrade_invite_proposals_conversation_status
+  ON chat_upgrade_invite_proposals (conversation_id, status);
+
+ALTER TABLE chat_upgrade_invite_proposals
+  ADD COLUMN IF NOT EXISTS host_narration TEXT NOT NULL DEFAULT '';
+
+DROP TRIGGER IF EXISTS trg_chat_upgrade_invite_proposals_updated_at ON chat_upgrade_invite_proposals;
+CREATE TRIGGER trg_chat_upgrade_invite_proposals_updated_at
+BEFORE UPDATE ON chat_upgrade_invite_proposals
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+-- billing: Creem one-time credit packs
+
+CREATE TABLE IF NOT EXISTS billing_orders (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  pack_key VARCHAR(32) NOT NULL,
+  credits INTEGER NOT NULL,
+  price_usd_cents INTEGER NOT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'pending',
+  request_id VARCHAR(128) NOT NULL,
+  creem_product_id VARCHAR(128) NOT NULL,
+  creem_checkout_id VARCHAR(128),
+  creem_order_id VARCHAR(128),
+  paid_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uk_billing_orders_request_id UNIQUE (request_id),
+  CONSTRAINT ck_billing_orders_credits_positive CHECK (credits > 0),
+  CONSTRAINT ck_billing_orders_price_positive CHECK (price_usd_cents > 0),
+  CONSTRAINT ck_billing_orders_status CHECK (status IN ('pending', 'paid'))
+);
+
+DROP TRIGGER IF EXISTS trg_billing_orders_updated_at ON billing_orders;
+CREATE TRIGGER trg_billing_orders_updated_at
+BEFORE UPDATE ON billing_orders
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+CREATE INDEX IF NOT EXISTS idx_billing_orders_user_status
+  ON billing_orders (user_id, status);
+CREATE INDEX IF NOT EXISTS idx_billing_orders_creem_checkout
+  ON billing_orders (creem_checkout_id);
+
+CREATE TABLE IF NOT EXISTS billing_credit_balances (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  balance BIGINT NOT NULL DEFAULT 0,
+  version INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uk_billing_credit_balances_user UNIQUE (user_id),
+  CONSTRAINT ck_billing_credit_balances_nonneg CHECK (balance >= 0)
+);
+
+DROP TRIGGER IF EXISTS trg_billing_credit_balances_updated_at ON billing_credit_balances;
+CREATE TRIGGER trg_billing_credit_balances_updated_at
+BEFORE UPDATE ON billing_credit_balances
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+CREATE TABLE IF NOT EXISTS billing_credit_ledger (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  order_id BIGINT NOT NULL,
+  event_id VARCHAR(128) NOT NULL,
+  delta INTEGER NOT NULL,
+  balance_after BIGINT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uk_billing_credit_ledger_event UNIQUE (event_id),
+  CONSTRAINT ck_billing_credit_ledger_delta_positive CHECK (delta > 0),
+  CONSTRAINT fk_billing_credit_ledger_order
+    FOREIGN KEY (order_id) REFERENCES billing_orders(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_billing_credit_ledger_user_created
+  ON billing_credit_ledger (user_id, created_at, id);
+
+CREATE TABLE IF NOT EXISTS billing_webhook_events (
+  id BIGSERIAL PRIMARY KEY,
+  event_id VARCHAR(128) NOT NULL,
+  event_type VARCHAR(64) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uk_billing_webhook_events_event UNIQUE (event_id)
+);

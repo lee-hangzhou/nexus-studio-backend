@@ -8,6 +8,7 @@ from typing import cast
 from langchain_core.messages import AIMessage, ToolMessage
 
 from app.agent.chat.agent.events import AgentEvent, AgentEventType
+from app.agent.chat.tools.judgment_gate import is_upgrade_protocol_tool
 from app.agent.chat.tools.lc_tools import ChatToolContext
 from app.agent.chat.tools.result import ToolResult, ToolResultProtocolError
 from app.agent.chat.tools.ui_preview import sanitize_tool_step_preview
@@ -184,6 +185,9 @@ class TurnAgentEventRecorder:
                 stream=self.observation.stream_meta,
             ),
         )
+        # 判断工具是协议信号，不进入用户可见 tool_steps 时间线
+        if is_upgrade_protocol_tool(event.tool_name):
+            return
         self.tool_steps.append(
             ToolStepMetadata(
                 call_id=call_id,

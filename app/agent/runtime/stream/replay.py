@@ -643,7 +643,11 @@ class ReplayFramePublisher:
         raise error
 
     def _observe(self, frame: StreamFrame) -> None:
-        if frame.type in (StreamFrameType.TOOL_PENDING, StreamFrameType.USER_GATE_REQUIRED):
+        if frame.type in (
+            StreamFrameType.TOOL_PENDING,
+            StreamFrameType.USER_GATE_REQUIRED,
+            StreamFrameType.UPGRADE_INVITE_PROPOSED,
+        ):
             self.saw_pending = True
         elif frame.type == StreamFrameType.DONE and self.terminal_status is None:
             self.terminal_status = ReplayStatus.COMPLETED

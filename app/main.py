@@ -48,6 +48,8 @@ def create_app() -> FastAPI:
             f"{settings.API_V1_PREFIX}/health",
             f"{settings.API_V1_PREFIX}/gateway/callbacks",
             f"{settings.API_V1_PREFIX}/generate/callback",
+            f"{settings.API_V1_PREFIX}/billing/webhook",
+            f"{settings.API_V1_PREFIX}/billing/packs",
         ],
     )
 

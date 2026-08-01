@@ -17,6 +17,7 @@ from langgraph.graph.state import CompiledStateGraph
 from app.agent.chat.turn.empty_recovery import recover_empty_answer
 from app.agent.chat.turn.event_recorder import TurnAgentEventRecorder
 from app.agent.chat.turn.gate_emit import has_pending_user_gate
+from app.agent.chat.turn.upgrade_invite_emit import has_pending_upgrade_invite
 from app.agent.chat.turn.guards import TurnGuards
 from app.agent.chat.turn.persistence import TurnPersistence, finalize_assistant
 from app.agent.chat.turn.trace import log_stage
@@ -82,6 +83,10 @@ class ChatRecoveryHook:
         # Must return INTERRUPTED before empty_recovery / GATEWAY_UPSTREAM_FAILED.
         # Gate SSE is emitted on TurnCompleted → Chat persistence (force_interrupted).
         if self.agent is not None and await has_pending_user_gate(self.agent, self.config):
+            return TurnTerminatedBy.INTERRUPTED
+        if self.agent is not None and await has_pending_upgrade_invite(
+            self.agent, self.config
+        ):
             return TurnTerminatedBy.INTERRUPTED
         if self.recorder.last_invalid_tool_calls and not (
             last is not None and last.tool_calls

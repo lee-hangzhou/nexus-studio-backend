@@ -22,8 +22,18 @@ from app.agent.chat.expert_turn import (
     profile_tool_names_for_chat,
 )
 from app.agent.chat.tools.build_turn_tools import build_chat_turn_tools
+from app.agent.chat.tools.judgment_gate import UpgradeInviteGateState
+from app.agent.chat.tools.judgment_tools import (
+    build_judgment_tools,
+    wrap_tools_with_judgment_gate,
+)
 from app.agent.chat.tools.lc_tools import ChatToolContext
 from app.agent.chat.tools.ui_preview import sanitize_tool_step_preview
+from app.agent.workshop.mechanism import (
+    WorkshopMechanismSurface,
+    assemble_workshop_mechanism_skills_block,
+    format_invite_directory_prompt,
+)
 from app.agent.chat.turn.checkpoint import (
     capture_turn_checkpoint_messages,
     repair_chat_checkpoint_if_needed,
@@ -218,6 +228,12 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
         attachments=usage_collector.attachments,
     )
     loop_guard = TurnToolLoopGuard(surface=SkillSurface.CHAT)
+    selected_expert_key = ctx.conversation.selected_expert_key
+    # 未选专家的单 Agent：判断门闩优先；已选专家则用户已指定身份，不强制升级判断
+    declined = bool(ctx.conversation.upgrade_invite_declined)
+    judgment_gate = UpgradeInviteGateState(
+        upgrade_invite_declined=declined,
+    )
     tool_ctx = ChatToolContext(
         user_id=ctx.user_id,
         conversation_id=ctx.conversation_id,
@@ -226,7 +242,34 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
         guards=guards,
         cancel_event=ctx.cancel_event,
         loop_guard=loop_guard,
+        judgment_gate=judgment_gate,
+        source_user_text=compiled.human_message,
     )
+    mount_judgment_tools = selected_expert_key is None
+    if mount_judgment_tools:
+
+        async def _create_upgrade_invite(
+            *,
+            expert_keys: tuple[str, ...],
+            primary_expert_key: str,
+            rationale: str,
+            host_narration: str,
+        ):
+            """经 UpgradeInvite Port 创建升级邀请提案"""
+            from app.agent.runtime.ports import get_upgrade_invite_port
+
+            return await get_upgrade_invite_port().create_proposal(
+                user_id=ctx.user_id,
+                conversation_id=ctx.conversation_id,
+                turn_id=ctx.turn_id,
+                source_user_text=compiled.human_message,
+                expert_keys=expert_keys,
+                primary_expert_key=primary_expert_key,
+                rationale=rationale,
+                host_narration=host_narration,
+            )
+
+        tool_ctx.create_upgrade_invite = _create_upgrade_invite
     plan_enable_tools = ctx.enable_tools and turn_ctx.enable_tools
     asset_media_types = {
         asset.asset_id: asset.media_type for asset in compiled.tool_asset_index
@@ -238,8 +281,24 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
         tool_asset_ids=frozenset(compiled.tool_asset_ids),
         asset_media_types=asset_media_types,
     )
-    selected_expert_key = getattr(ctx.conversation, "selected_expert_key", None)
     expert_identity_block = ""
+    mechanism_skills_block = ""
+    if mount_judgment_tools and plan_enable_tools:
+        tools = list(tools) + build_judgment_tools(tool_ctx)
+        tools = wrap_tools_with_judgment_gate(tool_ctx, tools)
+        declined_block = None
+        if declined:
+            declined_block = (
+                "用户此前已拒绝升级邀请：禁止主动调用 propose_upgrade_and_invite；"
+                "仅当本回合用户明确要求升级或邀请专家时才可调用，"
+                "且必须传 user_explicitly_requested=true；"
+                "普通问答直接回答或使用执行工具，无需再提议升级"
+            )
+        mechanism_skills_block = assemble_workshop_mechanism_skills_block(
+            surface=WorkshopMechanismSurface.CHAT_DUAL_MODE,
+            invite_directory_block=format_invite_directory_prompt(),
+            declined_upgrade_block=declined_block,
+        )
     if selected_expert_key:
         allowed_names = profile_tool_names_for_chat(selected_expert_key)
         tools = intersect_chat_tools_with_profile(tools, allowed_names)
@@ -313,6 +372,12 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
     )
     if expert_identity_block:
         system_prompt = f"{expert_identity_block}\n\n{system_prompt}"
+    if not mechanism_skills_block:
+        # 无双形态判断挂载时仍注入回复边界
+        mechanism_skills_block = assemble_workshop_mechanism_skills_block(
+            surface=WorkshopMechanismSurface.CHAT_EXPERT,
+        )
+    system_prompt = f"{mechanism_skills_block}\n\n{system_prompt}"
     spec = get_model_spec(ctx.model_key)
     turn_human = HumanMessage(content=compiled.human_message)
     bind_attachment_ids = await chat_attachment_service.attachment_ids_for_asset_ids(

@@ -99,6 +99,8 @@ from app.contracts.workshop import (
     WorkshopCompleteScheduledRunRequest,
     WorkshopConfirmCustomExpertRequest,
     WorkshopConfirmTaskProposalRequest,
+    WorkshopConfirmUpgradeInviteRequest,
+    WorkshopConfirmUpgradeInviteResultView,
     WorkshopConfirmWorkflowRequest,
     ChatSelectedExpertView,
     ClearChatSelectedExpertRequest,
@@ -119,6 +121,9 @@ from app.contracts.workshop import (
     WorkshopDataSourceStatus,
     WorkshopDeclineCustomExpertRequest,
     WorkshopDeclineTaskProposalRequest,
+    WorkshopDeclineUpgradeInviteRequest,
+    WorkshopGetPendingUpgradeInviteRequest,
+    WorkshopPendingUpgradeInviteResponse,
     WorkshopDraftWorkflowRequest,
     WorkshopEventListResponse,
     WorkshopEventView,
@@ -158,6 +163,8 @@ from app.contracts.workshop import (
     WorkshopTaskView,
     WorkshopTriggerScheduleRequest,
     WorkshopUnassignTaskExpertRequest,
+    WorkshopUpgradeInviteExpertView,
+    WorkshopUpgradeInviteProposedView,
     WorkshopUpgradeRequest,
     WorkshopUpgradeFromTeamRequest,
     WorkshopUpgradeFromExpertRequest,
@@ -170,6 +177,14 @@ from app.contracts.workshop import (
     WorkshopWorkflowListResponse,
     WorkshopWorkflowStepView,
     WorkshopWorkflowView,
+)
+from app.server.billing.schemas.http import (
+    CreateCheckoutRequest,
+    CreateCheckoutResponse,
+    CreditBalanceResponse,
+    CreditPackListResponse,
+    CreditPackView,
+    WebhookApplyResponse,
 )
 from app.server.generation.schemas import (
     GenerateModelItem,
@@ -205,6 +220,15 @@ GenerationContracts = Annotated[
     | GenerateTaskListResponse
     | GenerateModelItem
     | GenerateParamOptions,
+    Field(union_mode="left_to_right"),
+]
+BillingContracts = Annotated[
+    CreditPackView
+    | CreditPackListResponse
+    | CreateCheckoutRequest
+    | CreateCheckoutResponse
+    | CreditBalanceResponse
+    | WebhookApplyResponse,
     Field(union_mode="left_to_right"),
 ]
 GatewayContracts = Annotated[
@@ -341,11 +365,19 @@ WorkshopContracts = Annotated[
     | WorkshopUpgradeFromTeamRequest
     | WorkshopUpgradeFromExpertRequest
     | WorkshopTeamSelectRequiresUpgradeView
-    | WorkshopTurnTarget,
+    | WorkshopTurnTarget
+    | WorkshopUpgradeInviteExpertView
+    | WorkshopUpgradeInviteProposedView
+    | WorkshopConfirmUpgradeInviteRequest
+    | WorkshopDeclineUpgradeInviteRequest
+    | WorkshopGetPendingUpgradeInviteRequest
+    | WorkshopPendingUpgradeInviteResponse
+    | WorkshopConfirmUpgradeInviteResultView,
     Field(union_mode="left_to_right"),
 ]
 
 CONTRACTS: dict[str, TypeAdapter[Any]] = {
+    "billing": TypeAdapter(BillingContracts),
     "canvas": TypeAdapter(CanvasContracts),
     "ecommerce": TypeAdapter(EcommerceContracts),
     "generation": TypeAdapter(GenerationContracts),

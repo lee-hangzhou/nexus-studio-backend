@@ -9,7 +9,13 @@ from app.agent.chat.conversation_title import (
 )
 from app.agent.chat.stream.frames import StreamFrameType, create_stream_frame
 from app.agent.chat.turn.gate_emit import emit_user_gates, has_pending_user_gate
+from app.agent.chat.turn.upgrade_invite_emit import (
+    emit_upgrade_invite_proposals,
+    has_pending_upgrade_invite,
+)
+from app.agent.chat.turn.upgrade_invite_checkpoint import finalize_upgrade_invite_checkpoint
 from app.agent.chat.turn.gate_suspend import persist_gate_suspend_tool_results
+from app.agent.chat.turn.lifecycle import clear_turn_active
 from app.agent.chat.turn.persistence import finalize_assistant, finalize_published_deliverables
 from app.agent.chat.turn.session import ChatTurnSession
 from app.agent.runtime.turn.enums import TurnTerminatedBy
@@ -26,6 +32,21 @@ from app.contracts.metadata import AssistantMessageMetadata, ToolRecoveryMetadat
 from app.server.chat.domain.stream_enums import TerminationReason
 from app.server.infra.config import settings
 from app.server.infra.logger import logger
+
+
+def _is_internal_exception_text(text: str) -> bool:
+    """识别不应落用户可见助手正文的内部异常文案"""
+    lowered = (text or "").lower()
+    markers = (
+        "validation error",
+        "traceback",
+        "pydantic",
+        "permissionerror",
+        "typeerror",
+        "valueerror",
+        "for further information visit https://errors.pydantic",
+    )
+    return any(marker in lowered for marker in markers)
 
 
 class ChatPersistenceSubscriber:
@@ -53,11 +74,28 @@ class ChatPersistenceSubscriber:
                 message=None,
             )
             if session.agent is not None and session.runnable_config is not None:
-                await persist_gate_suspend_tool_results(
-                    agent=session.agent,
-                    config=session.runnable_config,
-                    observation=session.observation,
+                emitted = await emit_upgrade_invite_proposals(
+                    session.agent,
+                    session.runnable_config,
+                    emit,
+                    turn_id=session.turn_id,
                 )
+                if emitted:
+                    await clear_turn_active(session.conversation)
+                    await finalize_upgrade_invite_checkpoint(
+                        session.agent,
+                        session.runnable_config,
+                        conversation_id=session.conversation_id,
+                        turn_id=session.turn_id,
+                    )
+                    if session.recovery_hook is not None:
+                        session.recovery_hook.force_interrupted = True
+                else:
+                    await persist_gate_suspend_tool_results(
+                        agent=session.agent,
+                        config=session.runnable_config,
+                        observation=session.observation,
+                    )
             return
 
         if isinstance(event, TurnFailed):
@@ -84,6 +122,26 @@ class ChatPersistenceSubscriber:
         fail_message = (
             "模型服务暂时无响应，请重试" if gateway_error else (event.error or "turn failed")
         )
+        if (not gateway_error) and _is_internal_exception_text(fail_message):
+            # 内部异常不落助手气泡；由 SSE ERROR 帧表达可重试，留给后续模型回合消化
+            logger.error(
+                "chat.stream_turn.internal_error_not_persisted_as_assistant",
+                conversation_id=session.conversation_id,
+                turn_id=session.turn_id,
+                error_class=event.error_class,
+                error=fail_message,
+            )
+            session.usage_collector.note_failure(message=fail_message)
+            reason = (
+                termination_reason_for(event.error_class)
+                if event.error_class
+                else TerminationReason.ERROR
+            )
+            session.terminated_by = reason
+            session.usage_collector.note_termination(
+                terminated_by=reason, message=fail_message
+            )
+            return
         await session.persistence.persist_turn_error(
             turn_id=session.turn_id,
             step_index=event.step_index or 0,
@@ -164,6 +222,40 @@ class ChatPersistenceSubscriber:
                 workspace=session.workspace,
             )
             if session.gate_interrupted:
+                await persist_gate_suspend_tool_results(
+                    agent=session.agent,
+                    config=session.runnable_config,
+                    observation=session.observation,
+                )
+                session.terminated_by = TerminationReason.INTERRUPTED
+                session.recovery_hook.force_interrupted = True
+                session.usage_collector.note_termination(
+                    terminated_by=TerminationReason.INTERRUPTED,
+                    message=None,
+                )
+                return
+
+        if (
+            not session.recorder.final_persisted
+            and session.agent is not None
+            and session.runnable_config is not None
+            and await has_pending_upgrade_invite(session.agent, session.runnable_config)
+        ):
+            emitted = await emit_upgrade_invite_proposals(
+                session.agent,
+                session.runnable_config,
+                emit,
+                turn_id=session.turn_id,
+            )
+            if emitted:
+                session.gate_interrupted = True
+                await clear_turn_active(session.conversation)
+                await finalize_upgrade_invite_checkpoint(
+                    session.agent,
+                    session.runnable_config,
+                    conversation_id=session.conversation_id,
+                    turn_id=session.turn_id,
+                )
                 await persist_gate_suspend_tool_results(
                     agent=session.agent,
                     config=session.runnable_config,

@@ -256,6 +256,16 @@ class Settings(BaseSettings):
     CANVAS_TURN_CANCEL_WAIT_SEC: float = Field(default=12.0, gt=0)
     CHAT_TURN_CANCEL_WAIT_SEC: float = Field(default=12.0, gt=0)
 
+    # Creem one-time credit packs（密钥仅服务端；product_id 按档位配置）
+    CREEM_API_KEY: str = Field(default="")
+    CREEM_WEBHOOK_SECRET: str = Field(default="")
+    CREEM_API_BASE_URL: str = Field(default="https://test-api.creem.io")
+    CREEM_PRODUCT_ID_USD_5: str = Field(default="")
+    CREEM_PRODUCT_ID_USD_15: str = Field(default="")
+    CREEM_PRODUCT_ID_USD_50: str = Field(default="")
+    CREEM_PRODUCT_ID_USD_100: str = Field(default="")
+    CREEM_SUCCESS_URL: str = Field(default="")
+
     # Workshop schedule ticker（秒为单位；PostgreSQL claim 保证多副本安全）
     WORKSHOP_SCHEDULE_TICKER_ENABLED: bool = Field(default=True)
     WORKSHOP_SCHEDULE_TICK_INTERVAL_SEC: float = Field(default=30.0, gt=0, le=3600)

@@ -4,6 +4,7 @@ TORTOISE_ORM_MODEL_MODULES = [
     "app.server.chat.persistence.attachments",
     "app.server.chat.persistence.conversations",
     "app.server.chat.persistence.messages",
+    "app.server.chat.persistence.upgrade_invite_proposals",
     "app.server.canvas.persistence.edges",
     "app.server.canvas.persistence.messages",
     "app.server.canvas.persistence.nodes",
@@ -15,6 +16,7 @@ TORTOISE_ORM_MODEL_MODULES = [
     "app.server.auth.persistence.user",
     "app.server.skills.persistence.entries",
     "app.server.workshop.persistence.models",
+    "app.server.billing.persistence.models",
 ]
 
 __all__ = ["TORTOISE_ORM_MODEL_MODULES"]

@@ -60,6 +60,7 @@ class StreamFrameType(StrEnum):
     GENERATION_PROGRESS = "generation_progress"
     TOOL_PENDING = "tool_pending"
     USER_GATE_REQUIRED = "user_gate_required"
+    UPGRADE_INVITE_PROPOSED = "upgrade_invite_proposed"
     BROWSER_BLOCKED = "browser_blocked"
     BROWSER_FRAME = "browser_frame"
 

@@ -1,12 +1,22 @@
 from __future__ import annotations
 
-from app.server.ports.product import AssetsPort, CanvasPort, ChatPort, GenerationPort, UserSkillPort
+from app.server.ports.product import (
+    AssetsPort,
+    CanvasPort,
+    ChatPort,
+    GenerationPort,
+    UpgradeInvitePort,
+    UserSkillPort,
+    WorkshopPort,
+)
 
 _generation: GenerationPort | None = None
 _canvas: CanvasPort | None = None
 _chat: ChatPort | None = None
 _assets: AssetsPort | None = None
 _user_skills: UserSkillPort | None = None
+_workshop: WorkshopPort | None = None
+_upgrade_invite: UpgradeInvitePort | None = None
 
 
 def configure_ports(
@@ -16,14 +26,18 @@ def configure_ports(
     chat: ChatPort,
     assets: AssetsPort,
     user_skills: UserSkillPort,
+    workshop: WorkshopPort,
+    upgrade_invite: UpgradeInvitePort,
 ) -> None:
     """注入 agent 运行时 Port 句柄"""
-    global _generation, _canvas, _chat, _assets, _user_skills
+    global _generation, _canvas, _chat, _assets, _user_skills, _workshop, _upgrade_invite
     _generation = generation
     _canvas = canvas
     _chat = chat
     _assets = assets
     _user_skills = user_skills
+    _workshop = workshop
+    _upgrade_invite = upgrade_invite
 
 
 def get_generation_port() -> GenerationPort:
@@ -59,3 +73,17 @@ def get_user_skill_port() -> UserSkillPort:
     if _user_skills is None:
         raise RuntimeError("user skill port not configured")
     return _user_skills
+
+
+def get_workshop_port() -> WorkshopPort:
+    """获取工坊 Port"""
+    if _workshop is None:
+        raise RuntimeError("workshop port not configured")
+    return _workshop
+
+
+def get_upgrade_invite_port() -> UpgradeInvitePort:
+    """获取升级邀请 Port"""
+    if _upgrade_invite is None:
+        raise RuntimeError("upgrade invite port not configured")
+    return _upgrade_invite

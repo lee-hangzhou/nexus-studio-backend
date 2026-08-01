@@ -11,6 +11,7 @@ class ChatConversations(BaseModel):
     active_turn_id = fields.CharField(max_length=64, null=True)
     active_turn_started_at = fields.DatetimeField(null=True)
     selected_expert_key = fields.CharField(max_length=128, null=True)
+    upgrade_invite_declined = fields.BooleanField(null=False, default=False)
 
     class Meta(BaseModel.Meta):
         table = "chat_conversations"

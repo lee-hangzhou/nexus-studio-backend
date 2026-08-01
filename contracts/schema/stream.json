@@ -2302,6 +2302,101 @@
       "title": "ToolStartFrame",
       "type": "object"
     },
+    "UpgradeInviteExpertFrameItem": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "name"
+      ],
+      "title": "UpgradeInviteExpertFrameItem",
+      "type": "object"
+    },
+    "UpgradeInviteProposedFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "conversation_id": {
+          "minimum": 1,
+          "title": "Conversation Id",
+          "type": "integer"
+        },
+        "expert_keys": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Expert Keys",
+          "type": "array"
+        },
+        "experts": {
+          "items": {
+            "$ref": "#/$defs/UpgradeInviteExpertFrameItem"
+          },
+          "minItems": 1,
+          "title": "Experts",
+          "type": "array"
+        },
+        "primary_expert_key": {
+          "minLength": 1,
+          "title": "Primary Expert Key",
+          "type": "string"
+        },
+        "proposal_id": {
+          "minimum": 1,
+          "title": "Proposal Id",
+          "type": "integer"
+        },
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "upgrade_invite_proposed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "turn_id",
+        "proposal_id",
+        "conversation_id",
+        "expert_keys",
+        "primary_expert_key",
+        "rationale",
+        "experts"
+      ],
+      "title": "UpgradeInviteProposedFrame",
+      "type": "object"
+    },
     "UserGateRequiredFrame": {
       "additionalProperties": false,
       "properties": {
@@ -2506,6 +2601,7 @@
       "tool_end": "#/$defs/ToolEndFrame",
       "tool_pending": "#/$defs/ToolPendingFrame",
       "tool_start": "#/$defs/ToolStartFrame",
+      "upgrade_invite_proposed": "#/$defs/UpgradeInviteProposedFrame",
       "user_gate_required": "#/$defs/UserGateRequiredFrame"
     },
     "propertyName": "type"
@@ -2549,6 +2645,9 @@
     },
     {
       "$ref": "#/$defs/UserGateRequiredFrame"
+    },
+    {
+      "$ref": "#/$defs/UpgradeInviteProposedFrame"
     },
     {
       "$ref": "#/$defs/BrowserBlockedFrame"

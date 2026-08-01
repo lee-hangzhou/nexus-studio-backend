@@ -110,7 +110,7 @@ docker-browser-build:
 docker-images-build: docker-backend-build docker-sandbox-build docker-browser-build
 
 docker-config-check:
-	@test -f deploy/.env.prod || cp deploy/.env.prod.example deploy/.env.prod
+	@test -f deploy/.env.prod
 	$(DOCKER_COMPOSE) config --quiet
 
 docker-config:

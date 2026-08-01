@@ -56,19 +56,25 @@ from app.server.ports.product import (
     ObservedGenerationDTO,
     ProjectPromptContextDTO,
     SelectedSkillDTO,
+    UpgradeInvitePort,
+    UpgradeInviteProposalDTO,
     UserSkillPort,
+    WorkshopPort,
+    WorkshopRosterExpertDTO,
 )
 from app.server.skills.domain.enums import SkillScope, SkillSurface
 from app.server.skills.domain.models import SelectedSkill
 from app.server.skills.services.service import UserSkillService
 from app.server.assets.persistence.repository import AssetRepository
 from app.server.chat.persistence.attachment_repository import ChatAttachmentRepository
+from app.server.chat.services.upgrade_invite import UpgradeInviteService
 from app.server.generation.schemas import (
     GenerateMaterialUploadResponse,
     GenerateModelsResponse,
     GenerateTaskSubmitResponse,
     SubmitGenerateRequest,
 )
+from app.server.workshop.services.workshop_project_service import WorkshopProjectService
 
 
 _OPTIONAL_JSON_OBJECT = TypeAdapter(dict[str, Any] | None)
@@ -879,3 +885,85 @@ def _selected_skill_dto(item: SelectedSkill) -> SelectedSkillDTO:
         description=item.description,
         revision=item.revision,
     )
+
+
+class WorkshopPortAdapter:
+    """工坊项目 Port 适配器"""
+
+    def __init__(self, service: WorkshopProjectService) -> None:
+        """注入工坊项目服务"""
+        self._service = service
+
+    async def add_preset_to_roster(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        preset_key: str,
+    ) -> WorkshopRosterExpertDTO:
+        """将预置专家加入名册"""
+        expert = await self._service.add_preset_to_roster(
+            project_id=project_id,
+            user_id=user_id,
+            preset_key=preset_key,
+        )
+        return WorkshopRosterExpertDTO(
+            id=expert.id,
+            name=expert.name,
+            preset_key=expert.preset_key,
+        )
+
+    async def invite_to_room(
+        self, *, project_id: str, user_id: int, expert_id: str
+    ) -> None:
+        """邀请专家进房"""
+        await self._service.invite_to_room(
+            project_id=project_id, user_id=user_id, expert_id=expert_id
+        )
+
+    async def room_members(self, *, project_id: str, user_id: int) -> frozenset[str]:
+        """列出房间在场专家 id"""
+        members = await self._service.room_members(
+            project_id=project_id, user_id=user_id
+        )
+        return frozenset(members)
+
+
+class UpgradeInvitePortAdapter:
+    """升级邀请 Port 适配器"""
+
+    def __init__(self, service: UpgradeInviteService) -> None:
+        """注入升级邀请服务"""
+        self._service = service
+
+    async def create_proposal(
+        self,
+        *,
+        user_id: int,
+        conversation_id: int,
+        turn_id: str,
+        source_user_text: str,
+        expert_keys: tuple[str, ...],
+        primary_expert_key: str,
+        rationale: str,
+        host_narration: str,
+    ) -> UpgradeInviteProposalDTO:
+        """创建待确认升级邀请提议"""
+        record = await self._service.create_proposal(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            turn_id=turn_id,
+            source_user_text=source_user_text,
+            expert_keys=expert_keys,
+            primary_expert_key=primary_expert_key,
+            rationale=rationale,
+            host_narration=host_narration,
+        )
+        return UpgradeInviteProposalDTO(
+            id=record.id,
+            conversation_id=record.conversation_id,
+            expert_keys=record.expert_keys,
+            primary_expert_key=record.primary_expert_key,
+            rationale=record.rationale,
+            host_narration=record.host_narration,
+        )

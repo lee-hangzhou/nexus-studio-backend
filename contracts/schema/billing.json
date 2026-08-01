@@ -1,0 +1,200 @@
+{
+  "$defs": {
+    "CreateCheckoutRequest": {
+      "properties": {
+        "pack_key": {
+          "$ref": "#/$defs/CreditPackKey"
+        }
+      },
+      "required": [
+        "pack_key"
+      ],
+      "title": "CreateCheckoutRequest",
+      "type": "object"
+    },
+    "CreateCheckoutResponse": {
+      "properties": {
+        "checkout_url": {
+          "title": "Checkout Url",
+          "type": "string"
+        },
+        "credits": {
+          "title": "Credits",
+          "type": "integer"
+        },
+        "order_id": {
+          "title": "Order Id",
+          "type": "integer"
+        },
+        "pack_key": {
+          "$ref": "#/$defs/CreditPackKey"
+        },
+        "price_usd_cents": {
+          "title": "Price Usd Cents",
+          "type": "integer"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "order_id",
+        "request_id",
+        "pack_key",
+        "credits",
+        "price_usd_cents",
+        "checkout_url"
+      ],
+      "title": "CreateCheckoutResponse",
+      "type": "object"
+    },
+    "CreditBalanceResponse": {
+      "properties": {
+        "balance": {
+          "minimum": 0,
+          "title": "Balance",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "balance"
+      ],
+      "title": "CreditBalanceResponse",
+      "type": "object"
+    },
+    "CreditPackKey": {
+      "enum": [
+        "usd_5",
+        "usd_15",
+        "usd_50",
+        "usd_100"
+      ],
+      "title": "CreditPackKey",
+      "type": "string"
+    },
+    "CreditPackListResponse": {
+      "properties": {
+        "credits_per_usd": {
+          "minimum": 1,
+          "title": "Credits Per Usd",
+          "type": "integer"
+        },
+        "packs": {
+          "items": {
+            "$ref": "#/$defs/CreditPackView"
+          },
+          "title": "Packs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "packs",
+        "credits_per_usd"
+      ],
+      "title": "CreditPackListResponse",
+      "type": "object"
+    },
+    "CreditPackView": {
+      "properties": {
+        "available": {
+          "title": "Available",
+          "type": "boolean"
+        },
+        "credits": {
+          "minimum": 1,
+          "title": "Credits",
+          "type": "integer"
+        },
+        "key": {
+          "$ref": "#/$defs/CreditPackKey"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "price_usd_cents": {
+          "minimum": 1,
+          "title": "Price Usd Cents",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "price_usd_cents",
+        "credits",
+        "available"
+      ],
+      "title": "CreditPackView",
+      "type": "object"
+    },
+    "WebhookApplyResponse": {
+      "properties": {
+        "balance_after": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Balance After"
+        },
+        "credits_granted": {
+          "default": 0,
+          "title": "Credits Granted",
+          "type": "integer"
+        },
+        "event_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Event Id"
+        },
+        "status": {
+          "enum": [
+            "applied",
+            "duplicate",
+            "ignored"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "WebhookApplyResponse",
+      "type": "object"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/CreditPackView"
+    },
+    {
+      "$ref": "#/$defs/CreditPackListResponse"
+    },
+    {
+      "$ref": "#/$defs/CreateCheckoutRequest"
+    },
+    {
+      "$ref": "#/$defs/CreateCheckoutResponse"
+    },
+    {
+      "$ref": "#/$defs/CreditBalanceResponse"
+    },
+    {
+      "$ref": "#/$defs/WebhookApplyResponse"
+    }
+  ]
+}

@@ -125,6 +125,7 @@ async def stream_workshop_turn(
     cancel_event: asyncio.Event,
     turn_target: WorkshopTurnTarget | None = None,
     selected_skills: tuple[SelectedSkillDTO, ...] | None = None,
+    persist_user_message: bool = True,
 ) -> AsyncIterator[str]:
     """工坊群聊 turn：host idle 或在场专家；未进房专家 fail closed"""
     target = turn_target or WorkshopTurnTarget()
@@ -189,6 +190,37 @@ async def stream_workshop_turn(
         expert_name=expert_name,
         avatar_url=avatar_url,
         selected_skills_text=selected_skills_text,
+        persist_user_message=persist_user_message,
     )
     async for chunk in stream_agent_turn(WORKSHOP_MOUNT, ctx):
         yield chunk
+
+    handoff_id = (
+        ctx.tool_ctx.pending_expert_handoff_id
+        if ctx.tool_ctx is not None
+        else None
+    )
+    if is_host and handoff_id:
+        # 隐式交接：同一用户原话由指定在场专家续答，不重复落库用户消息
+        handoff_target = WorkshopTurnTarget(
+            expert_id=handoff_id,
+            task_id=task_id,
+            speaker_role="expert",
+            persist_user_message=False,
+        )
+        async for chunk in stream_workshop_turn(
+            projects=projects,
+            orchestrator=orchestrator,
+            project=project,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            turn_id=f"{turn_id}-handoff",
+            content=content,
+            model_key=model_key,
+            enable_tools=enable_tools,
+            cancel_event=cancel_event,
+            turn_target=handoff_target,
+            selected_skills=selected_skills,
+            persist_user_message=False,
+        ):
+            yield chunk

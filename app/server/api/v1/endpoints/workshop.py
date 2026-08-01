@@ -4,6 +4,7 @@ from fastapi import APIRouter, Request
 
 from app.composition import (
     chat_selected_expert_service,
+    upgrade_invite_service,
     workshop_project_service,
     workshop_task_orchestrator,
     workshop_workflow_schedule_service,
@@ -35,6 +36,11 @@ from app.contracts.workshop import (
     WorkshopUpgradeFromTeamRequest,
     WorkshopUpgradeFromExpertRequest,
     WorkshopUpgradeResultView,
+    WorkshopConfirmUpgradeInviteRequest,
+    WorkshopConfirmUpgradeInviteResultView,
+    WorkshopDeclineUpgradeInviteRequest,
+    WorkshopGetPendingUpgradeInviteRequest,
+    WorkshopPendingUpgradeInviteResponse,
     WorkshopDraftWorkflowRequest,
     WorkshopEventListResponse,
     WorkshopExpertProposalIdView,
@@ -97,6 +103,7 @@ from app.server.workshop.assembly import (
     scheduled_completion_to_view,
     task_assignment_to_view,
     task_to_view,
+    upgrade_invite_proposal_to_view,
     upgrade_to_view,
     wake_to_view,
     weak_accept_to_view,
@@ -177,6 +184,93 @@ async def upgrade_from_expert(
     except _WORKSHOP_HTTP_ERRORS as exc:
         raise map_workshop_error(exc) from exc
     return Response(data=result)
+
+
+@router.post("/upgrade-invite/pending")
+async def get_pending_upgrade_invite(
+    request: Request, body: WorkshopGetPendingUpgradeInviteRequest
+) -> Response[WorkshopPendingUpgradeInviteResponse]:
+    """读取会话当前 pending 升级邀请；无则 proposal 为 null"""
+    user_id: int = request.state.user_id
+    record = await upgrade_invite_service.get_pending(
+        user_id=user_id,
+        conversation_id=body.conversation_id,
+    )
+    return Response(
+        data=WorkshopPendingUpgradeInviteResponse(
+            proposal=None if record is None else upgrade_invite_proposal_to_view(record)
+        )
+    )
+
+
+@router.post("/upgrade-invite/confirm")
+async def confirm_upgrade_invite(
+    request: Request, body: WorkshopConfirmUpgradeInviteRequest
+) -> Response[WorkshopConfirmUpgradeInviteResultView]:
+    """确认 LLM 升级+邀请提议：建项、进房，返回主答专家与 Host 说明"""
+    from app.agent.chat.turn.upgrade_invite_discard import (
+        discard_upgrade_invite_checkpoint_after_resolution,
+    )
+    from app.server.chat.services.upgrade_invite import UpgradeInviteServiceError
+
+    user_id: int = request.state.user_id
+    try:
+        result = await upgrade_invite_service.confirm(
+            user_id=user_id,
+            conversation_id=body.conversation_id,
+            proposal_id=body.proposal_id,
+            expert_keys=tuple(body.expert_keys),
+            primary_expert_key=body.primary_expert_key,
+            project_name=body.project_name,
+            carried_message_count=body.carried_message_count,
+        )
+        await discard_upgrade_invite_checkpoint_after_resolution(
+            user_id=user_id,
+            conversation_id=body.conversation_id,
+        )
+    except UpgradeInviteServiceError as exc:
+        raise AppError(ErrorCode.INVALID_PARAMS, str(exc)) from exc
+    except RuntimeError as exc:
+        raise AppError(ErrorCode.INTERNAL_ERROR, str(exc)) from exc
+    except _WORKSHOP_HTTP_ERRORS as exc:
+        raise map_workshop_error(exc) from exc
+    return Response(
+        data=WorkshopConfirmUpgradeInviteResultView(
+            project=project_to_view(result.upgrade.project),
+            primary_expert_id=result.primary_expert_id,
+            host_narration=result.host_narration,
+            source_user_text=result.source_user_text,
+            carried_message_count=result.upgrade.carried_message_count,
+        )
+    )
+
+
+@router.post("/upgrade-invite/decline")
+async def decline_upgrade_invite(
+    request: Request, body: WorkshopDeclineUpgradeInviteRequest
+) -> Response[WorkshopOkView]:
+    """拒绝升级+邀请提议；本会话不再主动判断"""
+    from app.agent.chat.turn.upgrade_invite_discard import (
+        discard_upgrade_invite_checkpoint_after_resolution,
+    )
+    from app.server.chat.services.upgrade_invite import UpgradeInviteServiceError
+
+    user_id: int = request.state.user_id
+    try:
+        await upgrade_invite_service.decline(
+            user_id=user_id,
+            conversation_id=body.conversation_id,
+            proposal_id=body.proposal_id,
+        )
+        await discard_upgrade_invite_checkpoint_after_resolution(
+            user_id=user_id,
+            conversation_id=body.conversation_id,
+        )
+    except UpgradeInviteServiceError as exc:
+        raise AppError(ErrorCode.INVALID_PARAMS, str(exc)) from exc
+    except RuntimeError as exc:
+        raise AppError(ErrorCode.INTERNAL_ERROR, str(exc)) from exc
+    return Response(data=WorkshopOkView())
 
 
 @router.post("/projects/create")

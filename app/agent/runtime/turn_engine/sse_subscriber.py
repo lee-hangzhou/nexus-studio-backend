@@ -25,6 +25,11 @@ from app.server.chat.domain.stream_enums import StreamErrorCode, TokenChannel, n
 from app.server.infra.config import settings
 from app.server.skills.domain.enums import SkillSurface
 
+# 与 UPGRADE_PROTOCOL_TOOL_NAMES 对齐；不对用户 SSE 时间线暴露
+_HIDDEN_USER_TIMELINE_TOOLS: frozenset[str] = frozenset(
+    {"propose_upgrade_and_invite"}
+)
+
 ToolPreviewFn = Callable[[str, str, bool], str]
 PendingEnrichFn = Callable[
     [str, dict[str, Any] | None],
@@ -98,6 +103,8 @@ class SseTurnSubscriber:
             return
 
         if isinstance(event, ToolStarted):
+            if event.tool_name in _HIDDEN_USER_TIMELINE_TOOLS:
+                return
             await self._emit_frame(
                 emit,
                 type=StreamFrameType.TOOL_START,
@@ -109,6 +116,8 @@ class SseTurnSubscriber:
             return
 
         if isinstance(event, ToolFinished):
+            if event.tool_name in _HIDDEN_USER_TIMELINE_TOOLS:
+                return
             preview = self._preview(
                 event.tool_name,
                 event.tool_result,

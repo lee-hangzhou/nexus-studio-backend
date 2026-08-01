@@ -306,6 +306,64 @@ class ChatPort(Protocol):
     async def get_attachment_storage_key(self, attachment_id: int, user_id: int) -> str | None: ...
 
 
+@dataclass(frozen=True, slots=True)
+class WorkshopRosterExpertDTO:
+    """工坊名册专家 Port DTO"""
+
+    id: str
+    name: str
+    preset_key: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class UpgradeInviteProposalDTO:
+    """升级邀请提议 Port DTO"""
+
+    id: int
+    conversation_id: int
+    expert_keys: tuple[str, ...]
+    primary_expert_key: str
+    rationale: str
+    host_narration: str
+
+
+@runtime_checkable
+class WorkshopPort(Protocol):
+    """工坊项目写用例 Port（agent 经此访问，禁止直引 composition）"""
+
+    async def add_preset_to_roster(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        preset_key: str,
+    ) -> WorkshopRosterExpertDTO: ...
+
+    async def invite_to_room(
+        self, *, project_id: str, user_id: int, expert_id: str
+    ) -> None: ...
+
+    async def room_members(self, *, project_id: str, user_id: int) -> frozenset[str]: ...
+
+
+@runtime_checkable
+class UpgradeInvitePort(Protocol):
+    """未升级会话的升级邀请 Port"""
+
+    async def create_proposal(
+        self,
+        *,
+        user_id: int,
+        conversation_id: int,
+        turn_id: str,
+        source_user_text: str,
+        expert_keys: tuple[str, ...],
+        primary_expert_key: str,
+        rationale: str,
+        host_narration: str,
+    ) -> UpgradeInviteProposalDTO: ...
+
+
 @runtime_checkable
 class AssetsPort(Protocol):
     async def resolve_storage_key(self, asset_id: int, user_id: int) -> str | None: ...

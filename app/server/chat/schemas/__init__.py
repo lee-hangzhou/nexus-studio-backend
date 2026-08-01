@@ -166,6 +166,7 @@ class ConversationView(BaseModel):
     status: int
     is_generating: bool = False
     awaiting_user_gate: bool = False
+    awaiting_upgrade_invite: bool = False
     generating_started_at: datetime | None = None
     created_at: datetime
     updated_at: datetime

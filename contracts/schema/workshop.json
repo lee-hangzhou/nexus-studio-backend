@@ -893,6 +893,89 @@
       "title": "WorkshopConfirmTaskProposalRequest",
       "type": "object"
     },
+    "WorkshopConfirmUpgradeInviteRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "carried_message_count": {
+          "minimum": 0,
+          "title": "Carried Message Count",
+          "type": "integer"
+        },
+        "conversation_id": {
+          "minimum": 1,
+          "title": "Conversation Id",
+          "type": "integer"
+        },
+        "expert_keys": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Expert Keys",
+          "type": "array"
+        },
+        "primary_expert_key": {
+          "minLength": 1,
+          "title": "Primary Expert Key",
+          "type": "string"
+        },
+        "project_name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Project Name",
+          "type": "string"
+        },
+        "proposal_id": {
+          "minimum": 1,
+          "title": "Proposal Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "conversation_id",
+        "proposal_id",
+        "expert_keys",
+        "primary_expert_key",
+        "project_name",
+        "carried_message_count"
+      ],
+      "title": "WorkshopConfirmUpgradeInviteRequest",
+      "type": "object"
+    },
+    "WorkshopConfirmUpgradeInviteResultView": {
+      "additionalProperties": false,
+      "properties": {
+        "carried_message_count": {
+          "minimum": 0,
+          "title": "Carried Message Count",
+          "type": "integer"
+        },
+        "host_narration": {
+          "title": "Host Narration",
+          "type": "string"
+        },
+        "primary_expert_id": {
+          "title": "Primary Expert Id",
+          "type": "string"
+        },
+        "project": {
+          "$ref": "#/$defs/WorkshopProjectView"
+        },
+        "source_user_text": {
+          "title": "Source User Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "primary_expert_id",
+        "host_narration",
+        "source_user_text",
+        "carried_message_count"
+      ],
+      "title": "WorkshopConfirmUpgradeInviteResultView",
+      "type": "object"
+    },
     "WorkshopConfirmWorkflowRequest": {
       "additionalProperties": false,
       "properties": {
@@ -1257,6 +1340,27 @@
       "title": "WorkshopDeclineTaskProposalRequest",
       "type": "object"
     },
+    "WorkshopDeclineUpgradeInviteRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "conversation_id": {
+          "minimum": 1,
+          "title": "Conversation Id",
+          "type": "integer"
+        },
+        "proposal_id": {
+          "minimum": 1,
+          "title": "Proposal Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "conversation_id",
+        "proposal_id"
+      ],
+      "title": "WorkshopDeclineUpgradeInviteRequest",
+      "type": "object"
+    },
     "WorkshopDraftWorkflowRequest": {
       "additionalProperties": false,
       "properties": {
@@ -1394,6 +1498,21 @@
         "proposal_id"
       ],
       "title": "WorkshopExpertProposalIdView",
+      "type": "object"
+    },
+    "WorkshopGetPendingUpgradeInviteRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "conversation_id": {
+          "minimum": 1,
+          "title": "Conversation Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "conversation_id"
+      ],
+      "title": "WorkshopGetPendingUpgradeInviteRequest",
       "type": "object"
     },
     "WorkshopGrantExternalAuthRequest": {
@@ -1634,6 +1753,24 @@
         "items"
       ],
       "title": "WorkshopPendingProposalListResponse",
+      "type": "object"
+    },
+    "WorkshopPendingUpgradeInviteResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "proposal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkshopUpgradeInviteProposedView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "WorkshopPendingUpgradeInviteResponse",
       "type": "object"
     },
     "WorkshopProjectByChatResponse": {
@@ -2445,6 +2582,11 @@
           "default": null,
           "title": "Expert Id"
         },
+        "persist_user_message": {
+          "default": true,
+          "title": "Persist User Message",
+          "type": "boolean"
+        },
         "speaker_role": {
           "anyOf": [
             {
@@ -2559,6 +2701,77 @@
         "team_key"
       ],
       "title": "WorkshopUpgradeFromTeamRequest",
+      "type": "object"
+    },
+    "WorkshopUpgradeInviteExpertView": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "name"
+      ],
+      "title": "WorkshopUpgradeInviteExpertView",
+      "type": "object"
+    },
+    "WorkshopUpgradeInviteProposedView": {
+      "additionalProperties": false,
+      "description": "LLM 提议升级并邀请专家（待用户确认）",
+      "properties": {
+        "conversation_id": {
+          "minimum": 1,
+          "title": "Conversation Id",
+          "type": "integer"
+        },
+        "expert_keys": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Expert Keys",
+          "type": "array"
+        },
+        "experts": {
+          "items": {
+            "$ref": "#/$defs/WorkshopUpgradeInviteExpertView"
+          },
+          "minItems": 1,
+          "title": "Experts",
+          "type": "array"
+        },
+        "primary_expert_key": {
+          "minLength": 1,
+          "title": "Primary Expert Key",
+          "type": "string"
+        },
+        "proposal_id": {
+          "minimum": 1,
+          "title": "Proposal Id",
+          "type": "integer"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposal_id",
+        "conversation_id",
+        "expert_keys",
+        "primary_expert_key",
+        "rationale",
+        "experts"
+      ],
+      "title": "WorkshopUpgradeInviteProposedView",
       "type": "object"
     },
     "WorkshopUpgradeRequest": {
@@ -3069,6 +3282,27 @@
     },
     {
       "$ref": "#/$defs/WorkshopTurnTarget"
+    },
+    {
+      "$ref": "#/$defs/WorkshopUpgradeInviteExpertView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopUpgradeInviteProposedView"
+    },
+    {
+      "$ref": "#/$defs/WorkshopConfirmUpgradeInviteRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopDeclineUpgradeInviteRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopGetPendingUpgradeInviteRequest"
+    },
+    {
+      "$ref": "#/$defs/WorkshopPendingUpgradeInviteResponse"
+    },
+    {
+      "$ref": "#/$defs/WorkshopConfirmUpgradeInviteResultView"
     }
   ]
 }

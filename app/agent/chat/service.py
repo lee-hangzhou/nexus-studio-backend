@@ -24,6 +24,7 @@ from app.contracts.turn_content import TurnUserInput
 from app.agent.chat.workspace import conversation_workspace
 from app.agent.chat.workspace.session import ensure_workspace_session
 from app.agent.chat.gate import session_bridge
+from app.server.chat.services.upgrade_invite import UpgradeInviteService
 from app.agent.chat.gate.pending import get_gate_pending, get_gate_pending_many
 from app.agent.runtime.checkpointer import get_chat_checkpointer
 from app.server.infra.logger import log_exception, logger
@@ -69,9 +70,18 @@ class ChatService:
         query = ChatConversations.filter(user_id=user_id, status=int(ChatConversationStatus.ACTIVE))
         total = await query.count()
         rows = await query.order_by("-updated_at").offset(offset).limit(limit)
-        pending_by_id = await get_gate_pending_many([row.id for row in rows])
+        conversation_ids = [row.id for row in rows]
+        pending_by_id = await get_gate_pending_many(conversation_ids)
+        upgrade_pending_ids = await UpgradeInviteService.conversation_ids_with_pending(
+            user_id=user_id,
+            conversation_ids=conversation_ids,
+        )
         items = [
-            self._to_conversation_view(row, gate_pending=pending_by_id.get(row.id))
+            self._to_conversation_view(
+                row,
+                gate_pending=pending_by_id.get(row.id),
+                awaiting_upgrade_invite=row.id in upgrade_pending_ids,
+            )
             for row in rows
         ]
         return ConversationListResponse(
@@ -82,7 +92,15 @@ class ChatService:
     async def get_conversation(self, user_id: int, conversation_id: int) -> ConversationView:
         row = await self._get_owned_conversation(user_id, conversation_id)
         pending = await get_gate_pending(row.id)
-        return self._to_conversation_view(row, gate_pending=pending)
+        upgrade_pending = await UpgradeInviteService.get_pending(
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
+        return self._to_conversation_view(
+            row,
+            gate_pending=pending,
+            awaiting_upgrade_invite=upgrade_pending is not None,
+        )
 
     async def update_conversation(
         self,
@@ -99,7 +117,15 @@ class ChatService:
             row.default_model = model
         await row.save()
         pending = await get_gate_pending(row.id)
-        return self._to_conversation_view(row, gate_pending=pending)
+        upgrade_pending = await UpgradeInviteService.get_pending(
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
+        return self._to_conversation_view(
+            row,
+            gate_pending=pending,
+            awaiting_upgrade_invite=upgrade_pending is not None,
+        )
 
     async def delete_conversation(self, user_id: int, conversation_id: int) -> None:
         row = await self._get_owned_conversation(user_id, conversation_id)
@@ -136,7 +162,7 @@ class ChatService:
         conversation_id: int,
         model: Optional[str],
     ) -> tuple[ChatConversations, str]:
-        """校验归属与 gate；不抢锁（claim 创建执行时再抢）。"""
+        """校验归属与 gate；不抢锁（claim 创建执行时再抢）"""
         conversation = await self._get_owned_conversation(user_id, conversation_id)
         pending = await get_gate_pending(conversation_id)
         if pending:
@@ -148,6 +174,19 @@ class ChatService:
                     details={"reason": "gate_pending", **pending},
                 )
             await clear_stale_gate_ephemeral(conversation_id, user_id=user_id)
+        upgrade_pending = await UpgradeInviteService.get_pending(
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
+        if upgrade_pending is not None:
+            raise AppError(
+                ErrorCode.CONVERSATION_BUSY,
+                f"conversation {conversation_id} awaiting upgrade invite",
+                details={
+                    "reason": "upgrade_invite_pending",
+                    "proposal_id": upgrade_pending.id,
+                },
+            )
         model_key = require_turn_model(model)
         return conversation, model_key
 
@@ -312,6 +351,9 @@ class ChatService:
                 group_chat_id=conversation_id,
             )
             if project is not None:
+                persist_user = (
+                    True if turn_target is None else turn_target.persist_user_message
+                )
                 async for chunk in stream_workshop_turn(
                     projects=workshop_project_service,
                     orchestrator=workshop_task_orchestrator,
@@ -325,6 +367,7 @@ class ChatService:
                     cancel_event=cancel_event,
                     turn_target=turn_target,
                     selected_skills=selected_skills,
+                    persist_user_message=persist_user,
                 ):
                     yield chunk
                 return
@@ -466,6 +509,7 @@ class ChatService:
         row: ChatConversations,
         *,
         gate_pending: dict | None = None,
+        awaiting_upgrade_invite: bool = False,
     ) -> ConversationView:
         is_generating = bool(getattr(row, "active_turn_id", None))
         return ConversationView(
@@ -477,6 +521,7 @@ class ChatService:
             awaiting_user_gate=bool(
                 gate_pending and str(gate_pending.get("status") or "pending") == "pending"
             ),
+            awaiting_upgrade_invite=awaiting_upgrade_invite,
             generating_started_at=row.active_turn_started_at if is_generating else None,
             created_at=row.created_at,
             updated_at=row.updated_at,

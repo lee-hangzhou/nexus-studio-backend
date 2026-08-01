@@ -32,12 +32,15 @@ from app.contracts.workshop import (
     WorkshopTaskAssignmentView,
     WorkshopTaskView,
     WorkshopUpgradeResultView,
+    WorkshopUpgradeInviteExpertView,
+    WorkshopUpgradeInviteProposedView,
     WorkshopWakeDashboardView,
     WorkshopWeakAcceptResultView,
     WorkshopWorkflowStepView,
     WorkshopWorkflowView,
 )
 from app.server.workshop.domain.ecommerce.authorized_operations import AuthorizedOperation
+from app.server.chat.services.upgrade_invite import UpgradeInviteProposalRecord
 from app.server.workshop.domain.ecommerce.profiles import get_ecom_profile, is_ecom_preset
 from app.server.workshop.domain.enums import (
     WorkshopArtifactStorageType,
@@ -447,6 +450,28 @@ def scheduled_completion_to_view(
     return WorkshopScheduledCompletionResultView(
         task_status=result.task_status,
         event_ids=list(result.event_ids),
+    )
+
+
+def upgrade_invite_proposal_to_view(
+    record: UpgradeInviteProposalRecord,
+) -> WorkshopUpgradeInviteProposedView:
+    """升级邀请提案记录转契约视图"""
+    from app.server.workshop.domain.presets import get_preset
+
+    experts = [
+        WorkshopUpgradeInviteExpertView(key=key, name=get_preset(key).name)
+        for key in record.expert_keys
+    ]
+    if not experts:
+        raise ValueError("upgrade invite proposal requires experts")
+    return WorkshopUpgradeInviteProposedView(
+        proposal_id=record.id,
+        conversation_id=record.conversation_id,
+        expert_keys=list(record.expert_keys),
+        primary_expert_key=record.primary_expert_key,
+        rationale=record.rationale,
+        experts=experts,
     )
 
 

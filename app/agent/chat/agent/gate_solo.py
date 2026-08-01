@@ -6,21 +6,26 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, ToolMessage
 
+from app.agent.chat.tools.judgment_gate import PROPOSE_UPGRADE_AND_INVITE
 from app.agent.chat.tools.result import GATE_BATCH_ISOLATION, ToolResult
 
 GATE_SOLO_TOOL = "request_user_gate"
-_BATCH_ISOLATION_DETAIL = "request_user_gate must be the only tool_call in this model step"
+_SOLO_TOOLS = frozenset({GATE_SOLO_TOOL, PROPOSE_UPGRADE_AND_INVITE})
+_BATCH_ISOLATION_DETAIL = (
+    "request_user_gate / propose_upgrade_and_invite must be the only tool_call in this model step"
+)
 
 
 def batch_violation(tool_calls: list[dict[str, Any]]) -> bool:
+    """含协议 solo 工具时禁止与其它工具同批"""
     if not tool_calls:
         return False
     names = [str(c.get("name") or "") for c in tool_calls]
-    if GATE_SOLO_TOOL not in names:
+    if not any(name in _SOLO_TOOLS for name in names):
         return False
     if len(tool_calls) != 1:
         return True
-    return names[0] != GATE_SOLO_TOOL
+    return names[0] not in _SOLO_TOOLS
 
 
 def last_ai_message_with_tool_calls(messages: list) -> tuple[int, AIMessage] | None:

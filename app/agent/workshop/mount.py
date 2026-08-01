@@ -22,6 +22,12 @@ from app.agent.chat.prompt.types import TurnPromptContext
 from app.agent.chat.tools.build_turn_tools import build_chat_turn_tools
 from app.agent.chat.tools.lc_tools import ChatToolContext
 from app.agent.chat.tools.ui_preview import sanitize_tool_step_preview
+from app.agent.workshop.host_tools import build_host_orchestration_tools
+from app.agent.workshop.mechanism import (
+    WorkshopMechanismSurface,
+    assemble_workshop_mechanism_skills_block,
+    format_invite_directory_prompt,
+)
 from app.agent.chat.turn.guards import TurnGuards
 from app.agent.chat.turn.persistence import TurnPersistence
 from app.agent.runtime.checkpointer import get_chat_checkpointer
@@ -91,6 +97,7 @@ class WorkshopTurnMountContext(WorkshopMountContext):
     persistence: TurnPersistence | None = None
     tool_ctx: ChatToolContext | None = None
     selected_skills_text: str = ""
+    persist_user_message: bool = True
 
 
 def prepare_turn_tool_snapshot(ctx: WorkshopMountContext) -> tuple[str, ...]:
@@ -153,25 +160,28 @@ def _build_workshop_system_prompt(ctx: WorkshopTurnMountContext) -> str:
         PromptComposer.build_capability_brief(prompt_ctx),
         PromptComposer.build_context_clock(),
     ]
-    if ctx.is_host and ctx.host_context_block.strip():
-        parts.insert(0, ctx.host_context_block.strip())
-        parts.insert(
-            0,
-            (
-                "## 工坊主持人\n"
-                "你的唯一身份是「项目助手」。\n"
-                "禁止以任何专家角色自称或开场，即使房间里有专家在场。\n"
-                "用户未点名某专家时，由你协调、追问与汇总；需要专家时说明可邀请或请用户指定发给谁。"
-            ),
+    if ctx.is_host:
+        mechanism = assemble_workshop_mechanism_skills_block(
+            surface=WorkshopMechanismSurface.HOST,
+            invite_directory_block=format_invite_directory_prompt(),
         )
+        parts.insert(0, mechanism)
+        if ctx.host_context_block.strip():
+            parts.insert(1, ctx.host_context_block.strip())
     elif ctx.preset_key:
         parts.insert(0, build_expert_identity_block(ctx.preset_key))
+        parts.insert(
+            1,
+            assemble_workshop_mechanism_skills_block(
+                surface=WorkshopMechanismSurface.EXPERT,
+            ),
+        )
         if is_ecom_preset(ctx.preset_key):
             profile = profile_for_preset(ctx.preset_key)
             if profile is not None and profile.skill_refs:
                 skill_bodies = load_workshop_skill_bodies(profile.skill_refs)
                 if skill_bodies:
-                    parts.insert(1, skill_bodies)
+                    parts.insert(2, skill_bodies)
     if ctx.room_timeline_block.strip():
         parts.append(ctx.room_timeline_block.strip())
     if ctx.selected_skills_text.strip():
@@ -193,7 +203,7 @@ async def _prepare_workshop_turn(ctx: WorkshopTurnMountContext) -> WorkshopTurnM
     }
     persistence = TurnPersistence(user_id=ctx.user_id, conversation_id=ctx.conversation_id)
     ctx.persistence = persistence
-    if ctx.content.strip():
+    if ctx.persist_user_message and ctx.content.strip():
         await persist_workshop_user_message(
             user_id=ctx.user_id,
             conversation_id=ctx.conversation_id,
@@ -209,6 +219,7 @@ async def _prepare_workshop_turn(ctx: WorkshopTurnMountContext) -> WorkshopTurnM
         guards=None,
         cancel_event=ctx.cancel_event,
         loop_guard=loop_guard,
+        source_user_text=ctx.content,
     )
     ctx.tool_ctx = tool_ctx
     all_tools = build_chat_turn_tools(
@@ -219,15 +230,22 @@ async def _prepare_workshop_turn(ctx: WorkshopTurnMountContext) -> WorkshopTurnM
         asset_media_types={},
     )
     if ctx.is_host:
-        allowed = frozenset(ctx.tool_names)
+        # Host 不挂载 Chat 执行工具；仅编排工具
+        tools = (
+            build_host_orchestration_tools(tool_ctx, project_id=ctx.project_id)
+            if ctx.enable_tools
+            else []
+        )
+        ctx.tool_names = tuple(tool.name for tool in tools)
     elif ctx.preset_key:
         allowed = profile_tool_names_for_workshop_expert(
             ctx.preset_key,
             granted_external=ctx.granted_external,
         )
+        tools = intersect_chat_tools_with_profile(all_tools, allowed)
     else:
         allowed = frozenset(ctx.tool_names)
-    tools = intersect_chat_tools_with_profile(all_tools, allowed)
+        tools = intersect_chat_tools_with_profile(all_tools, allowed)
     spec = get_model_spec(ctx.model_key)
     llm = GatewayChatModel(
         model_key=ctx.model_key,

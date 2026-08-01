@@ -47,10 +47,39 @@ async def test_repair_chat_checkpoint_skips_when_user_gate_pending() -> None:
 
 
 @pytest.mark.asyncio
+async def test_repair_chat_checkpoint_skips_when_upgrade_invite_pending() -> None:
+    agent = _agent_with_messages([])
+    with patch(
+        "app.agent.chat.turn.checkpoint.has_pending_user_gate",
+        new=AsyncMock(return_value=False),
+    ), patch(
+        "app.agent.chat.turn.checkpoint.has_pending_upgrade_invite",
+        new=AsyncMock(return_value=True),
+    ) as upgrade, patch(
+        "app.agent.chat.turn.checkpoint.repair_unresolved_checkpoint_if_needed",
+        new=AsyncMock(return_value=2),
+    ) as shared_repair:
+        assert (
+            await repair_chat_checkpoint_if_needed(
+                agent,
+                {},
+                conversation_id=1,
+                turn_id="t1u",
+            )
+            is False
+        )
+        upgrade.assert_awaited_once()
+        shared_repair.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_repair_chat_checkpoint_writes_when_no_gate() -> None:
     agent = MagicMock()
     with patch(
         "app.agent.chat.turn.checkpoint.has_pending_user_gate",
+        new=AsyncMock(return_value=False),
+    ), patch(
+        "app.agent.chat.turn.checkpoint.has_pending_upgrade_invite",
         new=AsyncMock(return_value=False),
     ), patch(
         "app.agent.chat.turn.checkpoint.repair_unresolved_checkpoint_if_needed",
@@ -78,6 +107,9 @@ async def test_repair_chat_checkpoint_noop_when_shared_returns_none() -> None:
     agent = MagicMock()
     with patch(
         "app.agent.chat.turn.checkpoint.has_pending_user_gate",
+        new=AsyncMock(return_value=False),
+    ), patch(
+        "app.agent.chat.turn.checkpoint.has_pending_upgrade_invite",
         new=AsyncMock(return_value=False),
     ), patch(
         "app.agent.chat.turn.checkpoint.repair_unresolved_checkpoint_if_needed",

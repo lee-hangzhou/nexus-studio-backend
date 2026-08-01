@@ -6,6 +6,7 @@ from langgraph.graph.message import REMOVE_ALL_MESSAGES
 from langgraph.graph.state import CompiledStateGraph
 
 from app.agent.chat.turn.gate_emit import has_pending_user_gate
+from app.agent.chat.turn.upgrade_invite_emit import has_pending_upgrade_invite
 from app.agent.runtime.turn_engine.checkpoint import repair_unresolved_checkpoint_if_needed
 from app.server.infra.logger import logger
 
@@ -50,8 +51,10 @@ async def repair_chat_checkpoint_if_needed(
     turn_id: str,
     reason: str = "stale_unresolved",
 ) -> bool:
-    """有待处理 UserGate 时跳过; 否则走共享 unresolved checkpoint 修复"""
+    """有待处理 UserGate / 升级邀请 interrupt 时跳过; 否则走共享 unresolved checkpoint 修复"""
     if await has_pending_user_gate(agent, config):
+        return False
+    if await has_pending_upgrade_invite(agent, config):
         return False
     message_count = await repair_unresolved_checkpoint_if_needed(
         agent,

@@ -171,7 +171,11 @@ async def test_sse_frames_include_speaker_attribution_when_set() -> None:
 
 @pytest.mark.asyncio
 async def test_workshop_mount_prepare_turn_host_has_invite_tools_not_taobao() -> None:
-    """Host 回合快照无 taobao 写；含 propose_invite"""
+    """Host 编排工具为 invite_experts / designate_speaker，无 taobao 写"""
+    from app.agent.workshop.host_tools import build_host_orchestration_tools
+    from app.agent.chat.tools.lc_tools import ChatToolContext
+    from pathlib import Path
+
     ctx = WorkshopTurnMountContext(
         project_id="wp_test",
         expert_id="host",
@@ -182,13 +186,21 @@ async def test_workshop_mount_prepare_turn_host_has_invite_tools_not_taobao() ->
         host_context_block="名册：市场与竞品研究",
         model_key="",
     )
-    ctx.tool_names = prepare_turn_tool_snapshot(ctx)
-    ctx.system_prompt = build_host_turn_context_block(
+    tool_ctx = ChatToolContext(
+        user_id=1,
+        conversation_id=1,
+        workspace=Path("/tmp"),
+        audit=[],
+    )
+    tools = build_host_orchestration_tools(tool_ctx, project_id="wp_test")
+    names = {tool.name for tool in tools}
+    assert "invite_experts" in names
+    assert "designate_speaker" in names
+    assert "taobao_store_write" not in names
+    prompt = build_host_turn_context_block(
         roster_names=("市场与竞品研究",),
         room_member_names=(),
         task_titles=(),
         invite_directory_names=(),
     )
-    assert "taobao_store_write" not in ctx.tool_names
-    assert "propose_invite" in ctx.tool_names
-    assert "市场与竞品研究" in ctx.system_prompt
+    assert "市场与竞品研究" in prompt

@@ -569,39 +569,62 @@ class WorkshopProjectService:
     ) -> UpgradeResult:
         """单专家升级：名册只含该专家，并立即进入房间；不自动推送任务提议"""
         del seed_goal  # 兼容旧入参；升级不再据此立任务
+        return await self.confirm_upgrade_with_experts(
+            user_id=user_id,
+            group_chat_id=group_chat_id,
+            project_name=project_name,
+            carried_message_count=carried_message_count,
+            expert_keys=(expert_key,),
+        )
+
+    async def confirm_upgrade_with_experts(
+        self,
+        *,
+        user_id: int,
+        group_chat_id: int,
+        project_name: str,
+        carried_message_count: int = 0,
+        expert_keys: Tuple[str, ...],
+    ) -> UpgradeResult:
+        """多专家升级：种子名册并全部进房；不自动推送任务提议"""
         if not project_name.strip():
             raise WorkshopProjectError("project name required")
         if carried_message_count < 0:
             raise WorkshopProjectError("carried_message_count must be >= 0")
-        preset = get_preset(expert_key)
+        if not expert_keys:
+            raise WorkshopProjectError("at least one expert_key required")
+        try:
+            presets = presets_for_keys(expert_keys)
+        except KeyError as exc:
+            raise WorkshopProjectError(f"unknown expert preset: {exc.args[0]}") from exc
         try:
             project_record = await self._repository.create_project_with_presets(
                 project_id=new_id("wp"),
                 user_id=user_id,
                 name=project_name.strip(),
                 group_chat_id=group_chat_id,
-                presets=(preset,),
-                bootstrap_keys=[expert_key],
+                presets=presets,
+                bootstrap_keys=list(expert_keys),
             )
         except WorkshopProjectConflictError as exc:
             raise WorkshopProjectError(str(exc)) from exc
         except WorkshopGroupChatOwnershipError as exc:
             raise WorkshopProjectError(str(exc)) from exc
-        expert_id = next(
-            (
-                expert.id
-                for expert in await self._repository.list_roster(
-                    project_id=project_record.id, user_id=user_id
-                )
-                if expert.preset_key == expert_key
-            ),
-            None,
+        roster = await self._repository.list_roster(
+            project_id=project_record.id, user_id=user_id
         )
-        if expert_id is None:
-            raise WorkshopProjectError(f"expert not seeded: {expert_key}")
-        await self._repository.add_room_member(
-            project_id=project_record.id, user_id=user_id, expert_id=expert_id
-        )
+        by_preset = {
+            expert.preset_key: expert.id
+            for expert in roster
+            if expert.preset_key
+        }
+        for key in expert_keys:
+            expert_id = by_preset.get(key)
+            if expert_id is None:
+                raise WorkshopProjectError(f"expert not seeded: {key}")
+            await self._repository.add_room_member(
+                project_id=project_record.id, user_id=user_id, expert_id=expert_id
+            )
         return UpgradeResult(
             project=_to_project(project_record),
             group_chat_id=group_chat_id,

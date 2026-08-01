@@ -86,6 +86,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         # generate / chat 提交体可能含长 prompt 与引用；access 日志只记路径
         if path.startswith("/api/v1/generate/") or path.startswith("/api/v1/chat/"):
             return True
+        if path == "/api/v1/billing/webhook":
+            return True
         return False
 
     @classmethod

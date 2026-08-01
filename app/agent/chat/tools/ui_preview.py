@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from app.agent.chat.tools.result import ToolResult, ToolResultProtocolError
+from app.agent.chat.tools.judgment_gate import JUDGMENT_TOOL_NAMES
 from app.agent.runtime.tools.user_skill_protocol import WRITE_USER_SKILL_FILE
 
 MEMORY_RECALL_TOOLS = frozenset(
@@ -141,6 +142,9 @@ def sanitize_tool_step_preview(tool_name: str, preview: str, *, ok: bool | None 
 
     if tool_name == WRITE_USER_SKILL_FILE:
         return "已写入用户 Skill" if resolved_ok is not False else "技能写入未完成"
+
+    if tool_name in JUDGMENT_TOOL_NAMES:
+        return "已完成意图判断" if resolved_ok is not False else "意图判断未完成"
 
     if tool_name in BROWSER_TOOL_NAMES:
         if resolved_ok is False:

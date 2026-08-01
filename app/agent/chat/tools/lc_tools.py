@@ -3,7 +3,7 @@ import hashlib
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, List
+from typing import TYPE_CHECKING, Annotated, Any, List, Protocol
 from uuid import uuid4
 
 from langchain.tools import InjectedToolArg
@@ -49,11 +49,27 @@ from app.server.chat.domain.enums import AttachmentSource
 from app.server.chat.persistence.attachments import ChatAttachments
 
 if TYPE_CHECKING:
+    from app.agent.chat.tools.judgment_gate import UpgradeInviteGateState
     from app.agent.chat.turn.guards import TurnGuards
     from app.agent.runtime.turn.tool_loop_guard import TurnToolLoopGuard
+    from app.server.ports.product import UpgradeInviteProposalDTO
 
 MAX_WEB_QUERY_LENGTH = 300
 MAX_FILE_WRITE_CHARS = 200_000
+
+
+
+class CreateUpgradeInviteFn(Protocol):
+    """创建升级邀请提议的注入回调"""
+
+    async def __call__(
+        self,
+        *,
+        expert_keys: tuple[str, ...],
+        primary_expert_key: str,
+        rationale: str,
+        host_narration: str,
+    ) -> "UpgradeInviteProposalDTO": ...
 
 
 @dataclass
@@ -67,6 +83,11 @@ class ChatToolContext:
     file_read_cache: dict[str, str] = field(default_factory=dict)
     published_artifacts: list[PublishResult] = field(default_factory=list)
     loop_guard: "TurnToolLoopGuard | None" = None
+    judgment_gate: "UpgradeInviteGateState | None" = None
+    create_upgrade_invite: "CreateUpgradeInviteFn | None" = None
+    # Workshop Host：邀请后隐式交接的专家 id（房间成员）
+    pending_expert_handoff_id: str | None = None
+    source_user_text: str = ""
 
 
 def _cancelled_tool_result(ctx: ChatToolContext) -> ToolResult | None:
