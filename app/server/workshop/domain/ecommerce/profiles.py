@@ -153,7 +153,6 @@ ECOM_PROFILES: tuple[ExpertProfile, ...] = (
                 WorkshopToolCapability.WRITE_PROJECT_FILES,
                 WorkshopToolCapability.WRITE_TEMP_WORKSPACE,
                 WorkshopToolCapability.SANDBOX_EXECUTE,
-                WorkshopToolCapability.CREATE_SCHEDULE,
                 WorkshopToolCapability.REQUEST_EXTERNAL_AUTH,
             }
         ),

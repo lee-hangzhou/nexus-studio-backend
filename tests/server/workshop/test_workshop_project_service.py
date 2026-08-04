@@ -150,17 +150,8 @@ async def test_concurrent_invite_assign_and_capability_use_are_idempotent() -> N
             for item in roster
             if item.preset_key == "ecom_market_competitor_advisor"
         )
-        task = await h.propose_and_confirm_task(
-            project_id=project.id, title="t", goals=("g",)
-        )
-        await h.orchestrator.host_propose_go(
-            project_id=project.id, user_id=h.user_id, task_id=task.id
-        )
-        await h.orchestrator.user_confirm_go(
-            project_id=project.id, user_id=h.user_id, task_id=task.id
-        )
-        await h.orchestrator.begin_execution(
-            project_id=project.id, user_id=h.user_id, task_id=task.id
+        task = await h.create_executing_task(
+            project_id=project.id, title="t"
         )
 
         async def _invite() -> None:

@@ -30,6 +30,10 @@ from app.server.ports.product import (
 from app.server.skills.services import user_skill_service
 from app.server.workshop.persistence.repository import WorkshopRepository
 from app.server.workshop.services.task_orchestrator import WorkshopTaskOrchestrator
+from app.server.workshop.services.expert_node_runner import ExpertNodeRunner
+from app.server.workshop.services.workflow_run_execution import (
+    WorkflowRunExecutionService,
+)
 from app.server.workshop.services.workflow_schedule_service import (
     WorkshopWorkflowScheduleService,
 )
@@ -59,12 +63,34 @@ workshop_project_service = WorkshopProjectService(workshop_repository)
 chat_selected_expert_service = ChatSelectedExpertService(workshop_project_service)
 upgrade_invite_service = UpgradeInviteService(workshop_project_service)
 workshop_task_orchestrator = WorkshopTaskOrchestrator(workshop_repository)
+
+
+def _enqueue_workflow_run(project_id: str, user_id: int, run_id: str) -> None:
+    """将运行记录交给 Celery Worker"""
+    from app.server.workshop.celery_app import enqueue_workflow_run
+
+    enqueue_workflow_run(project_id, user_id, run_id)
+
+
 workshop_workflow_schedule_service = WorkshopWorkflowScheduleService(
     repository=workshop_repository,
     orchestrator=workshop_task_orchestrator,
+    enqueue_run=_enqueue_workflow_run,
 )
 
-workshop_port: WorkshopPort = WorkshopPortAdapter(workshop_project_service)
+workshop_run_execution_service = WorkflowRunExecutionService(
+    repository=workshop_repository,
+    runner=ExpertNodeRunner(
+        projects=workshop_project_service,
+        orchestrator=workshop_task_orchestrator,
+        repository=workshop_repository,
+    ),
+)
+
+workshop_port: WorkshopPort = WorkshopPortAdapter(
+    workshop_project_service,
+    workshop_workflow_schedule_service,
+)
 upgrade_invite_port: UpgradeInvitePort = UpgradeInvitePortAdapter(upgrade_invite_service)
 
 configure_ports(

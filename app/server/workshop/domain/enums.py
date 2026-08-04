@@ -55,6 +55,24 @@ class WorkshopWorkflowSource(str, Enum):
     USER = "user"
 
 
+class WorkshopWorkflowRunStatus(str, Enum):
+    """工作流一次运行的状态"""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    BLOCKED = "blocked"
+
+
+class WorkshopWorkflowRunTrigger(str, Enum):
+    """工作流运行触发方式"""
+
+    MANUAL = "manual"
+    SCHEDULE = "schedule"
+    TRIAL = "trial"
+
+
 class WorkshopProposalStatus(str, Enum):
     """立任务/定制专家提议状态"""
 
@@ -94,7 +112,9 @@ class WorkshopToolCapability(str, Enum):
     SANDBOX_EXECUTE = "sandbox_execute"
     MCP = "mcp"
     DRAFT_WORKFLOW = "draft_workflow"
+    CONFIRM_SAVE_WORKFLOW = "confirm_save_workflow"
     CREATE_SCHEDULE = "create_schedule"
+    MANUAL_RUN_WORKFLOW = "manual_run_workflow"
     REQUEST_EXTERNAL_AUTH = "request_external_auth"
     PROPOSE_INVITE = "propose_invite"
     INVITE_EXPERT = "invite_expert"

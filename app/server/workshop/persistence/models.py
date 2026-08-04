@@ -135,11 +135,13 @@ class WorkshopTaskCapabilityUses(Model):
 
 
 class WorkshopWorkflows(WorkshopStringIdModel):
-    """工坊工作流定义表"""
+    """工坊工作流定义表；steps JSONB 存 DAG definition 文档"""
 
     project_id = fields.CharField(max_length=64, null=False)
     name = fields.CharField(max_length=255, null=False)
-    steps: fields.JSONField[list[dict[str, object]]] = fields.JSONField(null=False)
+    steps: fields.JSONField[dict[str, object] | list[object]] = fields.JSONField(
+        null=False
+    )
     status = fields.CharField(max_length=16, null=False)
     source = fields.CharField(max_length=16, null=False)
     revision = fields.BigIntField(null=False, default=1)
@@ -148,6 +150,31 @@ class WorkshopWorkflows(WorkshopStringIdModel):
         table = "workshop_workflows"
         abstract = False
         indexes = [("project_id", "status", "updated_at")]
+
+
+class WorkshopWorkflowRuns(WorkshopStringIdModel):
+    """工作流任务运行记录表"""
+
+    project_id = fields.CharField(max_length=64, null=False)
+    workflow_id = fields.CharField(max_length=64, null=False)
+    workflow_revision = fields.BigIntField(null=False)
+    schedule_id = fields.CharField(max_length=64, null=True)
+    trigger = fields.CharField(max_length=16, null=False)
+    status = fields.CharField(max_length=16, null=False)
+    current_node_id = fields.CharField(max_length=128, null=True)
+    error_message = fields.TextField(null=True)
+    started_at = fields.DatetimeField(null=True)
+    finished_at = fields.DatetimeField(null=True)
+    revision = fields.BigIntField(null=False, default=1)
+
+    class Meta(WorkshopStringIdModel.Meta):
+        table = "workshop_workflow_runs"
+        abstract = False
+        indexes = [
+            ("project_id", "created_at"),
+            ("project_id", "workflow_id", "created_at"),
+            ("status", "created_at"),
+        ]
 
 
 class WorkshopSchedules(WorkshopStringIdModel):

@@ -61,6 +61,11 @@ from app.server.ports.product import (
     UserSkillPort,
     WorkshopPort,
     WorkshopRosterExpertDTO,
+    WorkshopScheduleDTO,
+    WorkshopWorkflowDTO,
+    WorkshopWorkflowEdgeSpecDTO,
+    WorkshopWorkflowNodeSpecDTO,
+    WorkshopWorkflowRunDTO,
 )
 from app.server.skills.domain.enums import SkillScope, SkillSurface
 from app.server.skills.domain.models import SelectedSkill
@@ -73,6 +78,18 @@ from app.server.generation.schemas import (
     GenerateModelsResponse,
     GenerateTaskSubmitResponse,
     SubmitGenerateRequest,
+)
+from app.server.workshop.domain.enums import (
+    WorkshopToolCapability,
+)
+from app.server.workshop.domain.workflow_definition import (
+    NodeAssignee,
+    WorkflowEdge,
+    WorkflowNode,
+)
+from app.server.workshop.services.workflow_schedule_service import (
+    WorkshopWorkflowScheduleError,
+    WorkshopWorkflowScheduleService,
 )
 from app.server.workshop.services.workshop_project_service import WorkshopProjectService
 
@@ -888,11 +905,16 @@ def _selected_skill_dto(item: SelectedSkill) -> SelectedSkillDTO:
 
 
 class WorkshopPortAdapter:
-    """工坊项目 Port 适配器"""
+    """工坊项目 / 工作流 Port 适配器"""
 
-    def __init__(self, service: WorkshopProjectService) -> None:
-        """注入工坊项目服务"""
-        self._service = service
+    def __init__(
+        self,
+        projects: WorkshopProjectService,
+        schedules: WorkshopWorkflowScheduleService,
+    ) -> None:
+        """注入项目服务与工作流调度服务"""
+        self._projects = projects
+        self._schedules = schedules
 
     async def add_preset_to_roster(
         self,
@@ -902,7 +924,7 @@ class WorkshopPortAdapter:
         preset_key: str,
     ) -> WorkshopRosterExpertDTO:
         """将预置专家加入名册"""
-        expert = await self._service.add_preset_to_roster(
+        expert = await self._projects.add_preset_to_roster(
             project_id=project_id,
             user_id=user_id,
             preset_key=preset_key,
@@ -917,16 +939,151 @@ class WorkshopPortAdapter:
         self, *, project_id: str, user_id: int, expert_id: str
     ) -> None:
         """邀请专家进房"""
-        await self._service.invite_to_room(
+        await self._projects.invite_to_room(
             project_id=project_id, user_id=user_id, expert_id=expert_id
         )
 
     async def room_members(self, *, project_id: str, user_id: int) -> frozenset[str]:
         """列出房间在场专家 id"""
-        members = await self._service.room_members(
+        members = await self._projects.room_members(
             project_id=project_id, user_id=user_id
         )
         return frozenset(members)
+
+    async def agent_draft_workflow(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        name: str,
+        model_key: str,
+        nodes: tuple[WorkshopWorkflowNodeSpecDTO, ...],
+        edges: tuple[WorkshopWorkflowEdgeSpecDTO, ...],
+    ) -> WorkshopWorkflowDTO:
+        """Agent 起草工作流草稿"""
+        domain_nodes = tuple(_node_from_spec(item) for item in nodes)
+        domain_edges = tuple(
+            WorkflowEdge(from_id=item.from_id, to_id=item.to_id) for item in edges
+        )
+        try:
+            record = await self._schedules.agent_draft_workflow(
+                project_id=project_id,
+                user_id=user_id,
+                name=name,
+                nodes=domain_nodes,
+                edges=domain_edges,
+                model_key=model_key,
+            )
+        except WorkshopWorkflowScheduleError as exc:
+            raise ValueError(str(exc)) from exc
+        return _workflow_dto(record)
+
+    async def confirm_save_workflow(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+    ) -> WorkshopWorkflowDTO:
+        """确认保存工作流"""
+        try:
+            record = await self._schedules.user_confirm_save_workflow(
+                project_id=project_id,
+                user_id=user_id,
+                workflow_id=workflow_id,
+            )
+        except WorkshopWorkflowScheduleError as exc:
+            raise ValueError(str(exc)) from exc
+        return _workflow_dto(record)
+
+    async def create_schedule(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+        cron: str,
+        timezone: str,
+        authorized_capabilities: tuple[str, ...],
+    ) -> WorkshopScheduleDTO:
+        """创建定时"""
+        caps = _parse_capabilities(authorized_capabilities)
+        try:
+            record = await self._schedules.create_schedule(
+                project_id=project_id,
+                user_id=user_id,
+                workflow_id=workflow_id,
+                cron=cron,
+                timezone=timezone,
+                authorized_capabilities=caps,
+            )
+        except WorkshopWorkflowScheduleError as exc:
+            raise ValueError(str(exc)) from exc
+        return WorkshopScheduleDTO(
+            id=record.id,
+            workflow_id=record.workflow_id,
+            cron=record.cron,
+            timezone=record.timezone,
+            enabled=record.enabled,
+        )
+
+    async def manual_run_workflow(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+        authorized_capabilities: tuple[str, ...],
+    ) -> WorkshopWorkflowRunDTO:
+        """手动跑一次已保存工作流"""
+        caps = _parse_capabilities(authorized_capabilities)
+        try:
+            result = await self._schedules.manual_run_with_light_confirm(
+                project_id=project_id,
+                user_id=user_id,
+                workflow_id=workflow_id,
+                authorized_capabilities=caps,
+            )
+        except WorkshopWorkflowScheduleError as exc:
+            raise ValueError(str(exc)) from exc
+        return WorkshopWorkflowRunDTO(
+            id=result.run.id,
+            workflow_id=result.run.workflow_id,
+            status=result.run.status.value,
+        )
+
+
+def _workflow_dto(record) -> WorkshopWorkflowDTO:
+    """领域工作流转 DTO"""
+    return WorkshopWorkflowDTO(
+        id=record.id,
+        name=record.name,
+        status=record.status.value,
+        model_key=record.model_key,
+        revision=record.revision,
+    )
+
+
+def _parse_capabilities(
+    raw: tuple[str, ...],
+) -> tuple[WorkshopToolCapability, ...]:
+    """解析能力字面量"""
+    return tuple(WorkshopToolCapability(item) for item in raw)
+
+
+def _node_from_spec(spec: WorkshopWorkflowNodeSpecDTO) -> WorkflowNode:
+    """Port 节点规格转领域节点；交付文件由执行面收口，不预声明硬端口"""
+    caps = tuple(
+        WorkshopToolCapability(item) for item in spec.external_capabilities
+    )
+    return WorkflowNode(
+        id=spec.id,
+        title=spec.title,
+        instruction=spec.instruction,
+        assignee=NodeAssignee(preset_key=spec.preset_key),
+        outputs=(),
+        external_capabilities=caps,
+    )
 
 
 class UpgradeInvitePortAdapter:

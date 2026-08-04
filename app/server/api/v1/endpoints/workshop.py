@@ -81,6 +81,8 @@ from app.contracts.workshop import (
     WorkshopWeakAcceptRequest,
     WorkshopWeakAcceptResultView,
     WorkshopWorkflowListResponse,
+    WorkshopWorkflowRunListResponse,
+    WorkshopListWorkflowRunsRequest,
     WorkshopWorkflowView,
 )
 from app.server.api.schemas import Response
@@ -107,7 +109,8 @@ from app.server.workshop.assembly import (
     upgrade_to_view,
     wake_to_view,
     weak_accept_to_view,
-    workflow_step_from_view,
+    workflow_graph_from_view,
+    workflow_run_to_view,
     workflow_to_view,
 )
 from app.server.exceptions.base import AppError
@@ -591,25 +594,6 @@ async def unassign_workshop_task_expert(
     return Response(data=WorkshopOkView())
 
 
-@router.post("/tasks/propose")
-async def propose_workshop_task(
-    request: Request, body: WorkshopProposeTaskRequest
-) -> Response[WorkshopCreateTaskProposalView]:
-    """主持提议立任务"""
-    user_id: int = request.state.user_id
-    try:
-        proposal = await workshop_task_orchestrator.host_propose_create_task(
-            project_id=body.project_id,
-            user_id=user_id,
-            title=body.title,
-            goals=body.goals,
-            required_artifacts=body.required_artifacts,
-        )
-    except _WORKSHOP_HTTP_ERRORS as exc:
-        raise map_workshop_error(exc) from exc
-    return Response(data=proposal_to_view(proposal))
-
-
 @router.post("/tasks/get")
 async def get_workshop_task(
     request: Request, body: WorkshopTaskIdRequest
@@ -659,25 +643,6 @@ async def list_workshop_artifacts(
     return Response(
         data=WorkshopArtifactListResponse(
             items=[artifact_to_view(item) for item in artifacts]
-        )
-    )
-
-
-@router.post("/tasks/pending-proposals")
-async def list_workshop_pending_proposals(
-    request: Request, body: WorkshopProjectIdRequest
-) -> Response[WorkshopPendingProposalListResponse]:
-    """列出待确认立任务提议"""
-    user_id: int = request.state.user_id
-    try:
-        proposals = await workshop_task_orchestrator.list_pending_proposals(
-            project_id=body.project_id, user_id=user_id
-        )
-    except _WORKSHOP_HTTP_ERRORS as exc:
-        raise map_workshop_error(exc) from exc
-    return Response(
-        data=WorkshopPendingProposalListResponse(
-            items=[proposal_to_view(item) for item in proposals]
         )
     )
 
@@ -763,85 +728,6 @@ async def begin_workshop_ecommerce_shop_auth(
     except _WORKSHOP_HTTP_ERRORS as exc:
         raise map_workshop_error(exc) from exc
     return Response(data=begin_shop_auth_to_view(result))
-
-
-@router.post("/tasks/confirm")
-async def confirm_workshop_task(
-    request: Request, body: WorkshopConfirmTaskProposalRequest
-) -> Response[WorkshopTaskView]:
-    """用户确认立任务"""
-    user_id: int = request.state.user_id
-    try:
-        task = await workshop_task_orchestrator.user_confirm_create_task(
-            project_id=body.project_id,
-            user_id=user_id,
-            proposal_id=body.proposal_id,
-        )
-    except _WORKSHOP_HTTP_ERRORS as exc:
-        raise map_workshop_error(exc) from exc
-    return Response(data=task_to_view(task))
-
-
-@router.post("/tasks/decline")
-async def decline_workshop_task(
-    request: Request, body: WorkshopDeclineTaskProposalRequest
-) -> Response[WorkshopOkView]:
-    """用户拒绝立任务"""
-    user_id: int = request.state.user_id
-    try:
-        await workshop_task_orchestrator.user_decline_create_task(
-            project_id=body.project_id,
-            user_id=user_id,
-            proposal_id=body.proposal_id,
-        )
-    except _WORKSHOP_HTTP_ERRORS as exc:
-        raise map_workshop_error(exc) from exc
-    return Response(data=WorkshopOkView())
-
-
-@router.post("/tasks/propose-go")
-async def propose_workshop_task_go(
-    request: Request, body: WorkshopTaskIdRequest
-) -> Response[WorkshopTaskView]:
-    """主持提议可以执行"""
-    user_id: int = request.state.user_id
-    try:
-        task = await workshop_task_orchestrator.host_propose_go(
-            project_id=body.project_id, user_id=user_id, task_id=body.task_id
-        )
-    except _WORKSHOP_HTTP_ERRORS as exc:
-        raise map_workshop_error(exc) from exc
-    return Response(data=task_to_view(task))
-
-
-@router.post("/tasks/confirm-go")
-async def confirm_workshop_task_go(
-    request: Request, body: WorkshopTaskIdRequest
-) -> Response[WorkshopTaskView]:
-    """用户确认可以执行"""
-    user_id: int = request.state.user_id
-    try:
-        task = await workshop_task_orchestrator.user_confirm_go(
-            project_id=body.project_id, user_id=user_id, task_id=body.task_id
-        )
-    except _WORKSHOP_HTTP_ERRORS as exc:
-        raise map_workshop_error(exc) from exc
-    return Response(data=task_to_view(task))
-
-
-@router.post("/tasks/begin")
-async def begin_workshop_task(
-    request: Request, body: WorkshopTaskIdRequest
-) -> Response[WorkshopTaskView]:
-    """任务进入执行态"""
-    user_id: int = request.state.user_id
-    try:
-        task = await workshop_task_orchestrator.begin_execution(
-            project_id=body.project_id, user_id=user_id, task_id=body.task_id
-        )
-    except _WORKSHOP_HTTP_ERRORS as exc:
-        raise map_workshop_error(exc) from exc
-    return Response(data=task_to_view(task))
 
 
 @router.post("/tasks/block")
@@ -995,12 +881,16 @@ async def agent_draft_workshop_workflow(
 ) -> Response[WorkshopWorkflowView]:
     """Agent 起草工作流"""
     user_id: int = request.state.user_id
+    nodes, edges, entry = workflow_graph_from_view(body.definition)
     try:
         workflow = await workshop_workflow_schedule_service.agent_draft_workflow(
             project_id=body.project_id,
             user_id=user_id,
             name=body.name,
-            steps=[workflow_step_from_view(step) for step in body.steps],
+            nodes=nodes,
+            edges=edges,
+            model_key=body.model_key,
+            entry_node_ids=entry,
         )
     except _WORKSHOP_HTTP_ERRORS as exc:
         raise map_workshop_error(exc) from exc
@@ -1013,12 +903,16 @@ async def user_draft_workshop_workflow(
 ) -> Response[WorkshopWorkflowView]:
     """用户起草工作流"""
     user_id: int = request.state.user_id
+    nodes, edges, entry = workflow_graph_from_view(body.definition)
     try:
         workflow = await workshop_workflow_schedule_service.user_draft_workflow(
             project_id=body.project_id,
             user_id=user_id,
             name=body.name,
-            steps=[workflow_step_from_view(step) for step in body.steps],
+            nodes=nodes,
+            edges=edges,
+            model_key=body.model_key,
+            entry_node_ids=entry,
         )
     except _WORKSHOP_HTTP_ERRORS as exc:
         raise map_workshop_error(exc) from exc
@@ -1056,6 +950,28 @@ async def list_workshop_workflows(
         raise map_workshop_error(exc) from exc
     return Response(
         data=WorkshopWorkflowListResponse(items=[workflow_to_view(item) for item in items])
+    )
+
+
+@router.post("/workflows/runs/list")
+async def list_workshop_workflow_runs(
+    request: Request, body: WorkshopListWorkflowRunsRequest
+) -> Response[WorkshopWorkflowRunListResponse]:
+    """列出工作流运行记录"""
+    user_id: int = request.state.user_id
+    try:
+        items = await workshop_workflow_schedule_service.list_workflow_runs(
+            project_id=body.project_id,
+            user_id=user_id,
+            workflow_id=body.workflow_id,
+            limit=body.limit,
+        )
+    except _WORKSHOP_HTTP_ERRORS as exc:
+        raise map_workshop_error(exc) from exc
+    return Response(
+        data=WorkshopWorkflowRunListResponse(
+            items=[workflow_run_to_view(item) for item in items]
+        )
     )
 
 

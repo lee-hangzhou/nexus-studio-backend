@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from uuid import uuid4
 
 import pytest
@@ -9,11 +10,13 @@ from app.server.workshop.domain.enums import (
     WorkshopTaskStatus,
     WorkshopToolCapability,
 )
-from app.server.workshop.domain.types import ArtifactSubmission, WorkflowStep
+from app.server.workshop.domain.types import ArtifactSubmission
+from app.server.workshop.domain.workflow_definition import NodeOutput
 from app.server.workshop.persistence.models import WorkshopArtifacts
 from app.server.workshop.persistence.repository import WorkshopTaskConflictError
 from app.server.workshop.services.task_orchestrator import TaskOrchestratorError
 from tests.server.workshop.harness import workshop_harness
+from tests.server.workshop.workflow_fixtures import single_step_graph
 
 
 def _db_artifact(name: str, content: str) -> ArtifactSubmission:
@@ -29,116 +32,21 @@ async def _to_reviewing(
     h,
     *,
     project_id: str,
-    goals: tuple[str, ...] = ("cover A",),
+    title: str = "cover A",
     required_artifacts: tuple[str, ...] = (),
+    external_auth: tuple[WorkshopToolCapability, ...] = (),
 ):
-    """创建任务并推进到 reviewing"""
-    task = await h.propose_and_confirm_task(
+    """经工作流创建 executing 任务并推进到 reviewing"""
+    task = await h.create_executing_task(
         project_id=project_id,
-        title="x",
-        goals=goals,
+        title=title,
         required_artifacts=required_artifacts,
-    )
-    await h.orchestrator.host_propose_go(
-        project_id=project_id, user_id=h.user_id, task_id=task.id
-    )
-    await h.orchestrator.user_confirm_go(
-        project_id=project_id, user_id=h.user_id, task_id=task.id
-    )
-    await h.orchestrator.begin_execution(
-        project_id=project_id, user_id=h.user_id, task_id=task.id
+        external_auth=external_auth,
     )
     await h.orchestrator.mark_reviewing(
         project_id=project_id, user_id=h.user_id, task_id=task.id
     )
     return task
-
-
-@pytest.mark.integration
-async def test_confirmed_task_moves_through_align_go_and_execute() -> None:
-    """确认后的任务依次完成对齐、go 确认与执行"""
-    async with workshop_harness() as h:
-        project = await h.projects.create_project(
-            user_id=h.user_id, name="p", group_chat_id=h.group_chat_id
-        )
-        h.track_project(project.id)
-        proposal = await h.orchestrator.host_propose_create_task(
-            project_id=project.id,
-            user_id=h.user_id,
-            title="竞品周报",
-            goals=("抓取三页竞品", "写出摘要"),
-            required_artifacts=("digest.md",),
-        )
-        assert proposal.required_artifacts == ("digest.md",)
-        task = await h.orchestrator.user_confirm_create_task(
-            project_id=project.id, user_id=h.user_id, proposal_id=proposal.id
-        )
-        assert task.status is WorkshopTaskStatus.ALIGNING
-        assert task.required_artifacts == ("digest.md",)
-
-        await h.orchestrator.host_propose_go(
-            project_id=project.id, user_id=h.user_id, task_id=task.id
-        )
-        awaiting = await h.orchestrator.get(
-            project_id=project.id, user_id=h.user_id, task_id=task.id
-        )
-        assert awaiting.status is WorkshopTaskStatus.AWAITING_GO
-
-        await h.orchestrator.user_confirm_go(
-            project_id=project.id, user_id=h.user_id, task_id=task.id
-        )
-        authorized = await h.orchestrator.get(
-            project_id=project.id, user_id=h.user_id, task_id=task.id
-        )
-        assert authorized.status is WorkshopTaskStatus.AUTHORIZED
-
-        await h.orchestrator.begin_execution(
-            project_id=project.id, user_id=h.user_id, task_id=task.id
-        )
-        executing = await h.orchestrator.get(
-            project_id=project.id, user_id=h.user_id, task_id=task.id
-        )
-        assert executing.status is WorkshopTaskStatus.EXECUTING
-
-
-@pytest.mark.integration
-async def test_user_can_decline_create_task_proposal() -> None:
-    """用户可拒绝主持的立任务提议"""
-    async with workshop_harness() as h:
-        project = await h.projects.create_project(
-            user_id=h.user_id, name="p", group_chat_id=h.group_chat_id
-        )
-        h.track_project(project.id)
-        proposal = await h.orchestrator.host_propose_create_task(
-            project_id=project.id, user_id=h.user_id, title="x", goals=("g",)
-        )
-        await h.orchestrator.user_decline_create_task(
-            project_id=project.id, user_id=h.user_id, proposal_id=proposal.id
-        )
-        with pytest.raises(TaskOrchestratorError):
-            await h.orchestrator.user_confirm_create_task(
-                project_id=project.id, user_id=h.user_id, proposal_id=proposal.id
-            )
-
-
-@pytest.mark.integration
-async def test_cannot_begin_execution_without_user_go_confirmation() -> None:
-    """缺少用户 go 确认时禁止执行"""
-    async with workshop_harness() as h:
-        project = await h.projects.create_project(
-            user_id=h.user_id, name="p", group_chat_id=h.group_chat_id
-        )
-        h.track_project(project.id)
-        task = await h.propose_and_confirm_task(
-            project_id=project.id, title="x", goals=("g",)
-        )
-        await h.orchestrator.host_propose_go(
-            project_id=project.id, user_id=h.user_id, task_id=task.id
-        )
-        with pytest.raises(TaskOrchestratorError):
-            await h.orchestrator.begin_execution(
-                project_id=project.id, user_id=h.user_id, task_id=task.id
-            )
 
 
 @pytest.mark.integration
@@ -149,16 +57,25 @@ async def test_schedule_trigger_skips_awaiting_go_into_executing() -> None:
             user_id=h.user_id, name="p", group_chat_id=h.group_chat_id
         )
         h.track_project(project.id)
+        nodes, edges = single_step_graph(title="publish digest")
+        node = replace(
+            nodes[0],
+            title="publish digest",
+            instruction="publish digest",
+            outputs=(
+                NodeOutput(
+                    name="digest.md",
+                    storage_type=WorkshopArtifactStorageType.DB,
+                ),
+            ),
+        )
         draft = await h.schedules.agent_draft_workflow(
             project_id=project.id,
             user_id=h.user_id,
             name="weekly digest",
-            steps=(
-                WorkflowStep(
-                    title="publish digest",
-                    required_artifact_names=("digest.md",),
-                ),
-            ),
+            model_key="test-model",
+            nodes=(node,),
+            edges=edges,
         )
         saved = await h.schedules.user_confirm_save_workflow(
             project_id=project.id, user_id=h.user_id, workflow_id=draft.id
@@ -222,7 +139,7 @@ async def test_weak_accept_marks_done_and_reject_reopens_to_realigning() -> None
 
 @pytest.mark.integration
 async def test_reject_done_then_reaccept_same_artifact_name_replaces() -> None:
-    """DONE->RE_ALIGNING->->DONE 同名产物原子替换，能力审计保留"""
+    """DONE->RE_ALIGNING->DONE 同名产物原子替换，能力审计保留"""
     from app.server.workshop.persistence.models import WorkshopTaskCapabilityUses
 
     async with workshop_harness() as h:
@@ -230,26 +147,11 @@ async def test_reject_done_then_reaccept_same_artifact_name_replaces() -> None:
             user_id=h.user_id, name="p", group_chat_id=h.group_chat_id
         )
         h.track_project(project.id)
-        task = await h.propose_and_confirm_task(
+        task = await h.create_executing_task(
             project_id=project.id,
-            title="x",
-            goals=("cover A",),
+            title="cover A",
             required_artifacts=("report.md",),
-        )
-        await h.orchestrator.host_propose_go(
-            project_id=project.id, user_id=h.user_id, task_id=task.id
-        )
-        await h.orchestrator.user_confirm_go(
-            project_id=project.id, user_id=h.user_id, task_id=task.id
-        )
-        await h.orchestrator.grant_external_auth(
-            project_id=project.id,
-            user_id=h.user_id,
-            task_id=task.id,
-            capabilities=frozenset({WorkshopToolCapability.BROWSER_WRITE}),
-        )
-        await h.orchestrator.begin_execution(
-            project_id=project.id, user_id=h.user_id, task_id=task.id
+            external_auth=(WorkshopToolCapability.BROWSER_WRITE,),
         )
         await h.orchestrator.record_capability_use(
             project_id=project.id,
@@ -322,7 +224,7 @@ async def test_weak_accept_required_artifacts_missing_and_free() -> None:
         missing_task = await _to_reviewing(
             h,
             project_id=project.id,
-            goals=("cover A",),
+            title="cover A",
             required_artifacts=("report.md",),
         )
         missing = await h.orchestrator.weak_accept(
@@ -338,7 +240,7 @@ async def test_weak_accept_required_artifacts_missing_and_free() -> None:
         free_task = await _to_reviewing(
             h,
             project_id=project.id,
-            goals=("cover C",),
+            title="cover C",
             required_artifacts=(),
         )
         free = await h.orchestrator.weak_accept(
@@ -360,17 +262,8 @@ async def test_weak_accept_uses_persisted_capability_usage() -> None:
         )
         h.track_project(project.id)
 
-        unauthorized = await h.propose_and_confirm_task(
-            project_id=project.id, title="x", goals=("g",)
-        )
-        await h.orchestrator.host_propose_go(
-            project_id=project.id, user_id=h.user_id, task_id=unauthorized.id
-        )
-        await h.orchestrator.user_confirm_go(
-            project_id=project.id, user_id=h.user_id, task_id=unauthorized.id
-        )
-        await h.orchestrator.begin_execution(
-            project_id=project.id, user_id=h.user_id, task_id=unauthorized.id
+        unauthorized = await h.create_executing_task(
+            project_id=project.id, title="g"
         )
         await h.orchestrator.record_capability_use(
             project_id=project.id,
@@ -391,23 +284,10 @@ async def test_weak_accept_uses_persisted_capability_usage() -> None:
         assert bad.passed is False
         assert "external_auth_violation" in bad.reasons
 
-        authorized = await h.propose_and_confirm_task(
-            project_id=project.id, title="y", goals=("g",)
-        )
-        await h.orchestrator.host_propose_go(
-            project_id=project.id, user_id=h.user_id, task_id=authorized.id
-        )
-        await h.orchestrator.user_confirm_go(
-            project_id=project.id, user_id=h.user_id, task_id=authorized.id
-        )
-        await h.orchestrator.grant_external_auth(
+        authorized = await h.create_executing_task(
             project_id=project.id,
-            user_id=h.user_id,
-            task_id=authorized.id,
-            capabilities=frozenset({WorkshopToolCapability.BROWSER_WRITE}),
-        )
-        await h.orchestrator.begin_execution(
-            project_id=project.id, user_id=h.user_id, task_id=authorized.id
+            title="g",
+            external_auth=(WorkshopToolCapability.BROWSER_WRITE,),
         )
         await h.orchestrator.record_capability_use(
             project_id=project.id,
@@ -436,14 +316,8 @@ async def test_grant_external_auth_rejects_non_external_capability() -> None:
             user_id=h.user_id, name="p", group_chat_id=h.group_chat_id
         )
         h.track_project(project.id)
-        task = await h.propose_and_confirm_task(
-            project_id=project.id, title="x", goals=("g",)
-        )
-        await h.orchestrator.host_propose_go(
-            project_id=project.id, user_id=h.user_id, task_id=task.id
-        )
-        await h.orchestrator.user_confirm_go(
-            project_id=project.id, user_id=h.user_id, task_id=task.id
+        task = await h.create_executing_task(
+            project_id=project.id, title="x"
         )
         with pytest.raises(TaskOrchestratorError, match="non-external"):
             await h.orchestrator.grant_external_auth(
@@ -502,22 +376,8 @@ async def test_parallel_tasks_can_execute_independently() -> None:
             user_id=h.user_id, name="p", group_chat_id=h.group_chat_id
         )
         h.track_project(project.id)
-        a = await h.propose_and_confirm_task(
-            project_id=project.id, title="A", goals=("a",)
-        )
-        b = await h.propose_and_confirm_task(
-            project_id=project.id, title="B", goals=("b",)
-        )
-        for task_id in (a.id, b.id):
-            await h.orchestrator.host_propose_go(
-                project_id=project.id, user_id=h.user_id, task_id=task_id
-            )
-            await h.orchestrator.user_confirm_go(
-                project_id=project.id, user_id=h.user_id, task_id=task_id
-            )
-            await h.orchestrator.begin_execution(
-                project_id=project.id, user_id=h.user_id, task_id=task_id
-            )
+        a = await h.create_executing_task(project_id=project.id, title="A")
+        b = await h.create_executing_task(project_id=project.id, title="B")
         assert (
             await h.orchestrator.get(
                 project_id=project.id, user_id=h.user_id, task_id=a.id
@@ -538,12 +398,8 @@ async def test_host_attributes_message_or_asks_when_ambiguous() -> None:
             user_id=h.user_id, name="p", group_chat_id=h.group_chat_id
         )
         h.track_project(project.id)
-        a = await h.propose_and_confirm_task(
-            project_id=project.id, title="A", goals=("a",)
-        )
-        b = await h.propose_and_confirm_task(
-            project_id=project.id, title="B", goals=("b",)
-        )
+        a = await h.create_executing_task(project_id=project.id, title="A")
+        b = await h.create_executing_task(project_id=project.id, title="B")
         attributed = await h.orchestrator.attribute_message(
             project_id=project.id,
             user_id=h.user_id,
@@ -571,18 +427,8 @@ async def test_external_auth_is_per_task() -> None:
             user_id=h.user_id, name="p", group_chat_id=h.group_chat_id
         )
         h.track_project(project.id)
-        a = await h.propose_and_confirm_task(
-            project_id=project.id, title="A", goals=("a",)
-        )
-        b = await h.propose_and_confirm_task(
-            project_id=project.id, title="B", goals=("b",)
-        )
-        await h.orchestrator.host_propose_go(
-            project_id=project.id, user_id=h.user_id, task_id=a.id
-        )
-        await h.orchestrator.user_confirm_go(
-            project_id=project.id, user_id=h.user_id, task_id=a.id
-        )
+        a = await h.create_executing_task(project_id=project.id, title="A")
+        b = await h.create_executing_task(project_id=project.id, title="B")
         await h.orchestrator.grant_external_auth(
             project_id=project.id,
             user_id=h.user_id,

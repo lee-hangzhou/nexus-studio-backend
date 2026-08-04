@@ -19,8 +19,8 @@ from app.server.workshop.domain.enums import (
 from app.server.workshop.domain.types import (
     ArtifactSubmission,
     ScheduleStartedPayload,
-    WorkflowStep,
 )
+from tests.server.workshop.workflow_fixtures import single_step_graph
 from app.server.workshop.persistence.models import WorkshopProjects
 from app.server.workshop.persistence.repository import (
     WorkshopOwnershipError,
@@ -210,12 +210,15 @@ async def test_get_workflow_rejects_cross_project() -> None:
             user_id=h.user_id, name="b", group_chat_id=other_chat_id
         )
         h.track_project(project_b.id)
+        nodes, edges = single_step_graph()
         workflow = await h.repository.create_workflow(
             workflow_id=new_id("wf"),
             project_id=project_a.id,
             user_id=h.user_id,
             name="flow",
-            steps=(WorkflowStep(title="step"),),
+            model_key="test-model",
+            nodes=nodes,
+            edges=edges,
             status=WorkshopWorkflowStatus.SAVED,
             source=WorkshopWorkflowSource.AGENT,
         )
@@ -240,12 +243,15 @@ async def test_create_schedule_rejects_cross_project_workflow() -> None:
             user_id=h.user_id, name="b", group_chat_id=other_chat_id
         )
         h.track_project(project_b.id)
+        nodes, edges = single_step_graph()
         workflow = await h.repository.create_workflow(
             workflow_id=new_id("wf"),
             project_id=project_a.id,
             user_id=h.user_id,
             name="flow",
-            steps=(WorkflowStep(title="step"),),
+            model_key="test-model",
+            nodes=nodes,
+            edges=edges,
             status=WorkshopWorkflowStatus.SAVED,
             source=WorkshopWorkflowSource.USER,
         )

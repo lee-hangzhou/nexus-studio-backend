@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     DATABASE_POOL: DatabasePoolConfig = Field(default_factory=DatabasePoolConfig)
 
 
-    REDIS_URL: str = Field(default="redis://localhost:6379/0")
+    REDIS_URL: str = Field(default="redis://127.0.0.1:6379/0")
     # 短命令共享池 (GET/SET/锁/publish)。禁止把长生命周期 Pub/Sub 放进此池。
     # Per-process; total ≈ workers × this value (stay well below Redis maxclients).
     REDIS_MAX_CONNECTIONS: int = Field(default=50)
@@ -267,7 +267,7 @@ class Settings(BaseSettings):
     CREEM_SUCCESS_URL: str = Field(default="")
 
     # Workshop schedule ticker（秒为单位；PostgreSQL claim 保证多副本安全）
-    WORKSHOP_SCHEDULE_TICKER_ENABLED: bool = Field(default=True)
+    WORKSHOP_SCHEDULE_TICKER_ENABLED: bool = Field(default=False)
     WORKSHOP_SCHEDULE_TICK_INTERVAL_SEC: float = Field(default=30.0, gt=0, le=3600)
     WORKSHOP_SCHEDULE_TICK_BATCH_SIZE: int = Field(default=32, ge=1, le=500)
     WORKSHOP_SCHEDULE_TICK_DEADLINE_SEC: float = Field(default=20.0, gt=0, le=300)

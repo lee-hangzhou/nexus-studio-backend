@@ -9,7 +9,6 @@ from app.server.workshop.domain.ecommerce.authorized_operations import Authorize
 from app.server.workshop.domain.types import (
     ArtifactRecord,
     ArtifactSubmission,
-    CreateTaskProposal,
     MessageAttribution,
     TaskAssignmentRecord,
     WeakAcceptResult,
@@ -17,7 +16,6 @@ from app.server.workshop.domain.types import (
 )
 from app.server.workshop.domain.weak_accept import evaluate_weak_accept
 from app.server.workshop.persistence.repository import (
-    WorkshopProposalNotFoundError,
     WorkshopRepository,
     WorkshopTaskConflictError,
     WorkshopTaskNotFoundError,
@@ -70,15 +68,7 @@ class WorkshopTaskOrchestrator:
         )
         return tuple(artifacts)
 
-    async def list_pending_proposals(
-        self, *, project_id: str, user_id: int
-    ) -> tuple[CreateTaskProposal, ...]:
-        """列出待确认立任务提议"""
-        proposals = await self._repository.list_pending_task_proposals(
-            project_id=project_id, user_id=user_id
-        )
-        return tuple(proposals)
-
+    
     async def list_authorized_operations(
         self, *, project_id: str, user_id: int
     ) -> tuple[AuthorizedOperation, ...]:
@@ -96,68 +86,7 @@ class WorkshopTaskOrchestrator:
         )
         return tuple(assignments)
 
-    async def host_propose_create_task(
-        self,
-        *,
-        project_id: str,
-        user_id: int,
-        title: str,
-        goals: Sequence[str],
-        required_artifacts: Sequence[str] = (),
-    ) -> CreateTaskProposal:
-        """主持提议立任务，进入待确认，不立即创建任务"""
-        if not title.strip():
-            raise TaskOrchestratorError("task title required")
-        normalized = tuple(goal for goal in goals if goal.strip())
-        if not normalized:
-            raise TaskOrchestratorError("at least one goal required")
-        required = tuple(name.strip() for name in required_artifacts)
-        if any(not name for name in required):
-            raise TaskOrchestratorError("required artifact name required")
-        return await self._repository.create_task_proposal(
-            proposal_id=str(uuid4()),
-            project_id=project_id,
-            user_id=user_id,
-            title=title.strip(),
-            goals=normalized,
-            required_artifacts=required,
-        )
-
-    async def user_confirm_create_task(
-        self,
-        *,
-        project_id: str,
-        user_id: int,
-        proposal_id: str,
-    ) -> WorkshopTaskRecord:
-        """用户确认立任务提议，任务进入 aligning"""
-        try:
-            return await self._repository.confirm_task_proposal(
-                project_id=project_id,
-                user_id=user_id,
-                proposal_id=proposal_id,
-                task_id=str(uuid4()),
-            )
-        except WorkshopProposalNotFoundError as exc:
-            raise TaskOrchestratorError(f"unknown proposal: {proposal_id}") from exc
-
-    async def user_decline_create_task(
-        self,
-        *,
-        project_id: str,
-        user_id: int,
-        proposal_id: str,
-    ) -> None:
-        """用户拒绝立任务（别开工），丢弃提议"""
-        try:
-            await self._repository.decline_task_proposal(
-                project_id=project_id,
-                user_id=user_id,
-                proposal_id=proposal_id,
-            )
-        except WorkshopProposalNotFoundError as exc:
-            raise TaskOrchestratorError(f"unknown proposal: {proposal_id}") from exc
-
+    
     async def host_propose_go(
         self, *, project_id: str, user_id: int, task_id: str
     ) -> WorkshopTaskRecord:

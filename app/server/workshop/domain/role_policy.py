@@ -19,6 +19,10 @@ _HOST: FrozenSet[WorkshopToolCapability] = frozenset(
         WorkshopToolCapability.INVITE_EXPERT,
         WorkshopToolCapability.RAISE_AUTH_POPUP,
         WorkshopToolCapability.PROPOSE_INVITE,
+        WorkshopToolCapability.DRAFT_WORKFLOW,
+        WorkshopToolCapability.CONFIRM_SAVE_WORKFLOW,
+        WorkshopToolCapability.CREATE_SCHEDULE,
+        WorkshopToolCapability.MANUAL_RUN_WORKFLOW,
     }
 )
 
@@ -45,8 +49,6 @@ _EXECUTOR: FrozenSet[WorkshopToolCapability] = frozenset(
         WorkshopToolCapability.BROWSER_WRITE,
         WorkshopToolCapability.SANDBOX_EXECUTE,
         WorkshopToolCapability.MCP,
-        WorkshopToolCapability.DRAFT_WORKFLOW,
-        WorkshopToolCapability.CREATE_SCHEDULE,
         WorkshopToolCapability.REQUEST_EXTERNAL_AUTH,
         WorkshopToolCapability.PROPOSE_INVITE,
         WorkshopToolCapability.TAOBAO_STORE_WRITE,

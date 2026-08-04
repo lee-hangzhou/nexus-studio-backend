@@ -88,6 +88,8 @@ class ChatToolContext:
     # Workshop Host：邀请后隐式交接的专家 id（房间成员）
     pending_expert_handoff_id: str | None = None
     source_user_text: str = ""
+    # 当前回合模型；Host 起草工作流时写入定义
+    model_key: str = ""
 
 
 def _cancelled_tool_result(ctx: ChatToolContext) -> ToolResult | None:

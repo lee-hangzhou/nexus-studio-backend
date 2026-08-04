@@ -68,20 +68,70 @@ class WorkshopTaskView(WorkshopContract):
     revision: int
 
 
-class WorkshopWorkflowStepView(WorkshopContract):
+class WorkshopWorkflowNodeAssigneeView(WorkshopContract):
+    preset_key: str = Field(min_length=1)
+
+
+class WorkshopWorkflowNodeInputView(WorkshopContract):
+    kind: Literal["artifact", "project_brief"]
+    name: str = ""
+    from_node_id: str | None = None
+
+
+class WorkshopWorkflowNodeOutputView(WorkshopContract):
+    name: str = Field(min_length=1)
+    storage_type: WorkshopArtifactStorageType
+    required: bool = True
+
+
+class WorkshopWorkflowNodeView(WorkshopContract):
+    id: str = Field(min_length=1)
     title: str = Field(min_length=1)
-    required_artifact_names: list[str] = Field(default_factory=list)
+    instruction: str = Field(min_length=1)
+    assignee: WorkshopWorkflowNodeAssigneeView
+    inputs: list[WorkshopWorkflowNodeInputView] = Field(default_factory=list)
+    outputs: list[WorkshopWorkflowNodeOutputView] = Field(default_factory=list)
     external_capabilities: list[WorkshopToolCapability] = Field(default_factory=list)
+    on_failure: Literal["fail_run", "block"] = "fail_run"
+
+
+class WorkshopWorkflowEdgeView(WorkshopContract):
+    from_id: str = Field(alias="from", min_length=1)
+    to_id: str = Field(alias="to", min_length=1)
+
+    model_config = ConfigDict(extra="forbid", use_enum_values=True, populate_by_name=True)
+
+
+class WorkshopWorkflowDefinitionView(WorkshopContract):
+    nodes: list[WorkshopWorkflowNodeView] = Field(min_length=1)
+    edges: list[WorkshopWorkflowEdgeView] = Field(default_factory=list)
+    entry_node_ids: list[str] | None = None
 
 
 class WorkshopWorkflowView(WorkshopContract):
     id: str
     project_id: str
     name: str
-    steps: list[WorkshopWorkflowStepView]
+    definition: WorkshopWorkflowDefinitionView
+    model_key: str
     status: WorkshopWorkflowStatus
     source: WorkshopWorkflowSource
     revision: int
+
+
+class WorkshopWorkflowRunView(WorkshopContract):
+    id: str
+    project_id: str
+    workflow_id: str
+    workflow_revision: int
+    schedule_id: str | None
+    trigger: Literal["manual", "schedule", "trial"]
+    status: Literal["queued", "running", "succeeded", "failed", "blocked"]
+    current_node_id: str | None
+    error_message: str | None
+    started_at: str | None
+    finished_at: str | None
+    created_at: str
 
 
 class WorkshopScheduleView(WorkshopContract):
@@ -209,8 +259,7 @@ class WorkshopUpgradeResultView(WorkshopContract):
 
 
 class WorkshopManualRunResultView(WorkshopContract):
-    task: WorkshopTaskView
-    used_light_confirmation: bool
+    run: WorkshopWorkflowRunView
 
 
 class WorkshopScheduleTriggerResultView(WorkshopContract):
@@ -218,6 +267,7 @@ class WorkshopScheduleTriggerResultView(WorkshopContract):
     run: WorkshopScheduleRunView
     event_ids: list[str]
     requires_external_auth_popup: bool
+    workflow_run: WorkshopWorkflowRunView | None = None
 
 
 class WorkshopScheduledCompletionResultView(WorkshopContract):
@@ -235,6 +285,10 @@ class WorkshopRoomMembersResponse(WorkshopContract):
 
 class WorkshopWorkflowListResponse(WorkshopContract):
     items: list[WorkshopWorkflowView]
+
+
+class WorkshopWorkflowRunListResponse(WorkshopContract):
+    items: list[WorkshopWorkflowRunView]
 
 
 class WorkshopEventListResponse(WorkshopContract):
@@ -362,7 +416,8 @@ class WorkshopWeakAcceptRequest(WorkshopContract):
 class WorkshopDraftWorkflowRequest(WorkshopContract):
     project_id: str = Field(min_length=1)
     name: str = Field(min_length=1)
-    steps: list[WorkshopWorkflowStepView] = Field(min_length=1)
+    definition: WorkshopWorkflowDefinitionView
+    model_key: str = Field(min_length=1)
 
 
 class WorkshopConfirmWorkflowRequest(WorkshopContract):
@@ -374,6 +429,12 @@ class WorkshopManualRunWorkflowRequest(WorkshopContract):
     project_id: str = Field(min_length=1)
     workflow_id: str = Field(min_length=1)
     authorized_capabilities: list[WorkshopToolCapability] = Field(default_factory=list)
+
+
+class WorkshopListWorkflowRunsRequest(WorkshopContract):
+    project_id: str = Field(min_length=1)
+    workflow_id: str | None = None
+    limit: int = Field(default=50, ge=1, le=200)
 
 
 class WorkshopCreateScheduleRequest(WorkshopContract):
@@ -460,6 +521,7 @@ class WorkshopArtifactView(WorkshopContract):
     storage_key: str
     size_bytes: int | None = None
     content: str | None = None
+    download_url: str | None = None
     created_at: str
     updated_at: str
 
@@ -638,6 +700,8 @@ class WorkshopTurnTarget(WorkshopContract):
     speaker_role: str | None = None
     # 升级确认 / Host 隐式交接续跑时显式关闭，禁止靠内容相等静默跳过落库
     persist_user_message: bool = True
+    # 工作流异步执行等非聊天平面：关闭后不写 chat_messages，也不注入房间时间线
+    persist_chat_messages: bool = True
 
 
 class WorkshopUpgradeInviteExpertView(WorkshopContract):

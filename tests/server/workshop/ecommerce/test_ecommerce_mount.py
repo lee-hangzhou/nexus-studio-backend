@@ -41,7 +41,7 @@ async def test_prepare_turn_tool_snapshots_differ_across_six_profiles() -> None:
 
 @pytest.mark.asyncio
 async def test_advisor_profile_has_no_mcp_or_taobao_write_in_snapshot() -> None:
-    """Advisor 回合快照不含 MCP / 店铺写"""
+    """Advisor 回合快照不含 MCP / 店铺写 / 浏览器写侧工具"""
     profile = get_ecom_profile("ecom_market_competitor_advisor")
     ctx = WorkshopMountContext(
         project_id="wp_test",
@@ -53,8 +53,10 @@ async def test_advisor_profile_has_no_mcp_or_taobao_write_in_snapshot() -> None:
     prepared = await prepare_turn(ctx)
     assert "mcp_invoke" not in prepared.tool_names
     assert "taobao_store_write" not in prepared.tool_names
-    assert "browser_write" not in prepared.tool_names
+    assert "browser_exec_script" not in prepared.tool_names
+    assert "request_user_gate" not in prepared.tool_names
     assert "generation_submit" not in prepared.tool_names
+    assert "write_file" not in prepared.tool_names
 
 
 def test_workshop_thread_id_format() -> None:
@@ -89,7 +91,7 @@ def test_allowlist_fingerprint_matches_profile_helper() -> None:
 
 
 def test_listing_executor_snapshot_includes_generation_list_not_submit_without_grant() -> None:
-    """Listing 执行专家可见 list_models；无 grant 时 submit 不在 effective 快照"""
+    """Listing 执行专家可见 list_models / write_file；无 grant 时 submit 不在 effective 快照"""
     profile = get_ecom_profile("ecom_listing_planner_executor")
     ctx = WorkshopMountContext(
         project_id="wp_1",
@@ -101,6 +103,8 @@ def test_listing_executor_snapshot_includes_generation_list_not_submit_without_g
     )
     names = prepare_turn_tool_snapshot(ctx)
     assert "generation_list_models" in names
+    assert "write_file" in names
+    assert "execute_python" in names
     assert "generation_submit" not in names
     granted = prepare_turn_tool_snapshot(
         WorkshopMountContext(

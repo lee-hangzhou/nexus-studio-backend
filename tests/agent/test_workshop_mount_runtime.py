@@ -107,10 +107,9 @@ async def test_roster_room_assignments_are_independent() -> None:
         )
         assert expert.id in members_after
 
-        task = await h.propose_and_confirm_task(
+        task = await h.create_executing_task(
             project_id=project.id,
             title="t1",
-            goals=["g1"],
         )
         assignments_before = await h.orchestrator.list_task_assignments(
             project_id=project.id, user_id=h.user_id
@@ -171,7 +170,7 @@ async def test_sse_frames_include_speaker_attribution_when_set() -> None:
 
 @pytest.mark.asyncio
 async def test_workshop_mount_prepare_turn_host_has_invite_tools_not_taobao() -> None:
-    """Host 编排工具为 invite_experts / designate_speaker，无 taobao 写"""
+    """Host 编排工具含邀请与工作流，无 taobao 写"""
     from app.agent.workshop.host_tools import build_host_orchestration_tools
     from app.agent.chat.tools.lc_tools import ChatToolContext
     from pathlib import Path
@@ -184,18 +183,23 @@ async def test_workshop_mount_prepare_turn_host_has_invite_tools_not_taobao() ->
         expert_kind=WorkshopExpertKind.ADVISOR,
         is_host=True,
         host_context_block="名册：市场与竞品研究",
-        model_key="",
+        model_key="test-model",
     )
     tool_ctx = ChatToolContext(
         user_id=1,
         conversation_id=1,
         workspace=Path("/tmp"),
         audit=[],
+        model_key="test-model",
     )
     tools = build_host_orchestration_tools(tool_ctx, project_id="wp_test")
     names = {tool.name for tool in tools}
     assert "invite_experts" in names
     assert "designate_speaker" in names
+    assert "draft_workflow" in names
+    assert "confirm_save_workflow" in names
+    assert "create_schedule" in names
+    assert "manual_run_workflow" in names
     assert "taobao_store_write" not in names
     prompt = build_host_turn_context_block(
         roster_names=("市场与竞品研究",),

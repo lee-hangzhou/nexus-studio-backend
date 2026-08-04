@@ -98,6 +98,7 @@ class WorkshopTurnMountContext(WorkshopMountContext):
     tool_ctx: ChatToolContext | None = None
     selected_skills_text: str = ""
     persist_user_message: bool = True
+    persist_chat_messages: bool = True
 
 
 def prepare_turn_tool_snapshot(ctx: WorkshopMountContext) -> tuple[str, ...]:
@@ -111,6 +112,10 @@ def prepare_turn_tool_snapshot(ctx: WorkshopMountContext) -> tuple[str, ...]:
                     WorkshopToolCapability.INVITE_EXPERT,
                     WorkshopToolCapability.RAISE_AUTH_POPUP,
                     WorkshopToolCapability.PROPOSE_INVITE,
+                    WorkshopToolCapability.DRAFT_WORKFLOW,
+                    WorkshopToolCapability.CONFIRM_SAVE_WORKFLOW,
+                    WorkshopToolCapability.CREATE_SCHEDULE,
+                    WorkshopToolCapability.MANUAL_RUN_WORKFLOW,
                 }
             ),
             ctx.granted_external,
@@ -203,7 +208,7 @@ async def _prepare_workshop_turn(ctx: WorkshopTurnMountContext) -> WorkshopTurnM
     }
     persistence = TurnPersistence(user_id=ctx.user_id, conversation_id=ctx.conversation_id)
     ctx.persistence = persistence
-    if ctx.persist_user_message and ctx.content.strip():
+    if ctx.persist_chat_messages and ctx.persist_user_message and ctx.content.strip():
         await persist_workshop_user_message(
             user_id=ctx.user_id,
             conversation_id=ctx.conversation_id,
@@ -220,6 +225,7 @@ async def _prepare_workshop_turn(ctx: WorkshopTurnMountContext) -> WorkshopTurnM
         cancel_event=ctx.cancel_event,
         loop_guard=loop_guard,
         source_user_text=ctx.content,
+        model_key=ctx.model_key,
     )
     ctx.tool_ctx = tool_ctx
     all_tools = build_chat_turn_tools(
@@ -288,7 +294,9 @@ def _workshop_guards(_ctx: WorkshopTurnMountContext) -> TurnGuards:
 
 
 def _workshop_subscribers(ctx: WorkshopTurnMountContext):
-    """复用 TurnPersistence 写入助手消息与发言归属"""
+    """复用 TurnPersistence 写入助手消息与发言归属；非聊天平面关闭落库"""
+    if not ctx.persist_chat_messages:
+        return []
     assert ctx.persistence is not None
     assert ctx.tool_ctx is not None
     return [

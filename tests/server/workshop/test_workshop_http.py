@@ -30,8 +30,40 @@ def _workshop_test_app() -> FastAPI:
     return application
 
 
+def _sample_definition(
+    *,
+    title: str = "cover A",
+    output_name: str = "report.md",
+    required: bool = True,
+) -> dict[str, Any]:
+    """构造合法 DAG definition HTTP 载荷"""
+    return {
+        "nodes": [
+            {
+                "id": "n1",
+                "title": title,
+                "instruction": title,
+                "assignee": {"preset_key": "ecom_market_competitor_advisor"},
+                "inputs": [],
+                "outputs": [
+                    {
+                        "name": output_name,
+                        "storage_type": "db",
+                        "required": required,
+                    }
+                ],
+                "external_capabilities": [],
+                "on_failure": "fail_run",
+            }
+        ],
+        "edges": [],
+    }
+
+
 @asynccontextmanager
-async def workshop_http_client(*, user_id: int = 1) -> AsyncIterator[tuple[AsyncClient, int, list[str], list[int]]]:
+async def workshop_http_client(
+    *, user_id: int = 1
+) -> AsyncIterator[tuple[AsyncClient, int, list[str], list[int]]]:
     """装配带鉴权的 Workshop HTTP 客户端，并登记清理资源"""
     await db.connect()
     app = _workshop_test_app()
@@ -63,9 +95,56 @@ async def workshop_http_client(*, user_id: int = 1) -> AsyncIterator[tuple[Async
 
 
 async def _post(client: AsyncClient, path: str, payload: dict[str, Any]) -> Any:
-    """发起 workshop API POST 并返回 JSON"""
-    response = await client.post(f"/api/v1/workshop{path}", json=payload)
-    return response
+    """发起 workshop API POST 并返回响应"""
+    return await client.post(f"/api/v1/workshop{path}", json=payload)
+
+
+async def _save_workflow(
+    client: AsyncClient,
+    *,
+    project_id: str,
+    name: str,
+    title: str = "cover A",
+    output_name: str = "report.md",
+) -> str:
+    """草稿并确认保存工作流，返回 workflow_id"""
+    draft_resp = await _post(
+        client,
+        "/workflows/user-draft",
+        {
+            "project_id": project_id,
+            "name": name,
+            "model_key": "test-model",
+            "definition": _sample_definition(title=title, output_name=output_name),
+        },
+    )
+    assert draft_resp.status_code == 200, draft_resp.text
+    workflow_id = draft_resp.json()["data"]["id"]
+    confirm_wf = await _post(
+        client,
+        "/workflows/confirm",
+        {"project_id": project_id, "workflow_id": workflow_id},
+    )
+    assert confirm_wf.status_code == 200, confirm_wf.text
+    assert confirm_wf.json()["data"]["status"] == WorkshopWorkflowStatus.SAVED.value
+    return workflow_id
+
+
+async def _manual_run_task(
+    client: AsyncClient, *, project_id: str, workflow_id: str
+) -> str:
+    """手动跑工作流，返回与 run 同 id 的壳任务 id"""
+    run_resp = await _post(
+        client,
+        "/workflows/manual-run",
+        {
+            "project_id": project_id,
+            "workflow_id": workflow_id,
+            "authorized_capabilities": [],
+        },
+    )
+    assert run_resp.status_code == 200, run_resp.text
+    return run_resp.json()["data"]["run"]["id"]
 
 
 @pytest.mark.integration
@@ -85,7 +164,7 @@ async def test_workshop_routes_require_auth() -> None:
 
 @pytest.mark.integration
 async def test_workshop_http_create_get_upgrade_task_workflow_schedule_path() -> None:
-    """覆盖创建/读取/升级/任务/工作流/定时成功路径"""
+    """覆盖创建/读取/升级/工作流/定时成功路径"""
     async with workshop_http_client() as (client, group_chat_id, project_ids, chat_ids):
         create_resp = await _post(
             client,
@@ -124,44 +203,13 @@ async def test_workshop_http_create_get_upgrade_task_workflow_schedule_path() ->
         project_ids.append(upgrade_body["project"]["id"])
         assert upgrade_body.get("pending_task_proposal") is None
 
-        propose_resp = await _post(
-            client,
-            "/tasks/propose",
-            {
-                "project_id": project_id,
-                "title": "周报",
-                "goals": ["汇总数据"],
-                "required_artifacts": ["report"],
-            },
+        workflow_id = await _save_workflow(
+            client, project_id=project_id, name="日报流", title="collect"
         )
-        assert propose_resp.status_code == 200
-        proposal_id = propose_resp.json()["data"]["id"]
-        confirm_resp = await _post(
-            client,
-            "/tasks/confirm",
-            {"project_id": project_id, "proposal_id": proposal_id},
-        )
-        assert confirm_resp.status_code == 200
-        assert confirm_resp.json()["data"]["status"] == WorkshopTaskStatus.ALIGNING.value
 
-        draft_resp = await _post(
-            client,
-            "/workflows/user-draft",
-            {
-                "project_id": project_id,
-                "name": "日报流",
-                "steps": [{"title": "collect", "required_artifact_names": [], "external_capabilities": []}],
-            },
-        )
-        assert draft_resp.status_code == 200
-        workflow_id = draft_resp.json()["data"]["id"]
-        confirm_wf = await _post(
-            client,
-            "/workflows/confirm",
-            {"project_id": project_id, "workflow_id": workflow_id},
-        )
-        assert confirm_wf.status_code == 200
-        assert confirm_wf.json()["data"]["status"] == WorkshopWorkflowStatus.SAVED.value
+        list_wf = await _post(client, "/workflows/list", {"project_id": project_id})
+        assert list_wf.status_code == 200
+        assert any(item["id"] == workflow_id for item in list_wf.json()["data"]["items"])
 
         schedule_resp = await _post(
             client,
@@ -227,23 +275,16 @@ async def test_workshop_http_room_members_task_get_and_reject_done() -> None:
         assert members_resp.status_code == 200
         assert expert["id"] in members_resp.json()["data"]["expert_ids"]
 
-        propose_resp = await _post(
+        workflow_id = await _save_workflow(
             client,
-            "/tasks/propose",
-            {
-                "project_id": project_id,
-                "title": "验收任务",
-                "goals": ["cover A"],
-                "required_artifacts": ["report.md"],
-            },
+            project_id=project_id,
+            name="验收流",
+            title="cover A",
+            output_name="report.md",
         )
-        proposal_id = propose_resp.json()["data"]["id"]
-        confirm_resp = await _post(
-            client,
-            "/tasks/confirm",
-            {"project_id": project_id, "proposal_id": proposal_id},
+        task_id = await _manual_run_task(
+            client, project_id=project_id, workflow_id=workflow_id
         )
-        task_id = confirm_resp.json()["data"]["id"]
 
         get_resp = await _post(
             client,
@@ -252,11 +293,12 @@ async def test_workshop_http_room_members_task_get_and_reject_done() -> None:
         )
         assert get_resp.status_code == 200
         assert get_resp.json()["data"]["id"] == task_id
-        assert get_resp.json()["data"]["status"] == WorkshopTaskStatus.ALIGNING.value
+        assert get_resp.json()["data"]["status"] == WorkshopTaskStatus.EXECUTING.value
 
-        for path in ("/tasks/propose-go", "/tasks/confirm-go", "/tasks/begin", "/tasks/review"):
-            step = await _post(client, path, {"project_id": project_id, "task_id": task_id})
-            assert step.status_code == 200, path
+        review = await _post(
+            client, "/tasks/review", {"project_id": project_id, "task_id": task_id}
+        )
+        assert review.status_code == 200
 
         accept_resp = await _post(
             client,
@@ -304,7 +346,12 @@ async def test_workshop_http_room_members_task_get_and_reject_done() -> None:
 @pytest.mark.integration
 async def test_workshop_http_ownership_and_conflict_mapping() -> None:
     """所有权失败与非法迁移映射为可区分错误码，禁止假成功"""
-    async with workshop_http_client(user_id=1) as (client, group_chat_id, project_ids, _chat_ids):
+    async with workshop_http_client(user_id=1) as (
+        client,
+        group_chat_id,
+        project_ids,
+        _chat_ids,
+    ):
         create_resp = await _post(
             client,
             "/projects/create",
@@ -323,35 +370,32 @@ async def test_workshop_http_ownership_and_conflict_mapping() -> None:
         assert foreign.status_code == 404
         assert foreign.json()["code"] == int(ErrorCode.RESOURCE_NOT_FOUND)
 
-        propose_resp = await _post(
-            client,
-            "/tasks/propose",
-            {
-                "project_id": project_id,
-                "title": "任务",
-                "goals": ["g1"],
-            },
+        workflow_id = await _save_workflow(
+            client, project_id=project_id, name="归属流", title="g1"
         )
-        proposal_id = propose_resp.json()["data"]["id"]
-        confirm_resp = await _post(
-            client,
-            "/tasks/confirm",
-            {"project_id": project_id, "proposal_id": proposal_id},
+        task_id = await _manual_run_task(
+            client, project_id=project_id, workflow_id=workflow_id
         )
-        task_id = confirm_resp.json()["data"]["id"]
 
-        begin_resp = await _post(
+        # EXECUTING 上再 begin 之类的路径已移除；审查后合法，取消后不可再 reject-done
+        cancel_resp = await _post(
             client,
-            "/tasks/begin",
+            "/tasks/cancel",
             {"project_id": project_id, "task_id": task_id},
         )
-        assert begin_resp.status_code == 400
-        assert begin_resp.json()["code"] == int(ErrorCode.INVALID_PARAMS)
-        assert begin_resp.json()["data"] is None or begin_resp.json()["code"] != 0
+        assert cancel_resp.status_code == 200
+
+        reject_cancelled = await _post(
+            client,
+            "/tasks/reject-done",
+            {"project_id": project_id, "task_id": task_id},
+        )
+        assert reject_cancelled.status_code == 400
+        assert reject_cancelled.json()["code"] == int(ErrorCode.INVALID_PARAMS)
 
         missing_task = await _post(
             client,
-            "/tasks/begin",
+            "/tasks/review",
             {"project_id": project_id, "task_id": "missing-task"},
         )
         assert missing_task.status_code == 404
@@ -366,6 +410,13 @@ async def test_workshop_http_ownership_and_conflict_mapping() -> None:
     assert "/api/v1/workshop/roster/room-members" in workshop_paths
     assert "/api/v1/workshop/tasks/get" in workshop_paths
     assert "/api/v1/workshop/tasks/reject-done" in workshop_paths
+    assert "/api/v1/workshop/workflows/manual-run" in workshop_paths
+    assert "/api/v1/workshop/workflows/runs/list" in workshop_paths
+    assert "/api/v1/workshop/tasks/propose" not in workshop_paths
+    assert "/api/v1/workshop/tasks/propose-go" not in workshop_paths
+    assert "/api/v1/workshop/tasks/confirm-go" not in workshop_paths
+    assert "/api/v1/workshop/tasks/begin" not in workshop_paths
+    assert "/api/v1/workshop/tasks/pending-proposals" not in workshop_paths
     assert "/api/v1/workshop/roster/decline-custom" in workshop_paths
     assert "/api/v1/workshop/schedules/get" in workshop_paths
     assert "/api/v1/workshop/schedules/list" in workshop_paths
@@ -416,7 +467,7 @@ async def test_workshop_http_duplicate_group_chat_and_foreign_chat_mapping() -> 
 
 @pytest.mark.integration
 async def test_workshop_http_read_list_endpoints() -> None:
-    """覆盖项目/任务/产物/数据源/authorized_operations 只读列表端点"""
+    """覆盖项目/任务/产物/工作流运行/数据源只读列表端点"""
     async with workshop_http_client() as (client, group_chat_id, project_ids, _chat_ids):
         create_resp = await _post(
             client,
@@ -436,35 +487,25 @@ async def test_workshop_http_read_list_endpoints() -> None:
         listed_ids = [item["id"] for item in list_projects_resp.json()["data"]["items"]]
         assert project_id in listed_ids
 
-        propose_resp = await _post(
+        workflow_id = await _save_workflow(
             client,
-            "/tasks/propose",
-            {
-                "project_id": project_id,
-                "title": "列表任务",
-                "goals": ["cover list"],
-                "required_artifacts": ["report.md"],
-            },
+            project_id=project_id,
+            name="列表流",
+            title="cover list",
+            output_name="report.md",
         )
-        assert propose_resp.status_code == 200
-        proposal_id = propose_resp.json()["data"]["id"]
+        task_id = await _manual_run_task(
+            client, project_id=project_id, workflow_id=workflow_id
+        )
 
-        pending_resp = await _post(
+        runs_resp = await _post(
             client,
-            "/tasks/pending-proposals",
-            {"project_id": project_id},
+            "/workflows/runs/list",
+            {"project_id": project_id, "workflow_id": workflow_id},
         )
-        assert pending_resp.status_code == 200
-        pending_ids = [item["id"] for item in pending_resp.json()["data"]["items"]]
-        assert proposal_id in pending_ids
-
-        confirm_resp = await _post(
-            client,
-            "/tasks/confirm",
-            {"project_id": project_id, "proposal_id": proposal_id},
-        )
-        assert confirm_resp.status_code == 200
-        task_id = confirm_resp.json()["data"]["id"]
+        assert runs_resp.status_code == 200
+        run_ids = [item["id"] for item in runs_resp.json()["data"]["items"]]
+        assert task_id in run_ids
 
         tasks_resp = await _post(
             client,
@@ -509,9 +550,10 @@ async def test_workshop_http_read_list_endpoints() -> None:
         assert import_errors_resp.status_code == 200
         assert import_errors_resp.json()["data"]["items"] == []
 
-        for path in ("/tasks/propose-go", "/tasks/confirm-go", "/tasks/begin", "/tasks/review"):
-            step = await _post(client, path, {"project_id": project_id, "task_id": task_id})
-            assert step.status_code == 200, path
+        review = await _post(
+            client, "/tasks/review", {"project_id": project_id, "task_id": task_id}
+        )
+        assert review.status_code == 200
 
         accept_resp = await _post(
             client,
@@ -585,7 +627,7 @@ async def test_workshop_http_get_by_chat_and_upgrade() -> None:
 
         upgrade_chat = await ChatConversations.create(
             user_id=1,
-            title=f"workshop-ecom-upgrade-{uuid4().hex}",
+            title=f"workshop-upgrade-keys-{uuid4().hex}",
             default_model="test",
             status=ChatConversationStatus.ACTIVE,
         )
@@ -595,17 +637,18 @@ async def test_workshop_http_get_by_chat_and_upgrade() -> None:
             "/projects/upgrade",
             {
                 "group_chat_id": int(upgrade_chat.id),
-                "project_name": "电商升级",
-                "seed_goal": "完成首版店铺诊断",
+                "project_name": "带专家升级",
                 "carried_message_count": 0,
-                "initial_expert_keys": [
-                    "ecom_ops_analytics_executor",
-                    "ecom_taobao_store_ops_executor",
-                ],
+                "initial_expert_keys": ["ecom_market_competitor_advisor"],
             },
         )
         assert upgrade_resp.status_code == 200
-        upgrade_body = upgrade_resp.json()["data"]
-        project_ids.append(upgrade_body["project"]["id"])
-        assert "pack" not in upgrade_body["project"]
-        assert upgrade_body["project"]["name"] == "电商升级"
+        upgraded = upgrade_resp.json()["data"]
+        project_ids.append(upgraded["project"]["id"])
+        assert upgraded.get("pending_task_proposal") is None
+        roster_resp = await _post(
+            client, "/roster/list", {"project_id": upgraded["project"]["id"]}
+        )
+        assert roster_resp.status_code == 200
+        keys = {item["preset_key"] for item in roster_resp.json()["data"]["items"]}
+        assert "ecom_market_competitor_advisor" in keys

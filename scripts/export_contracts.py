@@ -175,7 +175,15 @@ from app.contracts.workshop import (
     WorkshopWeakAcceptRequest,
     WorkshopWeakAcceptResultView,
     WorkshopWorkflowListResponse,
-    WorkshopWorkflowStepView,
+    WorkshopWorkflowDefinitionView,
+    WorkshopWorkflowEdgeView,
+    WorkshopWorkflowNodeAssigneeView,
+    WorkshopWorkflowNodeInputView,
+    WorkshopWorkflowNodeOutputView,
+    WorkshopWorkflowNodeView,
+    WorkshopWorkflowRunListResponse,
+    WorkshopWorkflowRunView,
+    WorkshopListWorkflowRunsRequest,
     WorkshopWorkflowView,
 )
 from app.server.billing.schemas.http import (
@@ -327,7 +335,11 @@ WorkshopContracts = Annotated[
     | WorkshopArtifactView
     | WorkshopArtifactListRequest
     | WorkshopArtifactListResponse
-    | WorkshopWorkflowStepView
+    | WorkshopWorkflowDefinitionView
+    | WorkshopWorkflowNodeView
+    | WorkshopWorkflowRunView
+    | WorkshopWorkflowRunListResponse
+    | WorkshopListWorkflowRunsRequest
     | WorkshopDraftWorkflowRequest
     | WorkshopConfirmWorkflowRequest
     | WorkshopWorkflowView

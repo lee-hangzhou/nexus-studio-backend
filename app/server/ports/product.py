@@ -316,6 +316,57 @@ class WorkshopRosterExpertDTO:
 
 
 @dataclass(frozen=True, slots=True)
+class WorkshopWorkflowDTO:
+    """工坊工作流 Port DTO"""
+
+    id: str
+    name: str
+    status: str
+    model_key: str
+    revision: int
+
+
+@dataclass(frozen=True, slots=True)
+class WorkshopScheduleDTO:
+    """工坊定时 Port DTO"""
+
+    id: str
+    workflow_id: str
+    cron: str
+    timezone: str
+    enabled: bool
+
+
+@dataclass(frozen=True, slots=True)
+class WorkshopWorkflowRunDTO:
+    """工坊工作流运行 Port DTO"""
+
+    id: str
+    workflow_id: str
+    status: str
+
+
+@dataclass(frozen=True, slots=True)
+class WorkshopWorkflowNodeSpecDTO:
+    """Agent 起草工作流节点规格"""
+
+    id: str
+    title: str
+    instruction: str
+    preset_key: str
+    output_name: str
+    external_capabilities: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class WorkshopWorkflowEdgeSpecDTO:
+    """Agent 起草工作流边规格"""
+
+    from_id: str
+    to_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class UpgradeInviteProposalDTO:
     """升级邀请提议 Port DTO"""
 
@@ -344,6 +395,45 @@ class WorkshopPort(Protocol):
     ) -> None: ...
 
     async def room_members(self, *, project_id: str, user_id: int) -> frozenset[str]: ...
+
+    async def agent_draft_workflow(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        name: str,
+        model_key: str,
+        nodes: tuple[WorkshopWorkflowNodeSpecDTO, ...],
+        edges: tuple[WorkshopWorkflowEdgeSpecDTO, ...],
+    ) -> WorkshopWorkflowDTO: ...
+
+    async def confirm_save_workflow(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+    ) -> WorkshopWorkflowDTO: ...
+
+    async def create_schedule(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+        cron: str,
+        timezone: str,
+        authorized_capabilities: tuple[str, ...],
+    ) -> WorkshopScheduleDTO: ...
+
+    async def manual_run_workflow(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+        authorized_capabilities: tuple[str, ...],
+    ) -> WorkshopWorkflowRunDTO: ...
 
 
 @runtime_checkable

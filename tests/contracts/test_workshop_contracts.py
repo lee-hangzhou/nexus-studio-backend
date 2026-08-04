@@ -16,7 +16,8 @@ from app.contracts.workshop import (
     WorkshopProjectView,
     WorkshopRoomMembersResponse,
     WorkshopTaskView,
-    WorkshopWorkflowStepView,
+    WorkshopWorkflowDefinitionView,
+    WorkshopWorkflowNodeView,
 )
 from app.server.workshop.domain.enums import (
     WorkshopArtifactStorageType,
@@ -139,14 +140,32 @@ def test_workshop_artifact_and_task_views_are_typed() -> None:
         }
     )
     assert task.status == WorkshopTaskStatus.ALIGNING
-    step = WorkshopWorkflowStepView.model_validate(
+    definition = WorkshopWorkflowDefinitionView.model_validate(
         {
-            "title": "collect",
-            "required_artifact_names": ["a"],
-            "external_capabilities": [WorkshopToolCapability.MCP.value],
+            "nodes": [
+                {
+                    "id": "n1",
+                    "title": "collect",
+                    "instruction": "collect data",
+                    "assignee": {"preset_key": "ecom_market_competitor_advisor"},
+                    "inputs": [],
+                    "outputs": [
+                        {
+                            "name": "brief",
+                            "storage_type": "db",
+                            "required": True,
+                        }
+                    ],
+                    "external_capabilities": [WorkshopToolCapability.WEB_SEARCH.value],
+                    "on_failure": "fail_run",
+                }
+            ],
+            "edges": [],
         }
     )
-    assert step.external_capabilities == [WorkshopToolCapability.MCP]
+    node = definition.nodes[0]
+    assert isinstance(node, WorkshopWorkflowNodeView)
+    assert node.assignee.preset_key == "ecom_market_competitor_advisor"
 
 
 def test_workshop_room_members_response_is_typed() -> None:

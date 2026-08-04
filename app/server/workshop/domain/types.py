@@ -12,32 +12,12 @@ from app.server.workshop.domain.enums import (
     WorkshopRole,
     WorkshopTaskStatus,
     WorkshopToolCapability,
+    WorkshopWorkflowRunStatus,
+    WorkshopWorkflowRunTrigger,
     WorkshopWorkflowSource,
     WorkshopWorkflowStatus,
 )
-
-
-@dataclass(frozen=True, slots=True)
-class WorkflowStep:
-    """工作流步骤值对象"""
-
-    title: str
-    required_artifact_names: Tuple[str, ...] = ()
-    external_capabilities: Tuple[WorkshopToolCapability, ...] = ()
-
-    def __post_init__(self) -> None:
-        """校验步骤标题、产物名与外部能力"""
-        if not self.title.strip():
-            raise ValueError("workflow step title required")
-        cleaned_names = tuple(name.strip() for name in self.required_artifact_names)
-        if any(not name for name in cleaned_names):
-            raise ValueError("required artifact name required")
-        object.__setattr__(self, "required_artifact_names", cleaned_names)
-        object.__setattr__(
-            self,
-            "external_capabilities",
-            tuple(self.external_capabilities),
-        )
+from app.server.workshop.domain.workflow_definition import WorkflowEdge, WorkflowNode
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,14 +109,36 @@ class WorkshopTaskRecord:
 
 @dataclass(frozen=True, slots=True)
 class WorkshopWorkflowRecord:
-    """工坊工作流读模型"""
+    """工坊工作流读模型（definition 为可执行 DAG）"""
 
     id: str
     project_id: str
     name: str
-    steps: Tuple[WorkflowStep, ...]
+    nodes: Tuple[WorkflowNode, ...]
+    edges: Tuple[WorkflowEdge, ...]
     status: WorkshopWorkflowStatus
     source: WorkshopWorkflowSource
+    revision: int
+    model_key: str
+    entry_node_ids: Optional[Tuple[str, ...]] = None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkshopWorkflowRunRecord:
+    """工作流一次运行记录"""
+
+    id: str
+    project_id: str
+    workflow_id: str
+    workflow_revision: int
+    schedule_id: Optional[str]
+    trigger: WorkshopWorkflowRunTrigger
+    status: WorkshopWorkflowRunStatus
+    current_node_id: Optional[str]
+    error_message: Optional[str]
+    started_at: Optional[datetime]
+    finished_at: Optional[datetime]
+    created_at: datetime
     revision: int
 
 

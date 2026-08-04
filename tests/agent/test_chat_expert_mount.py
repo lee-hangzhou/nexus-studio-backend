@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,8 +10,11 @@ from app.agent.chat.expert_turn import (
     intersect_chat_tools_with_profile,
     profile_allowlist_for_key,
     profile_tool_names_for_chat,
+    profile_tool_names_for_workshop_expert,
 )
 from app.agent.chat.mount import CHAT_MOUNT, ChatMountContext
+from app.agent.chat.tools.build_turn_tools import build_chat_turn_tools
+from app.agent.chat.tools.lc_tools import ChatToolContext
 from app.contracts.turn_content import TurnUserInput, compile_turn_input
 from app.server.workshop.domain.enums import WorkshopToolCapability
 
@@ -19,8 +23,43 @@ def test_profile_tool_names_cannot_gain_taobao_write_from_chat() -> None:
     """Chat 单 Agent 选淘天运营专家仍无 taobao_store_write"""
     names = profile_tool_names_for_chat("ecom_taobao_store_ops_executor")
     assert "taobao_store_write" not in names
-    assert "browser_write" not in names
+    assert "browser_exec_script" not in names
     assert "mcp_invoke" not in names
+
+
+def test_workshop_listing_executor_maps_to_real_write_file_tool() -> None:
+    """能力 WRITE_* / SANDBOX 必须映射到 Chat 真实工具名，过滤后仍可写盘"""
+    allowed = profile_tool_names_for_workshop_expert("ecom_listing_planner_executor")
+    assert "write_file" in allowed
+    assert "read_file" in allowed
+    assert "execute_python" in allowed
+    assert "write_project_files" not in allowed
+    assert "write_temp_workspace" not in allowed
+
+    ctx = ChatToolContext(
+        user_id=1,
+        conversation_id=1,
+        workspace=Path("/tmp"),
+        audit=[],
+        guards=None,
+        cancel_event=None,
+        loop_guard=None,
+        source_user_text="hi",
+        model_key="test-model",
+    )
+    tools = build_chat_turn_tools(
+        ctx,
+        enable_tools=True,
+        user_id=1,
+        tool_asset_ids=frozenset(),
+        asset_media_types={},
+    )
+    filtered = intersect_chat_tools_with_profile(tools, allowed)
+    names = {tool.name for tool in filtered}
+    assert "write_file" in names
+    assert "read_file" in names
+    assert "execute_python" in names
+    assert "web_search" in names
 
 
 def test_intersect_chat_tools_filters_unauthorized() -> None:

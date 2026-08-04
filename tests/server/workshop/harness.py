@@ -10,7 +10,16 @@ from tortoise import Tortoise
 from app.server.chat.domain.enums import ChatConversationStatus
 from app.server.chat.persistence.conversations import ChatConversations
 from app.server.infra.database import db
+from app.server.workshop.domain.enums import (
+    WorkshopArtifactStorageType,
+    WorkshopToolCapability,
+)
 from app.server.workshop.domain.types import WorkshopTaskRecord
+from app.server.workshop.domain.workflow_definition import (
+    NodeAssignee,
+    NodeOutput,
+    WorkflowNode,
+)
 from app.server.workshop.persistence.models import WorkshopProjects
 from app.server.workshop.persistence.repository import WorkshopRepository
 from app.server.workshop.services.task_orchestrator import WorkshopTaskOrchestrator
@@ -50,26 +59,59 @@ class WorkshopTestHarness:
         self.chat_ids.append(chat_id)
         return chat_id
 
-    async def propose_and_confirm_task(
+    async def create_executing_task(
         self,
         *,
         project_id: str,
-        title: str,
-        goals: Sequence[str],
+        title: str = "step",
         required_artifacts: Sequence[str] = (),
+        external_auth: Sequence[WorkshopToolCapability] = (),
+        preset_key: str = "ecom_market_competitor_advisor",
     ) -> WorkshopTaskRecord:
-        """测试专用：显式提议再确认立任务，替代生产 confirm_create_task 捷径"""
-        proposal = await self.orchestrator.host_propose_create_task(
-            project_id=project_id,
-            user_id=self.user_id,
-            title=title,
-            goals=goals,
-            required_artifacts=required_artifacts,
+        """经工作流保存后创建 executing 壳任务（无自由立任务路径）"""
+        outputs = tuple(
+            NodeOutput(
+                name=name,
+                storage_type=WorkshopArtifactStorageType.DB,
+            )
+            for name in required_artifacts
         )
-        return await self.orchestrator.user_confirm_create_task(
+        if not outputs:
+            outputs = (
+                NodeOutput(
+                    name=f"{title}_out",
+                    storage_type=WorkshopArtifactStorageType.DB,
+                    required=False,
+                ),
+            )
+        nodes = (
+            WorkflowNode(
+                id="n1",
+                title=title,
+                instruction=title,
+                assignee=NodeAssignee(preset_key=preset_key),
+                outputs=outputs,
+            ),
+        )
+        draft = await self.schedules.user_draft_workflow(
             project_id=project_id,
             user_id=self.user_id,
-            proposal_id=proposal.id,
+            name=title,
+            model_key="test-model",
+            nodes=nodes,
+            edges=(),
+        )
+        saved = await self.schedules.user_confirm_save_workflow(
+            project_id=project_id,
+            user_id=self.user_id,
+            workflow_id=draft.id,
+        )
+        return await self.repository.create_executing_task_from_workflow(
+            project_id=project_id,
+            user_id=self.user_id,
+            workflow_id=saved.id,
+            task_id=str(uuid4()),
+            external_auth=tuple(external_auth),
         )
 
 

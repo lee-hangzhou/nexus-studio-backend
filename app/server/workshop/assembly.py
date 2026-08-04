@@ -36,11 +36,18 @@ from app.contracts.workshop import (
     WorkshopUpgradeInviteProposedView,
     WorkshopWakeDashboardView,
     WorkshopWeakAcceptResultView,
-    WorkshopWorkflowStepView,
+    WorkshopWorkflowDefinitionView,
+    WorkshopWorkflowEdgeView,
+    WorkshopWorkflowNodeAssigneeView,
+    WorkshopWorkflowNodeInputView,
+    WorkshopWorkflowNodeOutputView,
+    WorkshopWorkflowNodeView,
+    WorkshopWorkflowRunView,
     WorkshopWorkflowView,
 )
-from app.server.workshop.domain.ecommerce.authorized_operations import AuthorizedOperation
 from app.server.chat.services.upgrade_invite import UpgradeInviteProposalRecord
+from app.server.infra.object_storage import object_storage
+from app.server.workshop.domain.ecommerce.authorized_operations import AuthorizedOperation
 from app.server.workshop.domain.ecommerce.profiles import get_ecom_profile, is_ecom_preset
 from app.server.workshop.domain.enums import (
     WorkshopArtifactStorageType,
@@ -64,7 +71,6 @@ from app.server.workshop.domain.types import (
     ScheduleSummaryPayload,
     TaskAssignmentRecord,
     WeakAcceptResult,
-    WorkflowStep,
     WorkshopEventPayload,
     WorkshopEventRecord,
     WorkshopProjectRecord,
@@ -72,6 +78,7 @@ from app.server.workshop.domain.types import (
     WorkshopScheduleRunRecord,
     WorkshopTaskRecord,
     WorkshopWorkflowRecord,
+    WorkshopWorkflowRunRecord,
 )
 from app.server.workshop.services.workflow_schedule_service import (
     ManualRunResult,
@@ -246,7 +253,14 @@ def task_to_view(task: WorkshopTaskRecord) -> WorkshopTaskView:
 
 
 def artifact_to_view(record: ArtifactRecord) -> WorkshopArtifactView:
-    """产物读模型转契约视图"""
+    """产物读模型转契约视图；oss 产物附带短期下载 URL"""
+    download_url: str | None = None
+    if (
+        record.storage_type is WorkshopArtifactStorageType.OSS
+        and record.storage_key.strip()
+        and object_storage._is_configured  # noqa: SLF001 — 与资产预览同契约
+    ):
+        download_url = object_storage.presigned_get_url(record.storage_key)
     return WorkshopArtifactView(
         id=record.id,
         project_id=record.project_id,
@@ -256,6 +270,7 @@ def artifact_to_view(record: ArtifactRecord) -> WorkshopArtifactView:
         storage_key=record.storage_key,
         size_bytes=record.size_bytes,
         content=record.content,
+        download_url=download_url,
         created_at=_iso(record.created_at),
         updated_at=_iso(record.updated_at),
     )
@@ -311,12 +326,51 @@ def begin_shop_auth_to_view(record: BeginShopAuthRecord) -> WorkshopBeginShopAut
     )
 
 
-def workflow_step_to_view(step: WorkflowStep) -> WorkshopWorkflowStepView:
-    """工作流步骤转契约视图"""
-    return WorkshopWorkflowStepView(
-        title=step.title,
-        required_artifact_names=list(step.required_artifact_names),
-        external_capabilities=list(step.external_capabilities),
+def workflow_definition_to_view(
+    workflow: WorkshopWorkflowRecord,
+) -> WorkshopWorkflowDefinitionView:
+    """工作流 DAG 转契约视图"""
+    return WorkshopWorkflowDefinitionView(
+        nodes=[
+            WorkshopWorkflowNodeView(
+                id=node.id,
+                title=node.title,
+                instruction=node.instruction,
+                assignee=WorkshopWorkflowNodeAssigneeView(
+                    preset_key=node.assignee.preset_key
+                ),
+                inputs=[
+                    WorkshopWorkflowNodeInputView(
+                        kind=item.kind,  # type: ignore[arg-type]
+                        name=item.name,
+                        from_node_id=item.from_node_id,
+                    )
+                    for item in node.inputs
+                ],
+                outputs=[
+                    WorkshopWorkflowNodeOutputView(
+                        name=item.name,
+                        storage_type=item.storage_type,
+                        required=item.required,
+                    )
+                    for item in node.outputs
+                ],
+                external_capabilities=list(node.external_capabilities),
+                on_failure=node.on_failure,  # type: ignore[arg-type]
+            )
+            for node in workflow.nodes
+        ],
+        edges=[
+            WorkshopWorkflowEdgeView.model_validate(
+                {"from": edge.from_id, "to": edge.to_id}
+            )
+            for edge in workflow.edges
+        ],
+        entry_node_ids=(
+            list(workflow.entry_node_ids)
+            if workflow.entry_node_ids is not None
+            else None
+        ),
     )
 
 
@@ -326,10 +380,29 @@ def workflow_to_view(workflow: WorkshopWorkflowRecord) -> WorkshopWorkflowView:
         id=workflow.id,
         project_id=workflow.project_id,
         name=workflow.name,
-        steps=[workflow_step_to_view(step) for step in workflow.steps],
+        definition=workflow_definition_to_view(workflow),
+        model_key=workflow.model_key,
         status=workflow.status,
         source=workflow.source,
         revision=workflow.revision,
+    )
+
+
+def workflow_run_to_view(run: WorkshopWorkflowRunRecord) -> WorkshopWorkflowRunView:
+    """运行记录转契约视图"""
+    return WorkshopWorkflowRunView(
+        id=run.id,
+        project_id=run.project_id,
+        workflow_id=run.workflow_id,
+        workflow_revision=run.workflow_revision,
+        schedule_id=run.schedule_id,
+        trigger=run.trigger.value,  # type: ignore[arg-type]
+        status=run.status.value,  # type: ignore[arg-type]
+        current_node_id=run.current_node_id,
+        error_message=run.error_message,
+        started_at=_iso(run.started_at) if run.started_at else None,
+        finished_at=_iso(run.finished_at) if run.finished_at else None,
+        created_at=_iso(run.created_at),
     )
 
 
@@ -427,10 +500,7 @@ def wake_to_view(dashboard: WakeDashboard) -> WorkshopWakeDashboardView:
 
 def manual_run_to_view(result: ManualRunResult) -> WorkshopManualRunResultView:
     """手动跑工作流转契约视图"""
-    return WorkshopManualRunResultView(
-        task=task_to_view(result.task),
-        used_light_confirmation=result.used_light_confirmation,
-    )
+    return WorkshopManualRunResultView(run=workflow_run_to_view(result.run))
 
 
 def schedule_trigger_to_view(result: ScheduleTriggerResult) -> WorkshopScheduleTriggerResultView:
@@ -440,6 +510,11 @@ def schedule_trigger_to_view(result: ScheduleTriggerResult) -> WorkshopScheduleT
         run=schedule_run_to_view(result.run),
         event_ids=list(result.event_ids),
         requires_external_auth_popup=result.requires_external_auth_popup,
+        workflow_run=(
+            workflow_run_to_view(result.workflow_run)
+            if result.workflow_run is not None
+            else None
+        ),
     )
 
 
@@ -489,16 +564,56 @@ def artifact_from_view(view: ArtifactSubmissionView) -> ArtifactSubmission:
     )
 
 
-def workflow_step_from_view(view: WorkshopWorkflowStepView) -> WorkflowStep:
-    """契约工作流步骤转为领域值对象"""
-    caps: list[WorkshopToolCapability] = []
-    for item in view.external_capabilities:
-        caps.append(item if isinstance(item, WorkshopToolCapability) else WorkshopToolCapability(item))
-    return WorkflowStep(
-        title=view.title,
-        required_artifact_names=tuple(view.required_artifact_names),
-        external_capabilities=tuple(caps),
+def workflow_graph_from_view(
+    view: WorkshopWorkflowDefinitionView,
+) -> tuple[tuple, tuple, list[str] | None]:
+    """契约 DAG 转为领域节点与边"""
+    from app.server.workshop.domain.workflow_definition import (
+        NodeAssignee,
+        NodeInput,
+        NodeOutput,
+        WorkflowEdge,
+        WorkflowNode,
     )
+
+    nodes = tuple(
+        WorkflowNode(
+            id=node.id,
+            title=node.title,
+            instruction=node.instruction,
+            assignee=NodeAssignee(preset_key=node.assignee.preset_key),
+            inputs=tuple(
+                NodeInput(
+                    kind=inp.kind,
+                    name=inp.name,
+                    from_node_id=inp.from_node_id,
+                )
+                for inp in node.inputs
+            ),
+            outputs=tuple(
+                NodeOutput(
+                    name=out.name,
+                    storage_type=(
+                        out.storage_type
+                        if isinstance(out.storage_type, WorkshopArtifactStorageType)
+                        else WorkshopArtifactStorageType(out.storage_type)
+                    ),
+                    required=out.required,
+                )
+                for out in node.outputs
+            ),
+            external_capabilities=tuple(
+                capability_from_contract(cap) for cap in node.external_capabilities
+            ),
+            on_failure=node.on_failure,
+        )
+        for node in view.nodes
+    )
+    edges = tuple(
+        WorkflowEdge(from_id=edge.from_id, to_id=edge.to_id) for edge in view.edges
+    )
+    entry = list(view.entry_node_ids) if view.entry_node_ids is not None else None
+    return nodes, edges, entry
 
 
 def capability_from_contract(value: WorkshopToolCapability | str) -> WorkshopToolCapability:

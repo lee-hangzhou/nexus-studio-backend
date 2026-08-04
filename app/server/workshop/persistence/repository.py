@@ -20,6 +20,8 @@ from app.server.workshop.domain.enums import (
     WorkshopRole,
     WorkshopTaskStatus,
     WorkshopToolCapability,
+    WorkshopWorkflowRunStatus,
+    WorkshopWorkflowRunTrigger,
     WorkshopWorkflowSource,
     WorkshopWorkflowStatus,
 )
@@ -40,7 +42,6 @@ from app.server.workshop.domain.types import (
     ScheduleStartedPayload,
     ScheduleSummaryPayload,
     TaskAssignmentRecord,
-    WorkflowStep,
     WorkshopEventPayload,
     WorkshopEventRecord,
     WorkshopProjectRecord,
@@ -48,6 +49,13 @@ from app.server.workshop.domain.types import (
     WorkshopScheduleRunRecord,
     WorkshopTaskRecord,
     WorkshopWorkflowRecord,
+    WorkshopWorkflowRunRecord,
+)
+from app.server.workshop.domain.workflow_definition import (
+    WorkflowEdge,
+    WorkflowNode,
+    definition_to_jsonable,
+    parse_definition_graph,
 )
 from app.server.workshop.persistence.models import (
     WorkshopArtifacts,
@@ -62,6 +70,7 @@ from app.server.workshop.persistence.models import (
     WorkshopTaskExperts,
     WorkshopTaskProposals,
     WorkshopTasks,
+    WorkshopWorkflowRuns,
     WorkshopWorkflows,
 )
 
@@ -228,67 +237,63 @@ def _parse_string_list(raw: object, *, field_name: str) -> tuple[str, ...]:
     return tuple(str(item) for item in raw)
 
 
-def _parse_steps(raw: Sequence[object]) -> tuple[WorkflowStep, ...]:
-    """将工作流 steps JSON 解析为值对象"""
-    steps: list[WorkflowStep] = []
-    for item in raw:
-        if not isinstance(item, dict):
-            raise WorkshopRepositoryError("workflow step must be object")
-        title = item.get("title")
-        if not isinstance(title, str):
-            raise WorkshopRepositoryError("workflow step title must be string")
-        required_raw = item.get("required_artifact_names", [])
-        if not isinstance(required_raw, list):
-            raise WorkshopRepositoryError(
-                "workflow step required_artifact_names must be list"
-            )
-        external_raw = item.get("external_capabilities", [])
-        if not isinstance(external_raw, list):
-            raise WorkshopRepositoryError(
-                "workflow step external_capabilities must be list"
-            )
-        steps.append(
-            WorkflowStep(
-                title=title,
-                required_artifact_names=tuple(str(name) for name in required_raw),
-                external_capabilities=tuple(
-                    WorkshopToolCapability(str(cap)) for cap in external_raw
-                ),
-            )
-        )
-    return tuple(steps)
+def _parse_definition_payload(raw: object) -> tuple[
+    tuple[WorkflowNode, ...],
+    tuple[WorkflowEdge, ...],
+    tuple[str, ...] | None,
+    str,
+]:
+    """解析 steps 列中的 DAG definition 文档"""
+    try:
+        return parse_definition_graph(raw)
+    except Exception as exc:  # noqa: BLE001 — 统一仓储错误
+        raise WorkshopRepositoryError(str(exc)) from exc
 
 
-def _dump_steps(steps: Sequence[WorkflowStep]) -> list[dict[str, object]]:
-    """将工作流步骤序列化为 JSON"""
-    return [
-        {
-            "title": step.title,
-            "required_artifact_names": list(step.required_artifact_names),
-            "external_capabilities": [
-                capability.value for capability in step.external_capabilities
-            ],
-        }
-        for step in steps
-    ]
+def _dump_definition(
+    nodes: Sequence[WorkflowNode],
+    edges: Sequence[WorkflowEdge],
+    model_key: str,
+    entry_node_ids: Sequence[str] | None = None,
+) -> dict[str, object]:
+    """序列化 DAG 到 JSONB"""
+    return definition_to_jsonable(
+        nodes=nodes,
+        edges=edges,
+        model_key=model_key,
+        entry_node_ids=entry_node_ids,
+    )
 
 
-def _goals_from_steps(steps: Sequence[WorkflowStep]) -> tuple[str, ...]:
-    """从工作流步骤提取目标标题序列"""
-    return tuple(step.title for step in steps)
+def _external_caps_from_nodes(
+    nodes: Sequence[WorkflowNode],
+) -> frozenset[WorkshopToolCapability]:
+    """汇总节点声明的外部能力"""
+    caps: set[WorkshopToolCapability] = set()
+    for node in nodes:
+        caps.update(node.external_capabilities)
+    return frozenset(caps)
 
 
-def _aggregate_required_artifacts(steps: Sequence[WorkflowStep]) -> tuple[str, ...]:
-    """从工作流步骤汇总必需产物名，保序去重"""
+def _goals_from_nodes(nodes: Sequence[WorkflowNode]) -> tuple[str, ...]:
+    """从节点标题提取目标序列"""
+    return tuple(node.title for node in nodes)
+
+
+def _aggregate_required_artifacts(
+    nodes: Sequence[WorkflowNode],
+) -> tuple[str, ...]:
+    """从节点 outputs 汇总必需产物名，保序去重"""
     seen: set[str] = set()
     ordered: list[str] = []
-    for step in steps:
-        for name in step.required_artifact_names:
-            if name in seen:
+    for node in nodes:
+        for output in node.outputs:
+            if not output.required or output.name in seen:
                 continue
-            seen.add(name)
-            ordered.append(name)
+            seen.add(output.name)
+            ordered.append(output.name)
     return tuple(ordered)
+
 
 
 def _dump_event_payload(
@@ -471,16 +476,36 @@ def _to_task(row: WorkshopTasks) -> WorkshopTaskRecord:
 
 def _to_workflow(row: WorkshopWorkflows) -> WorkshopWorkflowRecord:
     """ORM 工作流行转读模型"""
-    steps_raw = row.steps
-    if not isinstance(steps_raw, list):
-        raise WorkshopRepositoryError("workflow steps must be list")
+    nodes, edges, entry, model_key = _parse_definition_payload(row.steps)
     return WorkshopWorkflowRecord(
         id=row.id,
         project_id=row.project_id,
         name=row.name,
-        steps=_parse_steps(steps_raw),
+        nodes=nodes,
+        edges=edges,
         status=WorkshopWorkflowStatus(row.status),
         source=WorkshopWorkflowSource(row.source),
+        revision=int(row.revision),
+        model_key=model_key,
+        entry_node_ids=entry,
+    )
+
+
+def _to_workflow_run(row: WorkshopWorkflowRuns) -> WorkshopWorkflowRunRecord:
+    """ORM 运行记录转读模型"""
+    return WorkshopWorkflowRunRecord(
+        id=row.id,
+        project_id=row.project_id,
+        workflow_id=row.workflow_id,
+        workflow_revision=int(row.workflow_revision),
+        schedule_id=row.schedule_id,
+        trigger=WorkshopWorkflowRunTrigger(row.trigger),
+        status=WorkshopWorkflowRunStatus(row.status),
+        current_node_id=row.current_node_id,
+        error_message=row.error_message,
+        started_at=row.started_at,
+        finished_at=row.finished_at,
+        created_at=row.created_at,
         revision=int(row.revision),
     )
 
@@ -836,6 +861,13 @@ class WorkshopRepository:
         if row is None:
             return None
         return _to_project(row)
+
+    async def get_project_owner_user_id(self, *, project_id: str) -> int:
+        """按项目 id 读取所有者 user_id（定时派发用）"""
+        row = await WorkshopProjects.filter(id=project_id).first()
+        if row is None:
+            raise WorkshopProjectNotFoundError(project_id)
+        return int(row.user_id)
 
     async def get_project_by_group_chat(
         self,
@@ -1465,17 +1497,23 @@ class WorkshopRepository:
         project_id: str,
         user_id: int,
         name: str,
-        steps: Sequence[WorkflowStep],
+        nodes: Sequence[WorkflowNode],
+        edges: Sequence[WorkflowEdge],
+        model_key: str,
         status: WorkshopWorkflowStatus,
         source: WorkshopWorkflowSource,
+        entry_node_ids: Sequence[str] | None = None,
     ) -> WorkshopWorkflowRecord:
         """创建工作流定义"""
         await self.require_project(project_id=project_id, user_id=user_id)
+        key = model_key.strip()
+        if not key:
+            raise WorkshopRepositoryError("model_key required")
         row = await WorkshopWorkflows.create(
             id=workflow_id,
             project_id=project_id,
             name=name,
-            steps=_dump_steps(steps),
+            steps=_dump_definition(nodes, edges, key, entry_node_ids),
             status=status.value,
             source=source.value,
             revision=1,
@@ -1536,6 +1574,101 @@ class WorkshopRepository:
             status=WorkshopWorkflowStatus.SAVED.value,
         ).order_by("updated_at", "id")
         return [_to_workflow(row) for row in rows]
+
+    async def create_workflow_run(
+        self,
+        *,
+        run_id: str,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+        workflow_revision: int,
+        trigger: WorkshopWorkflowRunTrigger,
+        schedule_id: Optional[str] = None,
+        status: WorkshopWorkflowRunStatus = WorkshopWorkflowRunStatus.QUEUED,
+    ) -> WorkshopWorkflowRunRecord:
+        """创建一次工作流运行记录"""
+        await self.require_project(project_id=project_id, user_id=user_id)
+        row = await WorkshopWorkflowRuns.create(
+            id=run_id,
+            project_id=project_id,
+            workflow_id=workflow_id,
+            workflow_revision=workflow_revision,
+            schedule_id=schedule_id,
+            trigger=trigger.value,
+            status=status.value,
+            current_node_id=None,
+            error_message=None,
+            started_at=None,
+            finished_at=None,
+            revision=1,
+        )
+        return _to_workflow_run(row)
+
+    async def get_workflow_run(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        run_id: str,
+    ) -> WorkshopWorkflowRunRecord:
+        """读取运行记录并校验归属"""
+        await self.require_project(project_id=project_id, user_id=user_id)
+        row = await WorkshopWorkflowRuns.filter(
+            id=run_id, project_id=project_id
+        ).first()
+        if row is None:
+            raise WorkshopRepositoryError(f"unknown workflow run: {run_id}")
+        return _to_workflow_run(row)
+
+    async def list_workflow_runs(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: Optional[str] = None,
+        limit: int = 50,
+    ) -> list[WorkshopWorkflowRunRecord]:
+        """列出项目运行记录"""
+        await self.require_project(project_id=project_id, user_id=user_id)
+        query = WorkshopWorkflowRuns.filter(project_id=project_id)
+        if workflow_id is not None:
+            query = query.filter(workflow_id=workflow_id)
+        rows = await query.order_by("-created_at", "-id").limit(limit)
+        return [_to_workflow_run(row) for row in rows]
+
+    async def update_workflow_run_cas(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        run_id: str,
+        expected_revision: int,
+        status: WorkshopWorkflowRunStatus,
+        current_node_id: Optional[str],
+        error_message: Optional[str],
+        started_at: Optional[datetime],
+        finished_at: Optional[datetime],
+    ) -> WorkshopWorkflowRunRecord:
+        """CAS 更新运行记录状态"""
+        await self.require_project(project_id=project_id, user_id=user_id)
+        updated = await WorkshopWorkflowRuns.filter(
+            id=run_id,
+            project_id=project_id,
+            revision=expected_revision,
+        ).update(
+            status=status.value,
+            current_node_id=current_node_id,
+            error_message=error_message,
+            started_at=started_at,
+            finished_at=finished_at,
+            revision=expected_revision + 1,
+        )
+        if updated != 1:
+            raise WorkshopRepositoryError(f"workflow run conflict: {run_id}")
+        return await self.get_workflow_run(
+            project_id=project_id, user_id=user_id, run_id=run_id
+        )
 
     async def create_schedule(
         self,
@@ -1731,9 +1864,9 @@ class WorkshopRepository:
                 id=task_id,
                 project_id=project_id,
                 title=workflow.name,
-                goals=list(_goals_from_steps(workflow.steps)),
+                goals=list(_goals_from_nodes(workflow.nodes)),
                 required_artifacts=list(
-                    _aggregate_required_artifacts(workflow.steps)
+                    _aggregate_required_artifacts(workflow.nodes)
                 ),
                 status=WorkshopTaskStatus.EXECUTING.value,
                 schedule_id=None,
@@ -1917,8 +2050,8 @@ class WorkshopRepository:
             id=task_id,
             project_id=project_id,
             title=workflow.name,
-            goals=list(_goals_from_steps(workflow.steps)),
-            required_artifacts=list(_aggregate_required_artifacts(workflow.steps)),
+            goals=list(_goals_from_nodes(workflow.nodes)),
+            required_artifacts=list(_aggregate_required_artifacts(workflow.nodes)),
             status=WorkshopTaskStatus.EXECUTING.value,
             schedule_id=schedule_id,
             schedule_authorized=True,

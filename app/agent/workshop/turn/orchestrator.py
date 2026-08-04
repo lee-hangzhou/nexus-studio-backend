@@ -138,7 +138,6 @@ async def stream_workshop_turn(
     task_id = target.task_id
     granted_external = frozenset()
     host_context_block = ""
-    room_timeline_block = await _load_room_timeline_block(conversation_id=conversation_id)
     if is_host:
         host_context_block = await _host_context_block(
             projects=projects,
@@ -169,6 +168,13 @@ async def stream_workshop_turn(
     if selected_skills:
         selected_skills_text = format_selected_skill_bodies_text(selected_skills)
 
+    persist_chat = target.persist_chat_messages
+    room_timeline_block = ""
+    if persist_chat:
+        room_timeline_block = await _load_room_timeline_block(
+            conversation_id=conversation_id
+        )
+
     ctx = WorkshopTurnMountContext(
         project_id=project.id,
         expert_id=expert_id,
@@ -190,7 +196,8 @@ async def stream_workshop_turn(
         expert_name=expert_name,
         avatar_url=avatar_url,
         selected_skills_text=selected_skills_text,
-        persist_user_message=persist_user_message,
+        persist_user_message=persist_chat and persist_user_message,
+        persist_chat_messages=persist_chat,
     )
     async for chunk in stream_agent_turn(WORKSHOP_MOUNT, ctx):
         yield chunk
