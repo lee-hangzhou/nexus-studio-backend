@@ -159,10 +159,10 @@ class UpgradeInviteProposedFrame(StreamContract):
     turn_id: str
     proposal_id: int = Field(ge=1)
     conversation_id: int = Field(ge=1)
-    expert_keys: list[str] = Field(min_length=1)
-    primary_expert_key: str = Field(min_length=1)
+    expert_keys: list[str] = Field(default_factory=list)
+    primary_expert_key: str = ""
     rationale: str = Field(min_length=1)
-    experts: list[UpgradeInviteExpertFrameItem] = Field(min_length=1)
+    experts: list[UpgradeInviteExpertFrameItem] = Field(default_factory=list)
 
 
 class BrowserBlockedFrame(StreamContract):

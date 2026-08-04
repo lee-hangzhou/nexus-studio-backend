@@ -22,9 +22,26 @@ def _upgrade_invite_payload() -> dict:
     }
 
 
+def _upgrade_invite_payload_empty_experts() -> dict:
+    return {
+        "upgrade_invite": True,
+        "proposal_id": 2,
+        "conversation_id": 1306,
+        "expert_keys": [],
+        "primary_expert_key": "",
+        "rationale": "先建工坊项目做定时",
+        "experts": [],
+    }
+
+
 def test_upgrade_invite_interrupt_is_not_pending_tool_action() -> None:
     """复现 conv 1305：upgrade_invite 载荷被当成 tool_approval → PendingToolAction 校验失败"""
     classified = classify_interrupt_value(_upgrade_invite_payload())
+    assert classified == []
+
+
+def test_upgrade_invite_empty_experts_still_not_pending_tool_action() -> None:
+    classified = classify_interrupt_value(_upgrade_invite_payload_empty_experts())
     assert classified == []
 
 

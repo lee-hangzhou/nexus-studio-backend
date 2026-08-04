@@ -32,11 +32,18 @@ def validate_invite_expert_keys(
     *,
     expert_keys: Sequence[str],
     primary_expert_key: str,
+    require_non_empty: bool = True,
 ) -> tuple[str, ...]:
-    """校验邀请名单与主答；返回去重后的 expert_keys"""
+    """校验邀请名单与主答；返回去重后的 expert_keys。
+
+    require_non_empty=True：Host 邀专家等路径，至少一人。
+    require_non_empty=False：升级提议可零专家（仅建项目）。
+    """
     keys = tuple(dict.fromkeys(key.strip() for key in expert_keys if key and key.strip()))
     if not keys:
-        raise UpgradeInviteProposalError("at least one expert_key required")
+        if require_non_empty:
+            raise UpgradeInviteProposalError("at least one expert_key required")
+        return ()
 
     primary = primary_expert_key.strip()
     if primary not in keys:
@@ -57,7 +64,7 @@ def validate_upgrade_invite_proposal(
     rationale: str,
     host_narration: str,
 ) -> ValidatedUpgradeInviteProposal:
-    """校验建议名单、主答、面板说明与确认后 Host 旁白"""
+    """校验升级提议；允许 expert_keys 为空（仅升级项目，稍后再邀专家）"""
     cleaned_rationale = rationale.strip()
     if not cleaned_rationale:
         raise UpgradeInviteProposalError("rationale required")
@@ -68,10 +75,12 @@ def validate_upgrade_invite_proposal(
     keys = validate_invite_expert_keys(
         expert_keys=expert_keys,
         primary_expert_key=primary_expert_key,
+        require_non_empty=False,
     )
+    primary = primary_expert_key.strip() if keys else ""
     return ValidatedUpgradeInviteProposal(
         expert_keys=keys,
-        primary_expert_key=primary_expert_key.strip(),
+        primary_expert_key=primary,
         rationale=cleaned_rationale,
         host_narration=cleaned_host,
     )

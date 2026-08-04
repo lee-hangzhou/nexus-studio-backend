@@ -27,13 +27,24 @@ def test_validate_accepts_primary_in_suggested_set() -> None:
     assert "工坊" in result.host_narration
 
 
-def test_validate_rejects_empty_expert_keys() -> None:
+def test_validate_accepts_empty_expert_keys_for_project_only_upgrade() -> None:
+    """升级可只建项目、不邀专家"""
+    result = validate_upgrade_invite_proposal(
+        expert_keys=(),
+        primary_expert_key="",
+        rationale="用户只想定时自动跑任务，先建工坊项目",
+        host_narration="已经帮你升级成工坊项目，需要专家时再说。",
+    )
+    assert result.expert_keys == ()
+    assert result.primary_expert_key == ""
+
+
+def test_validate_invite_expert_keys_still_requires_non_empty_by_default() -> None:
+    """Host 邀专家路径默认仍至少一人"""
     with pytest.raises(UpgradeInviteProposalError, match="at least one"):
-        validate_upgrade_invite_proposal(
+        validate_invite_expert_keys(
             expert_keys=(),
-            primary_expert_key="ecom_listing_planner_executor",
-            rationale="x",
-            host_narration="y",
+            primary_expert_key="",
         )
 
 

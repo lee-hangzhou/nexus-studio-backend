@@ -24,10 +24,10 @@ class UpgradeInviteInterrupt(BaseModel):
     upgrade_invite: bool = True
     proposal_id: int = Field(ge=1)
     conversation_id: int = Field(ge=1)
-    expert_keys: list[str] = Field(min_length=1)
-    primary_expert_key: str = Field(min_length=1)
+    expert_keys: list[str] = Field(default_factory=list)
+    primary_expert_key: str = ""
     rationale: str = Field(min_length=1)
-    experts: list[UpgradeInviteExpertItem] = Field(min_length=1)
+    experts: list[UpgradeInviteExpertItem] = Field(default_factory=list)
 
 
 def _interrupt_payload(intr: object) -> object:

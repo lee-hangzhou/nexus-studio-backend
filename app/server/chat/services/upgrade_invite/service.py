@@ -36,18 +36,20 @@ class UpgradeInviteProposalRecord:
 
 @dataclass(frozen=True, slots=True)
 class ConfirmedUpgradeInvite:
-    """确认升级后的续跑上下文"""
+    """确认升级后的续跑上下文；零专家时 primary_expert_id 为 None（续跑走 Host）"""
 
     upgrade: UpgradeResult
-    primary_expert_id: str
+    primary_expert_id: str | None
     host_narration: str
     source_user_text: str
 
 
 def _parse_expert_keys(raw: object) -> tuple[str, ...]:
-    """JSONField 边界解析专家 key 列表"""
-    if not isinstance(raw, list) or not raw:
+    """JSONField 边界解析专家 key 列表；允许空列表"""
+    if not isinstance(raw, list):
         raise UpgradeInviteServiceError("corrupt expert_keys")
+    if not raw:
+        return ()
     keys: list[str] = []
     for item in raw:
         if not isinstance(item, str) or not item.strip():
@@ -221,31 +223,42 @@ class UpgradeInviteService:
             )
 
         try:
-            upgrade = await self._projects.confirm_upgrade_with_experts(
-                user_id=user_id,
-                group_chat_id=conversation_id,
-                project_name=project_name,
-                carried_message_count=carried_message_count,
-                expert_keys=validated.expert_keys,
-            )
+            if validated.expert_keys:
+                upgrade = await self._projects.confirm_upgrade_with_experts(
+                    user_id=user_id,
+                    group_chat_id=conversation_id,
+                    project_name=project_name,
+                    carried_message_count=carried_message_count,
+                    expert_keys=validated.expert_keys,
+                )
+            else:
+                upgrade = await self._projects.confirm_upgrade_to_project(
+                    user_id=user_id,
+                    group_chat_id=conversation_id,
+                    project_name=project_name,
+                    carried_message_count=carried_message_count,
+                    initial_expert_keys=(),
+                )
         except WorkshopProjectError as exc:
             raise UpgradeInviteServiceError(str(exc)) from exc
 
-        roster = await self._projects.list_roster(
-            project_id=upgrade.project.id, user_id=user_id
-        )
-        primary_id = next(
-            (
-                expert.id
-                for expert in roster
-                if expert.preset_key == validated.primary_expert_key
-            ),
-            None,
-        )
-        if primary_id is None:
-            raise UpgradeInviteServiceError(
-                f"primary expert not on roster: {validated.primary_expert_key}"
+        primary_id: str | None = None
+        if validated.expert_keys:
+            roster = await self._projects.list_roster(
+                project_id=upgrade.project.id, user_id=user_id
             )
+            primary_id = next(
+                (
+                    expert.id
+                    for expert in roster
+                    if expert.preset_key == validated.primary_expert_key
+                ),
+                None,
+            )
+            if primary_id is None:
+                raise UpgradeInviteServiceError(
+                    f"primary expert not on roster: {validated.primary_expert_key}"
+                )
 
         row.status = UpgradeInviteProposalStatus.CONFIRMED
         row.expert_keys = list(validated.expert_keys)

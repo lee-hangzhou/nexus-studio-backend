@@ -719,21 +719,21 @@ class WorkshopUpgradeInviteExpertView(WorkshopContract):
 
 
 class WorkshopUpgradeInviteProposedView(WorkshopContract):
-    """LLM 提议升级并邀请专家（待用户确认）"""
+    """LLM 提议升级为工坊项目；专家名单可空（仅建项目）"""
 
     proposal_id: int = Field(ge=1)
     conversation_id: int = Field(ge=1)
-    expert_keys: list[str] = Field(min_length=1)
-    primary_expert_key: str = Field(min_length=1)
+    expert_keys: list[str] = Field(default_factory=list)
+    primary_expert_key: str = ""
     rationale: str = Field(min_length=1)
-    experts: list[WorkshopUpgradeInviteExpertView] = Field(min_length=1)
+    experts: list[WorkshopUpgradeInviteExpertView] = Field(default_factory=list)
 
 
 class WorkshopConfirmUpgradeInviteRequest(WorkshopContract):
     conversation_id: int = Field(ge=1)
     proposal_id: int = Field(ge=1)
-    expert_keys: list[str] = Field(min_length=1)
-    primary_expert_key: str = Field(min_length=1)
+    expert_keys: list[str] = Field(default_factory=list)
+    primary_expert_key: str = ""
     project_name: str = Field(min_length=1, max_length=255)
     carried_message_count: int = Field(ge=0)
 
@@ -753,7 +753,7 @@ class WorkshopPendingUpgradeInviteResponse(WorkshopContract):
 
 class WorkshopConfirmUpgradeInviteResultView(WorkshopContract):
     project: WorkshopProjectView
-    primary_expert_id: str
+    primary_expert_id: str | None = None
     host_narration: str
     source_user_text: str
     carried_message_count: int = Field(ge=0)

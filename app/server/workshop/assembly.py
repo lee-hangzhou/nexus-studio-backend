@@ -556,8 +556,6 @@ def upgrade_invite_proposal_to_view(
         WorkshopUpgradeInviteExpertView(key=key, name=get_preset(key).name)
         for key in record.expert_keys
     ]
-    if not experts:
-        raise ValueError("upgrade invite proposal requires experts")
     return WorkshopUpgradeInviteProposedView(
         proposal_id=record.id,
         conversation_id=record.conversation_id,

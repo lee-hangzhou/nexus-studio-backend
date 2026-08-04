@@ -29,10 +29,16 @@ class ProposeUpgradeInviteArgs(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    expert_keys: list[str] = Field(min_length=1)
-    primary_expert_key: str = Field(min_length=1)
+    expert_keys: list[str] = Field(default_factory=list)
+    primary_expert_key: str = ""
     rationale: str = Field(min_length=1)
-    host_narration: str = Field(min_length=1)
+    host_narration: str = Field(
+        min_length=1,
+        description=(
+            "短交接旁白（确认后落库）：只说已升级为工坊项目；"
+            "有专家则简短点名；不要问需求、列清单或重复用户原话"
+        ),
+    )
     user_explicitly_requested: bool = False
 
 
@@ -156,15 +162,17 @@ def build_judgment_tools(ctx: ChatToolContext) -> list[StructuredTool]:
             coroutine=_propose_upgrade_and_invite,
             name=PROPOSE_UPGRADE_AND_INVITE,
             description=(
-                "Call only when specialists or a Workshop Project are needed this turn. "
-                "Do not call execution tools in the same turn. "
-                "expert_keys must be invite-directory preset_key values (at least one); "
-                "primary_expert_key must be in expert_keys; "
+                "Call when a Workshop Project is needed this turn (automation/schedules "
+                "and/or specialists). Do not call execution tools in the same turn. "
+                "expert_keys may be empty for project-only upgrade (invite later); "
+                "when non-empty, values must be invite-directory preset_key and "
+                "primary_expert_key must be in expert_keys (empty string if no experts); "
                 "rationale is short Simplified Chinese for the confirm panel; "
-                "host_narration is the full Host message shown after the user confirms "
-                "(Simplified Chinese, natural speech: that the chat is now a Workshop Project, "
-                "whom you invited and why; do not name internal tools; do not stage-direct "
-                "「请某某回答」); "
+                "host_narration is a SHORT handoff after confirm (1–2 sentences): "
+                "only that the chat is now a Workshop Project; if experts were chosen, "
+                "briefly name them; do NOT ask follow-up questions, list requirements, "
+                "or restate the user's task — the post-confirm continue turn will do that; "
+                "do not name internal tools; do not stage-direct 「请某某回答」); "
                 "after a prior decline, only call when the user explicitly asks this turn and set "
                 "user_explicitly_requested=true. Never invent keys. "
                 "Interrupts the turn for user confirm/decline. Protocol only — do not narrate to the user."
