@@ -9,6 +9,7 @@ from app.agent.runtime.tools.vision_inspect import (
     MediaInspectTask,
     VISUAL_MEDIA_TYPES,
     inspect_assets_with_vision,
+    media_type_from_mime,
 )
 from app.contracts.turn_content import TurnMediaType
 
@@ -42,18 +43,25 @@ class InspectTurnMediaInput(BaseModel):
 def build_inspect_turn_media_tool(
     *,
     user_id: int,
-    allowed_asset_ids: frozenset[int],
-    asset_media_types: dict[int, TurnMediaType],
+    allowed_asset_ids: frozenset[int] | None,
+    asset_media_types: dict[int, TurnMediaType] | None = None,
 ) -> StructuredTool:
-    """构建本 turn 视觉理解工具"""
+    """构建视觉理解工具。
+
+    allowed_asset_ids:
+    - frozenset：仅允许本轮 Turn References（空集则调用即失败）
+    - None：允许调用方传入用户自有视觉资产（按 ownership + mime 校验）
+    """
+    media_types = asset_media_types or {}
+    owned_scope = allowed_asset_ids is None
 
     async def inspect_turn_media(
         refs: list[InspectTurnMediaRefInput],
         task: MediaInspectTask,
         instruction: str | None = None,
     ) -> str:
-        """对 allowlist 内图像/视频调用网关视觉理解"""
-        if not allowed_asset_ids:
+        """对允许范围内的图像/视频调用网关视觉理解"""
+        if not owned_scope and not allowed_asset_ids:
             return ToolResult.fail(
                 "file_not_allowed",
                 detail="no visual media references in this turn",
@@ -63,27 +71,36 @@ def build_inspect_turn_media_tool(
         ordered_ids: list[int] = []
         ordered_types: list[TurnMediaType] = []
         for ref in refs:
-            if ref.asset_id not in allowed_asset_ids:
+            if allowed_asset_ids is not None and ref.asset_id not in allowed_asset_ids:
                 return ToolResult.fail(
                     "file_not_allowed",
                     detail=f"asset {ref.asset_id} is not in turn references",
-                ).to_tool_message()
-            if ref.asset_id not in asset_media_types:
-                return ToolResult.fail(
-                    "file_not_allowed",
-                    detail=f"asset {ref.asset_id} media_type missing from turn index",
-                ).to_tool_message()
-            media_type = asset_media_types[ref.asset_id]
-            if media_type not in VISUAL_MEDIA_TYPES:
-                return ToolResult.fail(
-                    "file_not_allowed",
-                    detail=f"asset {ref.asset_id} is not visual media",
                 ).to_tool_message()
             asset = await get_assets_port().get_asset(user_id=user_id, asset_id=ref.asset_id)
             if asset is None or not asset.preview_url.strip():
                 return ToolResult.fail(
                     "file_not_found",
                     detail=f"asset {ref.asset_id} not found",
+                ).to_tool_message()
+            if ref.asset_id in media_types:
+                media_type = media_types[ref.asset_id]
+            else:
+                if not asset.mime_type:
+                    return ToolResult.fail(
+                        "file_not_allowed",
+                        detail=f"asset {ref.asset_id} missing mime_type",
+                    ).to_tool_message()
+                resolved = media_type_from_mime(asset.mime_type)
+                if resolved is None:
+                    return ToolResult.fail(
+                        "file_not_allowed",
+                        detail=f"asset {ref.asset_id} is not visual media",
+                    ).to_tool_message()
+                media_type = resolved
+            if media_type not in VISUAL_MEDIA_TYPES:
+                return ToolResult.fail(
+                    "file_not_allowed",
+                    detail=f"asset {ref.asset_id} is not visual media",
                 ).to_tool_message()
             ordered_urls.append(asset.preview_url)
             ordered_ids.append(ref.asset_id)
@@ -98,13 +115,23 @@ def build_inspect_turn_media_tool(
             result_extra={"refs": [{"asset_id": aid} for aid in ordered_ids]},
         )
 
-    return StructuredTool.from_function(
-        coroutine=inspect_turn_media,
-        name="inspect_turn_media",
-        description=(
+    if owned_scope:
+        description = (
+            "Analyze the user's image or video assets with the vision model. "
+            "Pass refs=[{asset_id}, ...] from Turn References, list_assets, get_asset, "
+            "or generation history. "
+            "task=describe|reverse_prompt|custom; custom requires instruction."
+        )
+    else:
+        description = (
             "Analyze image or video assets attached as this turn's references using the vision model. "
             "Pass refs=[{asset_id}, ...] from Turn References. "
             "task=describe|reverse_prompt|custom; custom requires instruction."
-        ),
+        )
+
+    return StructuredTool.from_function(
+        coroutine=inspect_turn_media,
+        name="inspect_turn_media",
+        description=description,
         args_schema=InspectTurnMediaInput,
     )

@@ -18,16 +18,19 @@ def build_prompt_assistant_tools(
     tool_asset_ids: frozenset[int],
     asset_media_types: dict[int, TurnMediaType],
 ) -> list[StructuredTool]:
-    """组装创作提示词助手工具；视觉 inspect 在有媒体引用时始终挂载。"""
-    tools: list[StructuredTool] = []
-    if tool_asset_ids:
-        tools.append(
-            build_inspect_turn_media_tool(
-                user_id=user_id,
-                allowed_asset_ids=tool_asset_ids,
-                asset_media_types=asset_media_types,
-            )
+    """组装创作提示词助手工具。
+
+    inspect_turn_media 始终挂载：助手侧栏无附件上传，不能靠「本轮有图」才挂工具，
+    否则模型永远看不到 vision；资产范围按用户自有视觉资产校验（含 list/get）。
+    """
+    _ = tool_asset_ids
+    tools: list[StructuredTool] = [
+        build_inspect_turn_media_tool(
+            user_id=user_id,
+            allowed_asset_ids=None,
+            asset_media_types=asset_media_types,
         )
+    ]
     if not enable_tools:
         return tools
     tools.extend(
