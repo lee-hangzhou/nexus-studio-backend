@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from celery import Celery
 from celery.signals import worker_process_init
 
 from app.server.infra.config import settings
+from app.server.workshop.worker_loop import init_worker_loop, run_in_worker_loop
 
 celery_app = Celery(
     "nexus_studio_workshop",
@@ -32,10 +32,11 @@ celery_app.conf.update(
 
 @worker_process_init.connect
 def _init_worker_process(**_kwargs: Any) -> None:
-    """prefork 子进程对齐 API lifespan：拉取模型能力目录进内存"""
+    """prefork/solo 子进程：常驻 loop + 拉取模型目录（对齐 API lifespan 子集）。"""
     from app.agent.chat.llm.model_catalog import try_refresh_model_catalog
 
-    asyncio.run(try_refresh_model_catalog())
+    init_worker_loop()
+    run_in_worker_loop(try_refresh_model_catalog())
 
 
 def enqueue_workflow_run(project_id: str, user_id: int, run_id: str) -> None:
@@ -69,14 +70,14 @@ def _celery_task_id(project_id: str, run_id: str) -> str:
 def execute_workflow_run_task(
     *, project_id: str, user_id: int, run_id: str
 ) -> dict[str, Any]:
-    """Worker：执行一条运行记录"""
-    return asyncio.run(_execute_run(project_id, user_id, run_id))
+    """Worker：执行一条运行记录（常驻 loop，禁止 asyncio.run）"""
+    return run_in_worker_loop(_execute_run(project_id, user_id, run_id))
 
 
 @celery_app.task(name="workshop.dispatch_due_schedules")
 def dispatch_due_schedules_task() -> dict[str, Any]:
-    """Beat：扫描到期定时并入队"""
-    return asyncio.run(_dispatch_due())
+    """Beat：扫描到期定时并入队（常驻 loop，禁止 asyncio.run）"""
+    return run_in_worker_loop(_dispatch_due())
 
 
 async def _ensure_model_catalog() -> None:
