@@ -125,4 +125,4 @@ docker-down:
 docker-restart: docker-down docker-up
 
 docker-logs:
-	$(DOCKER_COMPOSE) logs -f backend
+	$(DOCKER_COMPOSE) logs -f backend celery-worker celery-beat

@@ -40,6 +40,64 @@ services:
       retries: 3
       start_period: 40s
 
+  # Workshop 异步执行：API 入队到 REDIS_URL，本进程消费。
+  celery-worker:
+    container_name: nexus-studio-prod-celery-worker
+    image: nexus-studio-prod-backend
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command:
+      [
+        "celery",
+        "-A",
+        "app.server.workshop.celery_app.celery_app",
+        "worker",
+        "--loglevel=INFO",
+        "--pool=prefork",
+        "--concurrency=1",
+      ]
+    env_file:
+      - .env.prod
+    environment:
+      CHAT_BROWSER_DOCKER_NETWORK: nexus-studio-network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/nexus-studio/chat-workspaces:/var/lib/nexus-studio/chat-workspaces
+      - /var/lib/nexus-studio/sandbox-packages:/var/lib/nexus-studio/sandbox-packages
+    networks:
+      - nexus-studio-network
+      - union-lm-network
+    restart: unless-stopped
+    stop_grace_period: 40s
+    healthcheck:
+      test: ["NONE"]
+
+  # Workshop 定时：每 60s 派发 workshop.dispatch_due_schedules。
+  celery-beat:
+    container_name: nexus-studio-prod-celery-beat
+    image: nexus-studio-prod-backend
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command:
+      [
+        "celery",
+        "-A",
+        "app.server.workshop.celery_app.celery_app",
+        "beat",
+        "--loglevel=INFO",
+      ]
+    env_file:
+      - .env.prod
+    networks:
+      - nexus-studio-network
+      - union-lm-network
+    restart: unless-stopped
+    stop_grace_period: 20s
+    healthcheck:
+      test: ["NONE"]
+
 networks:
   nexus-studio-network:
     name: nexus-studio-network
