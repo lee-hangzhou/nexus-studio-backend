@@ -117,6 +117,10 @@ class WorkshopWorkflowView(WorkshopContract):
     status: WorkshopWorkflowStatus
     source: WorkshopWorkflowSource
     revision: int
+    schedule_id: str | None = None
+    schedule_enabled: bool | None = None
+    schedule_cron: str | None = None
+    schedule_next_run_at: str | None = None
 
 
 class WorkshopWorkflowRunView(WorkshopContract):
@@ -126,7 +130,7 @@ class WorkshopWorkflowRunView(WorkshopContract):
     workflow_revision: int
     schedule_id: str | None
     trigger: Literal["manual", "schedule", "trial"]
-    status: Literal["queued", "running", "succeeded", "failed", "blocked"]
+    status: Literal["queued", "running", "succeeded", "failed", "blocked", "cancelled"]
     current_node_id: str | None
     error_message: str | None
     started_at: str | None
@@ -421,6 +425,11 @@ class WorkshopDraftWorkflowRequest(WorkshopContract):
 
 
 class WorkshopConfirmWorkflowRequest(WorkshopContract):
+    project_id: str = Field(min_length=1)
+    workflow_id: str = Field(min_length=1)
+
+
+class WorkshopWorkflowIdRequest(WorkshopContract):
     project_id: str = Field(min_length=1)
     workflow_id: str = Field(min_length=1)
 

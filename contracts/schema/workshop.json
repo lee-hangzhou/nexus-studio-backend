@@ -2583,6 +2583,9 @@
         "draft_workflow",
         "confirm_save_workflow",
         "create_schedule",
+        "start_workflow_execution",
+        "stop_workflow_execution",
+        "delete_workflow",
         "manual_run_workflow",
         "request_external_auth",
         "propose_invite",
@@ -3292,7 +3295,8 @@
             "running",
             "succeeded",
             "failed",
-            "blocked"
+            "blocked",
+            "cancelled"
           ],
           "title": "Status",
           "type": "string"
@@ -3375,6 +3379,54 @@
         "revision": {
           "title": "Revision",
           "type": "integer"
+        },
+        "schedule_cron": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schedule Cron"
+        },
+        "schedule_enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schedule Enabled"
+        },
+        "schedule_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schedule Id"
+        },
+        "schedule_next_run_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schedule Next Run At"
         },
         "source": {
           "$ref": "#/$defs/WorkshopWorkflowSource"

@@ -72,10 +72,18 @@ def _enqueue_workflow_run(project_id: str, user_id: int, run_id: str) -> None:
     enqueue_workflow_run(project_id, user_id, run_id)
 
 
+def _revoke_workflow_run(project_id: str, user_id: int, run_id: str) -> None:
+    """尽力撤销仍在队列中的 Celery 任务"""
+    from app.server.workshop.celery_app import revoke_workflow_run
+
+    revoke_workflow_run(project_id, user_id, run_id)
+
+
 workshop_workflow_schedule_service = WorkshopWorkflowScheduleService(
     repository=workshop_repository,
     orchestrator=workshop_task_orchestrator,
     enqueue_run=_enqueue_workflow_run,
+    revoke_run=_revoke_workflow_run,
 )
 
 workshop_run_execution_service = WorkflowRunExecutionService(

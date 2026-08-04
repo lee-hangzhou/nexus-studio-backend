@@ -77,6 +77,7 @@ from app.server.workshop.domain.types import (
     WorkshopScheduleRecord,
     WorkshopScheduleRunRecord,
     WorkshopTaskRecord,
+    WorkshopWorkflowListItem,
     WorkshopWorkflowRecord,
     WorkshopWorkflowRunRecord,
 )
@@ -374,8 +375,12 @@ def workflow_definition_to_view(
     )
 
 
-def workflow_to_view(workflow: WorkshopWorkflowRecord) -> WorkshopWorkflowView:
-    """工作流转契约视图"""
+def workflow_to_view(
+    workflow: WorkshopWorkflowRecord,
+    *,
+    schedule: WorkshopScheduleRecord | None = None,
+) -> WorkshopWorkflowView:
+    """工作流转契约视图；可选附 schedule 摘要"""
     return WorkshopWorkflowView(
         id=workflow.id,
         project_id=workflow.project_id,
@@ -385,7 +390,20 @@ def workflow_to_view(workflow: WorkshopWorkflowRecord) -> WorkshopWorkflowView:
         status=workflow.status,
         source=workflow.source,
         revision=workflow.revision,
+        schedule_id=schedule.id if schedule is not None else None,
+        schedule_enabled=schedule.enabled if schedule is not None else None,
+        schedule_cron=schedule.cron if schedule is not None else None,
+        schedule_next_run_at=(
+            _iso(schedule.next_run_at)
+            if schedule is not None and schedule.next_run_at is not None
+            else None
+        ),
     )
+
+
+def workflow_list_item_to_view(item: WorkshopWorkflowListItem) -> WorkshopWorkflowView:
+    """列表项转契约视图"""
+    return workflow_to_view(item.workflow, schedule=item.schedule)
 
 
 def workflow_run_to_view(run: WorkshopWorkflowRunRecord) -> WorkshopWorkflowRunView:

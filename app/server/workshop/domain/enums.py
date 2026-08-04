@@ -63,6 +63,7 @@ class WorkshopWorkflowRunStatus(str, Enum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     BLOCKED = "blocked"
+    CANCELLED = "cancelled"
 
 
 class WorkshopWorkflowRunTrigger(str, Enum):
@@ -114,6 +115,9 @@ class WorkshopToolCapability(str, Enum):
     DRAFT_WORKFLOW = "draft_workflow"
     CONFIRM_SAVE_WORKFLOW = "confirm_save_workflow"
     CREATE_SCHEDULE = "create_schedule"
+    START_WORKFLOW_EXECUTION = "start_workflow_execution"
+    STOP_WORKFLOW_EXECUTION = "stop_workflow_execution"
+    DELETE_WORKFLOW = "delete_workflow"
     MANUAL_RUN_WORKFLOW = "manual_run_workflow"
     REQUEST_EXTERNAL_AUTH = "request_external_auth"
     PROPOSE_INVITE = "propose_invite"

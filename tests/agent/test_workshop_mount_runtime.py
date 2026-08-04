@@ -200,6 +200,9 @@ async def test_workshop_mount_prepare_turn_host_has_invite_tools_not_taobao() ->
     assert "confirm_save_workflow" in names
     assert "create_schedule" in names
     assert "manual_run_workflow" in names
+    assert "start_workflow_execution" in names
+    assert "stop_workflow_execution" in names
+    assert "delete_workflow" in names
     assert "taobao_store_write" not in names
     prompt = build_host_turn_context_block(
         roster_names=("市场与竞品研究",),

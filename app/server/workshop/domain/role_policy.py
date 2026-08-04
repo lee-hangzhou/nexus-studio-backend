@@ -22,6 +22,9 @@ _HOST: FrozenSet[WorkshopToolCapability] = frozenset(
         WorkshopToolCapability.DRAFT_WORKFLOW,
         WorkshopToolCapability.CONFIRM_SAVE_WORKFLOW,
         WorkshopToolCapability.CREATE_SCHEDULE,
+        WorkshopToolCapability.START_WORKFLOW_EXECUTION,
+        WorkshopToolCapability.STOP_WORKFLOW_EXECUTION,
+        WorkshopToolCapability.DELETE_WORKFLOW,
         WorkshopToolCapability.MANUAL_RUN_WORKFLOW,
     }
 )

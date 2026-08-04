@@ -435,6 +435,30 @@ class WorkshopPort(Protocol):
         authorized_capabilities: tuple[str, ...],
     ) -> WorkshopWorkflowRunDTO: ...
 
+    async def start_workflow_execution(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+    ) -> tuple[WorkshopScheduleDTO, ...]: ...
+
+    async def stop_workflow_execution(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+    ) -> tuple[WorkshopScheduleDTO, ...]: ...
+
+    async def delete_workflow(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+    ) -> None: ...
+
 
 @runtime_checkable
 class UpgradeInvitePort(Protocol):

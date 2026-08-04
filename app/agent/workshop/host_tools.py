@@ -320,7 +320,9 @@ def build_host_orchestration_tools(
                         "status": workflow.status,
                         "instruction": (
                             "已保存；若用户确认建定时则 create_schedule；"
-                            "若确认跑一次则 manual_run_workflow"
+                            "若确认跑一次则 manual_run_workflow；"
+                            "启停定时用 start/stop_workflow_execution；"
+                            "删除用 delete_workflow"
                         ),
                     },
                     ensure_ascii=False,
@@ -429,6 +431,131 @@ def build_host_orchestration_tools(
             started,
         )
 
+    async def _start_workflow_execution(
+        workflow_id: str,
+        *,
+        tool_call_id: Annotated[str, InjectedToolCallId],
+    ) -> str:
+        """开启工作流定时执行（启用 schedule）"""
+        del tool_call_id
+        started = time.perf_counter()
+        args = {"workflow_id": workflow_id}
+        try:
+            schedules = await get_workshop_port().start_workflow_execution(
+                project_id=project_id,
+                user_id=ctx.user_id,
+                workflow_id=workflow_id,
+            )
+        except ValueError as exc:
+            return _emit(
+                ctx,
+                "start_workflow_execution",
+                args,
+                ToolResult.fail(INVALID_ARGUMENTS, detail=str(exc)),
+                started,
+            )
+        return _emit(
+            ctx,
+            "start_workflow_execution",
+            args,
+            ToolResult.ok(
+                json.dumps(
+                    {
+                        "workflow_id": workflow_id,
+                        "schedules": [
+                            {
+                                "schedule_id": item.id,
+                                "enabled": item.enabled,
+                                "cron": item.cron,
+                            }
+                            for item in schedules
+                        ],
+                    },
+                    ensure_ascii=False,
+                )
+            ),
+            started,
+        )
+
+    async def _stop_workflow_execution(
+        workflow_id: str,
+        *,
+        tool_call_id: Annotated[str, InjectedToolCallId],
+    ) -> str:
+        """停止工作流定时执行（禁用 schedule）"""
+        del tool_call_id
+        started = time.perf_counter()
+        args = {"workflow_id": workflow_id}
+        try:
+            schedules = await get_workshop_port().stop_workflow_execution(
+                project_id=project_id,
+                user_id=ctx.user_id,
+                workflow_id=workflow_id,
+            )
+        except ValueError as exc:
+            return _emit(
+                ctx,
+                "stop_workflow_execution",
+                args,
+                ToolResult.fail(INVALID_ARGUMENTS, detail=str(exc)),
+                started,
+            )
+        return _emit(
+            ctx,
+            "stop_workflow_execution",
+            args,
+            ToolResult.ok(
+                json.dumps(
+                    {
+                        "workflow_id": workflow_id,
+                        "schedules": [
+                            {
+                                "schedule_id": item.id,
+                                "enabled": item.enabled,
+                                "cron": item.cron,
+                            }
+                            for item in schedules
+                        ],
+                    },
+                    ensure_ascii=False,
+                )
+            ),
+            started,
+        )
+
+    async def _delete_workflow(
+        workflow_id: str,
+        *,
+        tool_call_id: Annotated[str, InjectedToolCallId],
+    ) -> str:
+        """删除已保存或草稿工作流（会取消活跃 run）"""
+        del tool_call_id
+        started = time.perf_counter()
+        args = {"workflow_id": workflow_id}
+        try:
+            await get_workshop_port().delete_workflow(
+                project_id=project_id,
+                user_id=ctx.user_id,
+                workflow_id=workflow_id,
+            )
+        except ValueError as exc:
+            return _emit(
+                ctx,
+                "delete_workflow",
+                args,
+                ToolResult.fail(INVALID_ARGUMENTS, detail=str(exc)),
+                started,
+            )
+        return _emit(
+            ctx,
+            "delete_workflow",
+            args,
+            ToolResult.ok(
+                json.dumps({"workflow_id": workflow_id, "deleted": True}, ensure_ascii=False)
+            ),
+            started,
+        )
+
     return [
         StructuredTool.from_function(
             coroutine=_invite_experts,
@@ -491,6 +618,31 @@ def build_host_orchestration_tools(
                 "对已保存工作流排队跑一次（异步执行平面，不写入聊天时间线）。"
                 "仅当用户本回合明确同意立即执行后调用；"
                 "不要用来代替 create_schedule。"
+            ),
+        ),
+        StructuredTool.from_function(
+            coroutine=_start_workflow_execution,
+            name="start_workflow_execution",
+            description=(
+                "开启已保存工作流的定时执行：启用其全部 schedule。"
+                "前提是已 create_schedule；无 schedule 会失败。"
+                "这不是 manual_run_workflow；仅当用户明确要求开启/恢复定时后调用。"
+            ),
+        ),
+        StructuredTool.from_function(
+            coroutine=_stop_workflow_execution,
+            name="stop_workflow_execution",
+            description=(
+                "停止已保存工作流的定时执行：禁用其全部 schedule。"
+                "已在跑的 run 不会因此中断；仅当用户明确要求停止/暂停定时后调用。"
+            ),
+        ),
+        StructuredTool.from_function(
+            coroutine=_delete_workflow,
+            name="delete_workflow",
+            description=(
+                "删除工作流定义：会取消活跃 run、清理关联 schedule。"
+                "仅当用户本回合明确要求删除该工作流后调用。"
             ),
         ),
     ]

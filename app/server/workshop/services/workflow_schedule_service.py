@@ -28,6 +28,7 @@ from app.server.workshop.domain.types import (
     WorkshopScheduleRecord,
     WorkshopScheduleRunRecord,
     WorkshopTaskRecord,
+    WorkshopWorkflowListItem,
     WorkshopWorkflowRecord,
     WorkshopWorkflowRunRecord,
 )
@@ -41,6 +42,7 @@ from app.server.workshop.domain.workflow_definition import (
 )
 from app.server.workshop.persistence.repository import (
     WorkshopRepository,
+    WorkshopRepositoryError,
     WorkshopScheduleNotFoundError,
     WorkshopTaskConflictError,
     WorkshopWorkflowConflictError,
@@ -53,6 +55,18 @@ from app.server.workshop.services.task_orchestrator import WorkshopTaskOrchestra
 
 class WorkshopWorkflowScheduleError(Exception):
     """非法工作流/定时操作（fail closed）"""
+
+
+def _prefer_schedule(
+    schedules: Sequence[WorkshopScheduleRecord],
+) -> WorkshopScheduleRecord | None:
+    """列表摘要：优先 enabled，否则按 authorized_at 最近"""
+    if not schedules:
+        return None
+    return max(
+        schedules,
+        key=lambda item: (item.enabled, item.authorized_at, item.id),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,12 +169,14 @@ class WorkshopWorkflowScheduleService:
         orchestrator: WorkshopTaskOrchestrator,
         clock: Optional[Callable[[], datetime]] = None,
         enqueue_run: Optional[Callable[[str, int, str], None]] = None,
+        revoke_run: Optional[Callable[[str, int, str], None]] = None,
     ) -> None:
-        """注入仓储、编排器、时钟与入队回调"""
+        """注入仓储、编排器、时钟、入队与撤销回调"""
         self._repository = repository
         self._orchestrator = orchestrator
         self._clock = clock or utc_now
         self._enqueue_run = enqueue_run
+        self._revoke_run = revoke_run
 
     async def agent_draft_workflow(
         self,
@@ -233,12 +249,131 @@ class WorkshopWorkflowScheduleService:
 
     async def list_saved_workflows(
         self, *, project_id: str, user_id: int
-    ) -> Tuple[WorkshopWorkflowRecord, ...]:
-        """列出已保存工作流"""
-        rows = await self._repository.list_saved_workflows(
+    ) -> Tuple[WorkshopWorkflowListItem, ...]:
+        """列出已保存工作流，附优选 schedule 摘要"""
+        workflows = await self._repository.list_saved_workflows(
             project_id=project_id, user_id=user_id
         )
-        return tuple(rows)
+        items: list[WorkshopWorkflowListItem] = []
+        for workflow in workflows:
+            schedules = await self._repository.list_schedules_for_workflow(
+                project_id=project_id,
+                user_id=user_id,
+                workflow_id=workflow.id,
+            )
+            items.append(
+                WorkshopWorkflowListItem(
+                    workflow=workflow,
+                    schedule=_prefer_schedule(schedules),
+                )
+            )
+        return tuple(items)
+
+    async def start_workflow_execution(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+        now: Optional[datetime] = None,
+    ) -> Tuple[WorkshopScheduleRecord, ...]:
+        """开启执行：启用该工作流下全部 schedule；无 schedule 则报错"""
+        await self._require_saved(
+            project_id=project_id, user_id=user_id, workflow_id=workflow_id
+        )
+        schedules = await self._repository.list_schedules_for_workflow(
+            project_id=project_id, user_id=user_id, workflow_id=workflow_id
+        )
+        if not schedules:
+            raise WorkshopWorkflowScheduleError(
+                "workflow has no schedule; create_schedule first"
+            )
+        enabled: list[WorkshopScheduleRecord] = []
+        for schedule in schedules:
+            enabled.append(
+                await self.enable_schedule(
+                    project_id=project_id,
+                    user_id=user_id,
+                    schedule_id=schedule.id,
+                    now=now,
+                )
+            )
+        return tuple(enabled)
+
+    async def stop_workflow_execution(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+    ) -> Tuple[WorkshopScheduleRecord, ...]:
+        """停止执行：禁用该工作流下全部 schedule；无 schedule 则报错"""
+        await self._require_saved(
+            project_id=project_id, user_id=user_id, workflow_id=workflow_id
+        )
+        schedules = await self._repository.list_schedules_for_workflow(
+            project_id=project_id, user_id=user_id, workflow_id=workflow_id
+        )
+        if not schedules:
+            raise WorkshopWorkflowScheduleError(
+                "workflow has no schedule; create_schedule first"
+            )
+        disabled: list[WorkshopScheduleRecord] = []
+        for schedule in schedules:
+            disabled.append(
+                await self.disable_schedule(
+                    project_id=project_id,
+                    user_id=user_id,
+                    schedule_id=schedule.id,
+                )
+            )
+        return tuple(disabled)
+
+    async def delete_workflow(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+        reason: str | None = None,
+    ) -> None:
+        """删除工作流：先取消活跃 run，再清 schedule 引用并硬删"""
+        await self._require_workflow(
+            project_id=project_id, user_id=user_id, workflow_id=workflow_id
+        )
+        active = await self._repository.list_active_workflow_runs(
+            project_id=project_id, user_id=user_id, workflow_id=workflow_id
+        )
+        finished_at = self._clock()
+        if finished_at.tzinfo is None:
+            raise WorkshopWorkflowScheduleError("clock must be timezone-aware")
+        cancel_reason = reason or "workflow deleted"
+        for run in active:
+            try:
+                await self._repository.cancel_workflow_run_cas(
+                    project_id=project_id,
+                    user_id=user_id,
+                    run_id=run.id,
+                    expected_revision=run.revision,
+                    finished_at=finished_at,
+                    reason=cancel_reason,
+                )
+            except WorkshopRepositoryError as exc:
+                raise WorkshopWorkflowScheduleError(
+                    f"failed to cancel workflow run: {run.id}"
+                ) from exc
+            self._revoke(project_id=project_id, user_id=user_id, run_id=run.id)
+        await self._repository.clear_task_schedule_refs_for_workflow(
+            project_id=project_id, user_id=user_id, workflow_id=workflow_id
+        )
+        try:
+            await self._repository.delete_workflow(
+                project_id=project_id, user_id=user_id, workflow_id=workflow_id
+            )
+        except WorkshopWorkflowNotFoundError as exc:
+            raise WorkshopWorkflowScheduleError(
+                f"unknown workflow: {workflow_id}"
+            ) from exc
 
     async def list_workflow_runs(
         self,
@@ -627,6 +762,12 @@ class WorkshopWorkflowScheduleService:
         if self._enqueue_run is None:
             return
         self._enqueue_run(project_id, user_id, run_id)
+
+    def _revoke(self, *, project_id: str, user_id: int, run_id: str) -> None:
+        """尽力撤销入队任务；未配置回调则跳过"""
+        if self._revoke_run is None:
+            return
+        self._revoke_run(project_id, user_id, run_id)
 
     async def _new_draft(
         self,

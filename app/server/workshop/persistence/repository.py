@@ -1734,6 +1734,108 @@ class WorkshopRepository:
         )
         return [_to_schedule(row) for row in rows]
 
+    async def list_schedules_for_workflow(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+    ) -> list[WorkshopScheduleRecord]:
+        """列出某工作流下全部定时"""
+        await self.require_project(project_id=project_id, user_id=user_id)
+        rows = await WorkshopSchedules.filter(
+            project_id=project_id, workflow_id=workflow_id
+        ).order_by("created_at", "id")
+        return [_to_schedule(row) for row in rows]
+
+    async def list_active_workflow_runs(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+    ) -> list[WorkshopWorkflowRunRecord]:
+        """列出工作流下 queued/running 的运行"""
+        await self.require_project(project_id=project_id, user_id=user_id)
+        rows = await WorkshopWorkflowRuns.filter(
+            project_id=project_id,
+            workflow_id=workflow_id,
+            status__in=[
+                WorkshopWorkflowRunStatus.QUEUED.value,
+                WorkshopWorkflowRunStatus.RUNNING.value,
+            ],
+        ).order_by("created_at", "id")
+        return [_to_workflow_run(row) for row in rows]
+
+    async def cancel_workflow_run_cas(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        run_id: str,
+        expected_revision: int,
+        finished_at: datetime,
+        reason: str | None = None,
+    ) -> WorkshopWorkflowRunRecord:
+        """CAS 将 queued/running 标为 cancelled"""
+        if finished_at.tzinfo is None:
+            raise WorkshopRepositoryError("finished_at must be timezone-aware")
+        await self.require_project(project_id=project_id, user_id=user_id)
+        updated = await WorkshopWorkflowRuns.filter(
+            id=run_id,
+            project_id=project_id,
+            revision=expected_revision,
+            status__in=[
+                WorkshopWorkflowRunStatus.QUEUED.value,
+                WorkshopWorkflowRunStatus.RUNNING.value,
+            ],
+        ).update(
+            status=WorkshopWorkflowRunStatus.CANCELLED.value,
+            error_message=reason,
+            finished_at=finished_at,
+            revision=expected_revision + 1,
+        )
+        if updated != 1:
+            raise WorkshopRepositoryError(f"workflow run cancel conflict: {run_id}")
+        return await self.get_workflow_run(
+            project_id=project_id, user_id=user_id, run_id=run_id
+        )
+
+    async def clear_task_schedule_refs_for_workflow(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+    ) -> int:
+        """解除任务对即将删除 schedule 的 RESTRICT 引用"""
+        await self.require_project(project_id=project_id, user_id=user_id)
+        schedule_ids = list(
+            await WorkshopSchedules.filter(
+                project_id=project_id, workflow_id=workflow_id
+            ).values_list("id", flat=True)
+        )
+        if not schedule_ids:
+            return 0
+        return await WorkshopTasks.filter(
+            project_id=project_id, schedule_id__in=schedule_ids
+        ).update(schedule_id=None, schedule_authorized=False)
+
+    async def delete_workflow(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+    ) -> None:
+        """硬删工作流（依赖 FK CASCADE 清理 schedule/run）"""
+        await self.require_project(project_id=project_id, user_id=user_id)
+        deleted = await WorkshopWorkflows.filter(
+            id=workflow_id, project_id=project_id
+        ).delete()
+        if deleted != 1:
+            raise WorkshopWorkflowNotFoundError(workflow_id)
+
     async def disable_schedule(
         self,
         *,

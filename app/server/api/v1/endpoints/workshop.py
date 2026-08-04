@@ -70,6 +70,7 @@ from app.contracts.workshop import (
     WorkshopScheduleTriggerResultView,
     WorkshopScheduleView,
     WorkshopTaskAssignmentListResponse,
+    WorkshopWorkflowIdRequest,
     WorkshopTaskIdRequest,
     WorkshopTaskListResponse,
     WorkshopTaskView,
@@ -110,6 +111,7 @@ from app.server.workshop.assembly import (
     wake_to_view,
     weak_accept_to_view,
     workflow_graph_from_view,
+    workflow_list_item_to_view,
     workflow_run_to_view,
     workflow_to_view,
 )
@@ -949,7 +951,9 @@ async def list_workshop_workflows(
     except _WORKSHOP_HTTP_ERRORS as exc:
         raise map_workshop_error(exc) from exc
     return Response(
-        data=WorkshopWorkflowListResponse(items=[workflow_to_view(item) for item in items])
+        data=WorkshopWorkflowListResponse(
+            items=[workflow_list_item_to_view(item) for item in items]
+        )
     )
 
 
@@ -993,6 +997,61 @@ async def manual_run_workshop_workflow(
     except _WORKSHOP_HTTP_ERRORS as exc:
         raise map_workshop_error(exc) from exc
     return Response(data=manual_run_to_view(result))
+
+
+@router.post("/workflows/start-execution")
+async def start_workshop_workflow_execution(
+    request: Request, body: WorkshopWorkflowIdRequest
+) -> Response[WorkshopScheduleListResponse]:
+    """开启工作流执行：启用关联 schedule"""
+    user_id: int = request.state.user_id
+    try:
+        items = await workshop_workflow_schedule_service.start_workflow_execution(
+            project_id=body.project_id,
+            user_id=user_id,
+            workflow_id=body.workflow_id,
+        )
+    except _WORKSHOP_HTTP_ERRORS as exc:
+        raise map_workshop_error(exc) from exc
+    return Response(
+        data=WorkshopScheduleListResponse(items=[schedule_to_view(item) for item in items])
+    )
+
+
+@router.post("/workflows/stop-execution")
+async def stop_workshop_workflow_execution(
+    request: Request, body: WorkshopWorkflowIdRequest
+) -> Response[WorkshopScheduleListResponse]:
+    """停止工作流执行：禁用关联 schedule"""
+    user_id: int = request.state.user_id
+    try:
+        items = await workshop_workflow_schedule_service.stop_workflow_execution(
+            project_id=body.project_id,
+            user_id=user_id,
+            workflow_id=body.workflow_id,
+        )
+    except _WORKSHOP_HTTP_ERRORS as exc:
+        raise map_workshop_error(exc) from exc
+    return Response(
+        data=WorkshopScheduleListResponse(items=[schedule_to_view(item) for item in items])
+    )
+
+
+@router.post("/workflows/delete")
+async def delete_workshop_workflow(
+    request: Request, body: WorkshopWorkflowIdRequest
+) -> Response[WorkshopOkView]:
+    """删除工作流（先取消活跃 run）"""
+    user_id: int = request.state.user_id
+    try:
+        await workshop_workflow_schedule_service.delete_workflow(
+            project_id=body.project_id,
+            user_id=user_id,
+            workflow_id=body.workflow_id,
+        )
+    except _WORKSHOP_HTTP_ERRORS as exc:
+        raise map_workshop_error(exc) from exc
+    return Response(data=WorkshopOkView())
 
 
 @router.post("/schedules/create")

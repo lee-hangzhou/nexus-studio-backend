@@ -158,6 +158,14 @@ class WorkshopScheduleRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class WorkshopWorkflowListItem:
+    """已保存工作流列表项：附优选 schedule 摘要（无则为 None）"""
+
+    workflow: WorkshopWorkflowRecord
+    schedule: Optional[WorkshopScheduleRecord]
+
+
+@dataclass(frozen=True, slots=True)
 class ScheduleStartedPayload:
     """定时开始事件载荷"""
 

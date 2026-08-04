@@ -1052,6 +1052,70 @@ class WorkshopPortAdapter:
             status=result.run.status.value,
         )
 
+    async def start_workflow_execution(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+    ) -> tuple[WorkshopScheduleDTO, ...]:
+        """开启工作流执行（启用关联 schedule）"""
+        try:
+            records = await self._schedules.start_workflow_execution(
+                project_id=project_id,
+                user_id=user_id,
+                workflow_id=workflow_id,
+            )
+        except WorkshopWorkflowScheduleError as exc:
+            raise ValueError(str(exc)) from exc
+        return tuple(_schedule_dto(item) for item in records)
+
+    async def stop_workflow_execution(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+    ) -> tuple[WorkshopScheduleDTO, ...]:
+        """停止工作流执行（禁用关联 schedule）"""
+        try:
+            records = await self._schedules.stop_workflow_execution(
+                project_id=project_id,
+                user_id=user_id,
+                workflow_id=workflow_id,
+            )
+        except WorkshopWorkflowScheduleError as exc:
+            raise ValueError(str(exc)) from exc
+        return tuple(_schedule_dto(item) for item in records)
+
+    async def delete_workflow(
+        self,
+        *,
+        project_id: str,
+        user_id: int,
+        workflow_id: str,
+    ) -> None:
+        """删除工作流"""
+        try:
+            await self._schedules.delete_workflow(
+                project_id=project_id,
+                user_id=user_id,
+                workflow_id=workflow_id,
+            )
+        except WorkshopWorkflowScheduleError as exc:
+            raise ValueError(str(exc)) from exc
+
+
+def _schedule_dto(record) -> WorkshopScheduleDTO:
+    """定时读模型转 Port DTO"""
+    return WorkshopScheduleDTO(
+        id=record.id,
+        workflow_id=record.workflow_id,
+        cron=record.cron,
+        timezone=record.timezone,
+        enabled=record.enabled,
+    )
+
 
 def _workflow_dto(record) -> WorkshopWorkflowDTO:
     """领域工作流转 DTO"""
