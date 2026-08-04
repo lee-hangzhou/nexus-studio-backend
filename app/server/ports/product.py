@@ -17,6 +17,8 @@ from app.server.generation.domain.models import GenerationModelCapabilities
 from app.server.generation.schemas import (
     GenerateMaterialUploadResponse,
     GenerateModelsResponse,
+    GenerateTaskListRequest,
+    GenerateTaskListResponse,
     GenerateTaskSubmitResponse,
     GenerateTaskView,
     SubmitGenerateRequest,
@@ -123,6 +125,10 @@ class GenerationPort(Protocol):
     async def observe_task(self, task_id: int, user_id: int) -> ObservedGenerationDTO: ...
 
     async def list_models(self, kind: GenerationKind) -> GenerateModelsResponse: ...
+
+    async def list_tasks(
+        self, user_id: int, req: GenerateTaskListRequest
+    ) -> GenerateTaskListResponse: ...
 
     async def resolve_tts_voice_id(
         self,

@@ -37,6 +37,15 @@ CANVAS_TOOL_NAMES = frozenset(
         "read_canvas_skill",
     }
 )
+PROMPT_ASSISTANT_TOOL_NAMES = frozenset(
+    {
+        "list_generate_tasks",
+        "list_assets",
+        "get_asset",
+        "apply_composer_prompt",
+        "inspect_turn_media",
+    }
+)
 
 _STATUS_PHRASES = frozenset(
     {
@@ -162,6 +171,21 @@ def sanitize_tool_step_preview(tool_name: str, preview: str, *, ok: bool | None 
     if tool_name in CANVAS_TOOL_NAMES:
         output = parsed.output if parsed is not None else text
         return _canvas_preview(tool_name, output, ok=resolved_ok is not False)
+
+    if tool_name in PROMPT_ASSISTANT_TOOL_NAMES:
+        if resolved_ok is False:
+            return "操作未完成"
+        if tool_name == "apply_composer_prompt":
+            return "已应用到创作器"
+        if tool_name == "list_generate_tasks":
+            return "已查询创作任务"
+        if tool_name == "list_assets":
+            return "已查询素材库"
+        if tool_name == "get_asset":
+            return "已读取素材"
+        if tool_name == "inspect_turn_media":
+            return "已完成视觉理解"
+        return "已完成"
 
     if tool_name in MEMORY_TOOL_NAMES:
         if parsed is None or not parsed.success:

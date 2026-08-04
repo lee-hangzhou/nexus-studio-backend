@@ -5,6 +5,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from app.contracts.canvas import CanvasPatchResponse, CanvasToolPendingOperation, GenerationProgress
+from app.contracts.composer_prompt import ComposerPromptContentSegment
 from app.server.chat.domain.stream_enums import StreamErrorCode, StreamFrameType, TokenChannel
 
 
@@ -180,6 +181,14 @@ class BrowserFrameEvent(StreamContract):
     height: int
 
 
+class ComposerPromptAppliedFrame(StreamContract):
+    type: Literal[StreamFrameType.COMPOSER_PROMPT_APPLIED]
+    turn_id: str
+    prompt: str
+    content: list[ComposerPromptContentSegment] = Field(default_factory=list)
+    ref_asset_ids: list[int] = Field(default_factory=list)
+
+
 StreamFrame = Annotated[
     TokenFrame
     | ToolStartFrame
@@ -196,7 +205,8 @@ StreamFrame = Annotated[
     | UserGateRequiredFrame
     | UpgradeInviteProposedFrame
     | BrowserBlockedFrame
-    | BrowserFrameEvent,
+    | BrowserFrameEvent
+    | ComposerPromptAppliedFrame,
     Field(discriminator="type"),
 ]
 

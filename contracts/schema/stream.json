@@ -1077,6 +1077,148 @@
       "title": "CanvasTaskResults",
       "type": "object"
     },
+    "ComposerPromptAppliedFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "audio_url": "#/$defs/ComposerPromptMediaSegment",
+                "image_url": "#/$defs/ComposerPromptMediaSegment",
+                "text": "#/$defs/ComposerPromptTextSegment",
+                "text_ref": "#/$defs/ComposerPromptTextRefSegment",
+                "video_url": "#/$defs/ComposerPromptMediaSegment"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ComposerPromptTextSegment"
+              },
+              {
+                "$ref": "#/$defs/ComposerPromptMediaSegment"
+              },
+              {
+                "$ref": "#/$defs/ComposerPromptTextRefSegment"
+              }
+            ]
+          },
+          "title": "Content",
+          "type": "array"
+        },
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "protocol_version": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Protocol Version",
+          "type": "integer"
+        },
+        "ref_asset_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Ref Asset Ids",
+          "type": "array"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "composer_prompt_applied",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "turn_id",
+        "prompt"
+      ],
+      "title": "ComposerPromptAppliedFrame",
+      "type": "object"
+    },
+    "ComposerPromptMediaSegment": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_id": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asset Id"
+        },
+        "type": {
+          "enum": [
+            "image_url",
+            "video_url",
+            "audio_url"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "url": {
+          "default": "",
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "ComposerPromptMediaSegment",
+      "type": "object"
+    },
+    "ComposerPromptTextRefSegment": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "text_ref",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "title": "ComposerPromptTextRefSegment",
+      "type": "object"
+    },
+    "ComposerPromptTextSegment": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "text",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "title": "ComposerPromptTextSegment",
+      "type": "object"
+    },
     "ConversationTitleFrame": {
       "additionalProperties": false,
       "properties": {
@@ -2587,6 +2729,7 @@
       "cancelled": "#/$defs/CancelledFrame",
       "canvas_patch": "#/$defs/CanvasPatchFrame",
       "canvas_session_title": "#/$defs/CanvasSessionTitleFrame",
+      "composer_prompt_applied": "#/$defs/ComposerPromptAppliedFrame",
       "conversation_title": "#/$defs/ConversationTitleFrame",
       "done": "#/$defs/DoneFrame",
       "error": "#/$defs/ErrorFrame",
@@ -2649,6 +2792,9 @@
     },
     {
       "$ref": "#/$defs/BrowserFrameEvent"
+    },
+    {
+      "$ref": "#/$defs/ComposerPromptAppliedFrame"
     }
   ]
 }

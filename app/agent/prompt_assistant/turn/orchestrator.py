@@ -1,35 +1,34 @@
-"""Chat turn SSE：组装 ChatMount + 会话生命周期壳。"""
+"""创作提示词助手 turn：PROMPT_ASSISTANT_MOUNT + 会话生命周期壳。"""
 
 from __future__ import annotations
 
 import asyncio
 from typing import AsyncIterator
 
-from app.agent.chat.mount import CHAT_MOUNT, ChatMountContext
 from app.agent.chat.turn.conversation_agent_stream import stream_conversation_agent_turn
+from app.agent.prompt_assistant.mount import PROMPT_ASSISTANT_MOUNT, PromptAssistantMountContext
 from app.agent.runtime.checkpointer import get_chat_checkpointer
+from app.contracts.composer_prompt import GenerateComposerContext
 from app.contracts.turn_content import TurnUserInput
 from app.server.chat.persistence.conversations import ChatConversations
-from app.server.ports.product import SelectedSkillDTO
 
 
-async def stream_turn(
+async def stream_prompt_assistant_turn(
     *,
     conversation: ChatConversations,
     user_id: int,
     conversation_id: int,
     user_input: TurnUserInput,
     content_text: str,
-    project_id: int | None,
     model_key: str,
     enable_tools: bool,
     client_turn_id: str | None,
     cancel_event: asyncio.Event,
     turn_id: str,
-    selected_skills: tuple[SelectedSkillDTO, ...] | None = None,
+    composer_context: GenerateComposerContext | None,
 ) -> AsyncIterator[str]:
-    resolved_skills = tuple(selected_skills) if selected_skills is not None else ()
-    ctx = ChatMountContext(
+    """执行创作提示词助手一轮流式 turn。"""
+    ctx = PromptAssistantMountContext(
         user_id=user_id,
         conversation_id=conversation_id,
         turn_id=turn_id,
@@ -38,20 +37,19 @@ async def stream_turn(
         conversation=conversation,
         content=content_text,
         user_input=user_input,
-        selected_skills=resolved_skills,
-        project_id=project_id,
         model_key=model_key,
         enable_tools=enable_tools,
         client_turn_id=client_turn_id,
+        composer_context=composer_context,
     )
     async for chunk in stream_conversation_agent_turn(
-        mount=CHAT_MOUNT,
+        mount=PROMPT_ASSISTANT_MOUNT,
         ctx=ctx,
         conversation=conversation,
         user_id=user_id,
         conversation_id=conversation_id,
         turn_id=turn_id,
         cancel_event=cancel_event,
-        log_event_prefix="chat.stream_turn",
+        log_event_prefix="prompt_assistant.stream_turn",
     ):
         yield chunk

@@ -1,3 +1,5 @@
+"""创作提示词助手 AgentMountSpec：复用会话脚手架与 chat 守卫/recovery，独立工具与 system prompt。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -13,26 +15,9 @@ from app.agent.chat.agent.factory import build_chat_agent
 from app.agent.chat.llm.gateway_chat_model import GatewayChatModel
 from app.agent.chat.llm.registry import get_model_spec
 from app.agent.chat.memory.store import chat_runnable_config
-from app.agent.chat.prompt.composer import PromptComposer
 from app.agent.chat.prompt.types import TurnPromptContext
-from app.agent.chat.expert_turn import (
-    build_expert_identity_block,
-    intersect_chat_tools_with_profile,
-    profile_tool_names_for_chat,
-)
-from app.agent.chat.tools.build_turn_tools import build_chat_turn_tools
-from app.agent.chat.tools.judgment_gate import UpgradeInviteGateState
-from app.agent.chat.tools.judgment_tools import (
-    build_judgment_tools,
-    wrap_tools_with_judgment_gate,
-)
 from app.agent.chat.tools.lc_tools import ChatToolContext
 from app.agent.chat.tools.ui_preview import sanitize_tool_step_preview
-from app.agent.workshop.mechanism import (
-    WorkshopMechanismSurface,
-    assemble_workshop_mechanism_skills_block,
-    format_invite_directory_prompt,
-)
 from app.agent.chat.turn.checkpoint import (
     capture_turn_checkpoint_messages,
     repair_chat_checkpoint_if_needed,
@@ -49,32 +34,27 @@ from app.agent.chat.turn.recovery_hook import ChatRecoveryHook
 from app.agent.chat.turn.session import ChatTurnSession
 from app.agent.chat.turn.subscribers import build_chat_lifecycle_subscribers
 from app.agent.chat.turn.usage_log import TurnUsageCollector
+from app.agent.prompt_assistant.prompt import build_prompt_assistant_system
+from app.agent.prompt_assistant.subscribers import PromptAssistantComposerPromptSubscriber
+from app.agent.prompt_assistant.tools.build import build_prompt_assistant_tools
 from app.agent.runtime.checkpointer import get_chat_checkpointer
-from app.agent.runtime.memory.inject import MemoryInjectionRequest, build_memory_injection
 from app.agent.runtime.memory_store import get_memory_store
 from app.agent.runtime.mounts.spec import AgentMountSpec
-from app.agent.runtime.ports import get_user_skill_port
-from app.agent.runtime.skills.prompt_format import (
-    format_selected_skill_bodies_text,
-    format_user_skill_index_text,
-)
 from app.agent.runtime.turn.tool_loop_guard import TurnToolLoopGuard
 from app.agent.runtime.turn_engine.terminal_policy import SseTerminalPolicy
-from app.contracts.turn_content import (
-    CompiledTurnInput,
-    TurnUserInput,
-    input_snapshot_dict,
-)
+from app.contracts.composer_prompt import GenerateComposerContext
+from app.contracts.turn_content import CompiledTurnInput, TurnMediaType, TurnUserInput, input_snapshot_dict
 from app.server.chat.persistence.conversations import ChatConversations
 from app.server.chat.services.attachments.service import chat_attachment_service
 from app.server.chat.services.constants import CHAT_CHECKPOINT_THREAD_PREFIX
 from app.server.infra.config import settings
-from app.server.ports.product import SelectedSkillDTO
 from app.server.skills.domain.enums import SkillSurface
 
 
 @dataclass
-class ChatMountContext:
+class PromptAssistantMountContext:
+    """创作提示词助手 mount 上下文。"""
+
     user_id: int
     conversation_id: int
     turn_id: str
@@ -85,8 +65,7 @@ class ChatMountContext:
     model_key: str
     enable_tools: bool
     user_input: TurnUserInput
-    selected_skills: tuple[SelectedSkillDTO, ...] = ()
-    project_id: int | None = None
+    composer_context: GenerateComposerContext | None = None
     client_turn_id: str | None = None
     compiled_input: CompiledTurnInput | None = None
     persistence: TurnPersistence | None = None
@@ -104,13 +83,13 @@ class ChatMountContext:
     sse_attribution: dict[str, str | None] | None = None
 
 
-def _thread_id(ctx: ChatMountContext) -> str:
-    """解析 Chat checkpoint thread id"""
+def _thread_id(ctx: PromptAssistantMountContext) -> str:
+    """与 chat 共用 session 前缀；conversation_id 隔离线程。"""
     return f"{CHAT_CHECKPOINT_THREAD_PREFIX}-{ctx.conversation_id}"
 
 
-async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
-    """组装 Chat turn 的 agent、prompt 与持久化快照"""
+async def _prepare_turn(ctx: PromptAssistantMountContext) -> PromptAssistantMountContext:
+    """组装提示词助手 turn：公共脚手架 + PA 工具与 system prompt。"""
     scaffold = await prepare_conversation_turn_scaffold(
         user_id=ctx.user_id,
         conversation_id=ctx.conversation_id,
@@ -118,7 +97,7 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
         model_key=ctx.model_key,
         enable_tools=ctx.enable_tools,
         user_input=ctx.user_input,
-        log_prefix="turn",
+        log_prefix="prompt_assistant.turn",
     )
     compiled = scaffold.compiled
     ctx.compiled_input = compiled
@@ -129,142 +108,41 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
     ctx.usage_collector = scaffold.usage_collector
     ctx.observation = scaffold.observation
     ctx.recorder = scaffold.recorder
-    persistence = scaffold.persistence
-    turn_context_meta = scaffold.turn_context_meta
-    workspace = scaffold.workspace
-    guards = scaffold.guards
-    tool_audit = scaffold.tool_audit
-    usage_collector = scaffold.usage_collector
-    observation = scaffold.observation
-    recorder = scaffold.recorder
-    plan_enable_tools = scaffold.plan_enable_tools
 
-    loop_guard = TurnToolLoopGuard(surface=SkillSurface.CHAT)
-    selected_expert_key = ctx.conversation.selected_expert_key
-    # 未选专家的单 Agent：判断门闩优先；已选专家则用户已指定身份，不强制升级判断
-    declined = bool(ctx.conversation.upgrade_invite_declined)
-    judgment_gate = UpgradeInviteGateState(
-        upgrade_invite_declined=declined,
-    )
+    loop_guard = TurnToolLoopGuard(surface=SkillSurface.PROMPT_ASSISTANT)
     tool_ctx = ChatToolContext(
         user_id=ctx.user_id,
         conversation_id=ctx.conversation_id,
-        workspace=workspace,
-        audit=tool_audit,
-        guards=guards,
+        workspace=scaffold.workspace,
+        audit=scaffold.tool_audit,
+        guards=scaffold.guards,
         cancel_event=ctx.cancel_event,
         loop_guard=loop_guard,
-        judgment_gate=judgment_gate,
         source_user_text=compiled.human_message,
     )
-    mount_judgment_tools = selected_expert_key is None
-    if mount_judgment_tools:
-
-        async def _create_upgrade_invite(
-            *,
-            expert_keys: tuple[str, ...],
-            primary_expert_key: str,
-            rationale: str,
-            host_narration: str,
-        ):
-            """经 UpgradeInvite Port 创建升级邀请提案"""
-            from app.agent.runtime.ports import get_upgrade_invite_port
-
-            return await get_upgrade_invite_port().create_proposal(
-                user_id=ctx.user_id,
-                conversation_id=ctx.conversation_id,
-                turn_id=ctx.turn_id,
-                source_user_text=compiled.human_message,
-                expert_keys=expert_keys,
-                primary_expert_key=primary_expert_key,
-                rationale=rationale,
-                host_narration=host_narration,
-            )
-
-        tool_ctx.create_upgrade_invite = _create_upgrade_invite
-    asset_media_types = {
+    asset_media_types: dict[int, TurnMediaType] = {
         asset.asset_id: asset.media_type for asset in compiled.tool_asset_index
     }
-    tools = build_chat_turn_tools(
-        tool_ctx,
-        enable_tools=plan_enable_tools,
+    tools = build_prompt_assistant_tools(
         user_id=ctx.user_id,
+        enable_tools=scaffold.plan_enable_tools,
         tool_asset_ids=frozenset(compiled.tool_asset_ids),
         asset_media_types=asset_media_types,
     )
-    expert_identity_block = ""
-    mechanism_skills_block = ""
-    if mount_judgment_tools and plan_enable_tools:
-        tools = list(tools) + build_judgment_tools(tool_ctx)
-        tools = wrap_tools_with_judgment_gate(tool_ctx, tools)
-        declined_block = None
-        if declined:
-            declined_block = (
-                "用户此前已拒绝升级邀请：禁止主动调用 propose_upgrade_and_invite；"
-                "仅当本回合用户明确要求升级或邀请专家时才可调用，"
-                "且必须传 user_explicitly_requested=true；"
-                "普通问答直接回答或使用执行工具，无需再提议升级"
-            )
-        mechanism_skills_block = assemble_workshop_mechanism_skills_block(
-            surface=WorkshopMechanismSurface.CHAT_DUAL_MODE,
-            invite_directory_block=format_invite_directory_prompt(),
-            declined_upgrade_block=declined_block,
-        )
-    if selected_expert_key:
-        allowed_names = profile_tool_names_for_chat(selected_expert_key)
-        tools = intersect_chat_tools_with_profile(tools, allowed_names)
-        expert_identity_block = build_expert_identity_block(selected_expert_key)
-        ctx.sse_attribution = {
-            "speaker_role": "expert",
-            "expert_id": selected_expert_key,
-            "task_id": None,
-        }
     prompt_ctx = TurnPromptContext(
         user_id=ctx.user_id,
         conversation_id=ctx.conversation_id,
         model_key=ctx.model_key,
-        enable_tools=plan_enable_tools,
+        enable_tools=scaffold.plan_enable_tools,
         tool_names=[tool.name for tool in tools],
         has_turn_media_refs=scaffold.has_visual_refs,
     )
-    memory_tools_enabled = any(
-        name in {"manage_user_memory", "recall_user_memory"} for name in prompt_ctx.tool_names
-    )
-    injection = await build_memory_injection(
-        MemoryInjectionRequest(
-            domain="chat",
-            user_id=ctx.user_id,
-            user_message=ctx.content,
-            is_resume=False,
-            memory_tools_enabled=memory_tools_enabled,
-            store=get_memory_store(),
-        )
-    )
-    selected_paths = {item.path for item in ctx.selected_skills}
-    index_items = await get_user_skill_port().list_enabled_for_index(
-        surface=SkillSurface.CHAT,
-        user_id=ctx.user_id,
-        project_id=ctx.project_id,
-    )
-    user_skill_index_text = format_user_skill_index_text(index_items, selected_paths)
-    selected_bodies_text = format_selected_skill_bodies_text(ctx.selected_skills)
-    system_prompt = PromptComposer.build_turn_system(
+    system_prompt = build_prompt_assistant_system(
         prompt_ctx,
-        memory_blocks_text=injection.memory_blocks_text,
-        memory_ops_brief=injection.ops_brief_text,
-        user_skill_index_text=user_skill_index_text,
-        selected_bodies_text=selected_bodies_text,
+        composer_context=ctx.composer_context,
         turn_references_block=compiled.reference_index,
         attachment_context_block=attachment_context_for_scaffold(scaffold),
     )
-    if expert_identity_block:
-        system_prompt = f"{expert_identity_block}\n\n{system_prompt}"
-    if not mechanism_skills_block:
-        # 无双形态判断挂载时仍注入回复边界
-        mechanism_skills_block = assemble_workshop_mechanism_skills_block(
-            surface=WorkshopMechanismSurface.CHAT_EXPERT,
-        )
-    system_prompt = f"{mechanism_skills_block}\n\n{system_prompt}"
     spec = get_model_spec(ctx.model_key)
     turn_human = HumanMessage(content=compiled.human_message)
     bind_attachment_ids = await chat_attachment_service.attachment_ids_for_asset_ids(
@@ -298,7 +176,7 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
     config = chat_runnable_config(
         user_id=ctx.user_id,
         conversation_id=ctx.conversation_id,
-        workspace=str(workspace),
+        workspace=str(scaffold.workspace),
         turn_id=ctx.turn_id,
     )
     ctx.agent = agent
@@ -309,30 +187,30 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
         llm=llm,
         system_prompt=system_prompt,
         config=config,
-        guards=guards,
+        guards=scaffold.guards,
         cancel_event=ctx.cancel_event,
         model_key=ctx.model_key,
         turn_id=ctx.turn_id,
-        persistence=persistence,
-        recorder=recorder,
-        usage_collector=usage_collector,
+        persistence=scaffold.persistence,
+        recorder=scaffold.recorder,
+        usage_collector=scaffold.usage_collector,
         ctx=tool_ctx,
-        turn_context_meta=turn_context_meta,
-        tool_audit=tool_audit,
+        turn_context_meta=scaffold.turn_context_meta,
+        tool_audit=scaffold.tool_audit,
         user_id=ctx.user_id,
         conversation_id=ctx.conversation_id,
         agent=agent,
     )
     ctx.recovery_hook = recovery_hook
     ctx.session = ChatTurnSession(
-        persistence=persistence,
-        recorder=recorder,
-        usage_collector=usage_collector,
-        observation=observation,
-        guards=guards,
+        persistence=scaffold.persistence,
+        recorder=scaffold.recorder,
+        usage_collector=scaffold.usage_collector,
+        observation=scaffold.observation,
+        guards=scaffold.guards,
         ctx=tool_ctx,
-        turn_context_meta=turn_context_meta,
-        tool_audit=tool_audit,
+        turn_context_meta=scaffold.turn_context_meta,
+        tool_audit=scaffold.tool_audit,
         turn_id=ctx.turn_id,
         conversation_id=ctx.conversation_id,
         user_id=ctx.user_id,
@@ -340,7 +218,7 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
         content=ctx.content,
         turn_asset_ids=compiled.tool_asset_ids,
         conversation=ctx.conversation,
-        workspace=workspace,
+        workspace=scaffold.workspace,
         cancel_event=ctx.cancel_event,
         recovery_hook=recovery_hook,
         agent=agent,
@@ -349,33 +227,41 @@ async def _prepare_turn(ctx: ChatMountContext) -> ChatMountContext:
     return ctx
 
 
-async def _build_agent(ctx: ChatMountContext) -> CompiledStateGraph:
-    """返回已准备好的 Chat agent 图"""
-    assert ctx.agent is not None
+async def _build_agent(ctx: PromptAssistantMountContext) -> CompiledStateGraph:
+    """返回已准备好的 agent 图。"""
+    if ctx.agent is None:
+        raise RuntimeError("prompt assistant agent missing after prepare_turn")
     return ctx.agent
 
 
-def _build_guards(ctx: ChatMountContext) -> TurnGuards:
-    """返回 turn 守卫配置"""
-    assert ctx.guards is not None
+def _build_guards(ctx: PromptAssistantMountContext) -> TurnGuards:
+    """返回 turn 守卫。"""
+    if ctx.guards is None:
+        raise RuntimeError("prompt assistant guards missing after prepare_turn")
     return ctx.guards
 
 
-def _build_subscribers(ctx: ChatMountContext):
-    """组装 Chat 生命周期订阅者"""
-    assert ctx.session is not None
-    return build_chat_lifecycle_subscribers(ctx.session)
+def _build_subscribers(ctx: PromptAssistantMountContext):
+    """组装会话生命周期订阅者与写回帧订阅者。"""
+    if ctx.session is None:
+        raise RuntimeError("prompt assistant session missing after prepare_turn")
+    return [
+        *build_chat_lifecycle_subscribers(ctx.session),
+        PromptAssistantComposerPromptSubscriber(),
+    ]
 
 
-def _build_runnable_config(ctx: ChatMountContext) -> RunnableConfig:
-    """返回 LangGraph runnable_config"""
-    assert ctx.runnable_config is not None
+def _build_runnable_config(ctx: PromptAssistantMountContext) -> RunnableConfig:
+    """返回 LangGraph runnable_config。"""
+    if ctx.runnable_config is None:
+        raise RuntimeError("prompt assistant runnable_config missing after prepare_turn")
     return ctx.runnable_config
 
 
-def _terminal_policy(ctx: ChatMountContext) -> SseTerminalPolicy:
-    """构造 SSE 终态策略"""
-    assert ctx.persistence is not None
+def _terminal_policy(ctx: PromptAssistantMountContext) -> SseTerminalPolicy:
+    """构造 SSE 终态策略。"""
+    if ctx.persistence is None:
+        raise RuntimeError("prompt assistant persistence missing after prepare_turn")
     persistence = ctx.persistence
     return SseTerminalPolicy(
         emit_done_on_completed=True,
@@ -384,30 +270,31 @@ def _terminal_policy(ctx: ChatMountContext) -> SseTerminalPolicy:
     )
 
 
-def _recovery(ctx: ChatMountContext):
-    """返回恢复钩子"""
+def _recovery(ctx: PromptAssistantMountContext):
+    """返回 recovery hook。"""
     return ctx.recovery_hook
 
 
-def _preview(_ctx: ChatMountContext):
-    """返回工具结果预览函数"""
+def _preview(_ctx: PromptAssistantMountContext):
+    """工具预览清洗函数。"""
     return lambda name, result, ok: sanitize_tool_step_preview(name, result, ok=ok)
 
 
-def _input_messages(ctx: ChatMountContext):
-    """返回本轮输入消息"""
+def _input_messages(ctx: PromptAssistantMountContext):
+    """本轮输入消息。"""
     return ctx.input_messages
 
 
-def _heartbeat(_ctx: ChatMountContext) -> int:
-    """返回心跳间隔秒数"""
+def _heartbeat(_ctx: PromptAssistantMountContext) -> int:
+    """SSE heartbeat 间隔秒数。"""
     return int(settings.CHAT_HEARTBEAT_INTERVAL_SEC)
 
 
-def _start_repair(ctx: ChatMountContext):
-    """返回 turn 开始时的 checkpoint 修复回调"""
+def _start_repair(ctx: PromptAssistantMountContext):
+    """checkpoint 修复闭包。"""
+
     async def repair(agent, runnable_config, **kwargs):
-        """按原因修复 Chat checkpoint"""
+        """修复 stale checkpoint。"""
         reason = kwargs.get("reason")
         await repair_chat_checkpoint_if_needed(
             agent,
@@ -420,18 +307,13 @@ def _start_repair(ctx: ChatMountContext):
     return repair
 
 
-def _cleanup_repair(ctx: ChatMountContext):
-    """返回 turn 清理时的 checkpoint 修复回调"""
-    return _start_repair(ctx)
-
-
-def _sse_attribution(ctx: ChatMountContext) -> dict[str, str | None]:
-    """返回 SSE 发言归因字段"""
+def _sse_attribution(ctx: PromptAssistantMountContext) -> dict[str, str | None]:
+    """SSE 归因字段。"""
     return dict(ctx.sse_attribution or {})
 
 
-CHAT_MOUNT = AgentMountSpec(
-    name=SkillSurface.CHAT,
+PROMPT_ASSISTANT_MOUNT = AgentMountSpec(
+    name=SkillSurface.PROMPT_ASSISTANT,
     prepare_turn=_prepare_turn,
     resolve_thread_id=_thread_id,
     build_guards=_build_guards,
@@ -444,7 +326,7 @@ CHAT_MOUNT = AgentMountSpec(
     build_preview_tool_result=_preview,
     resolve_input_messages=_input_messages,
     resolve_on_turn_start_repair=_start_repair,
-    resolve_on_turn_cleanup_repair=_cleanup_repair,
+    resolve_on_turn_cleanup_repair=_start_repair,
     resolve_client_turn_id=lambda ctx: ctx.client_turn_id,
     resolve_sse_attribution=_sse_attribution,
 )

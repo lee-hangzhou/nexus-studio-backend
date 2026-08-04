@@ -28,15 +28,19 @@ from app.server.chat.services.upgrade_invite import UpgradeInviteService
 from app.agent.chat.gate.pending import get_gate_pending, get_gate_pending_many
 from app.agent.runtime.checkpointer import get_chat_checkpointer
 from app.server.infra.logger import log_exception, logger
-from app.server.chat.domain.enums import ChatConversationStatus, ChatMessageRole
+from app.server.chat.domain.enums import ChatConversationKind, ChatConversationStatus, ChatMessageRole
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
 from app.server.chat.persistence.attachments import ChatAttachments
 from app.server.chat.persistence.conversations import ChatConversations
 from app.server.chat.persistence.messages import ChatMessages
 from app.server.ports.product import SelectedSkillDTO
+from app.contracts.composer_prompt import GenerateComposerContext
+from tortoise.exceptions import IntegrityError
 
 _OPTIONAL_JSON_OBJECT = TypeAdapter(dict[str, Any] | None)
+
+PROMPT_ASSISTANT_CONVERSATION_TITLE = "创作提示词助手"
 
 
 def require_turn_model(model: str | None) -> str:
@@ -45,6 +49,17 @@ def require_turn_model(model: str | None) -> str:
         raise AppError(ErrorCode.INVALID_PARAMS, "model is required")
     get_model_spec(key)
     return key
+
+
+def parse_conversation_kind(raw: str | None) -> ChatConversationKind:
+    """将持久化 kind 解析为枚举；未知值 fail closed。"""
+    try:
+        return ChatConversationKind(raw)
+    except ValueError as exc:
+        raise AppError(
+            ErrorCode.INTERNAL_ERROR,
+            f"unknown conversation kind: {raw!r}",
+        ) from exc
 
 
 class ChatService:
@@ -63,11 +78,58 @@ class ChatService:
             title=title or DEFAULT_CONVERSATION_TITLE,
             default_model=model_key,
             status=int(ChatConversationStatus.ACTIVE),
+            kind=ChatConversationKind.CHAT.value,
         )
         return self._to_conversation_view(row)
 
+    async def get_or_create_prompt_assistant_session(
+        self,
+        user_id: int,
+        *,
+        model: str,
+    ) -> ConversationView:
+        """获取或创建当前用户唯一的活跃创作提示词助手会话。"""
+        model_key = require_turn_model(model)
+        existing = await ChatConversations.filter(
+            user_id=user_id,
+            status=int(ChatConversationStatus.ACTIVE),
+            kind=ChatConversationKind.PROMPT_ASSISTANT.value,
+        ).first()
+        if existing is not None:
+            if existing.default_model != model_key:
+                existing.default_model = model_key
+                await existing.save(update_fields=["default_model", "updated_at"])
+            return self._to_conversation_view(existing)
+        try:
+            row = await ChatConversations.create(
+                user_id=user_id,
+                title=PROMPT_ASSISTANT_CONVERSATION_TITLE,
+                default_model=model_key,
+                status=int(ChatConversationStatus.ACTIVE),
+                kind=ChatConversationKind.PROMPT_ASSISTANT.value,
+            )
+        except IntegrityError:
+            row = await ChatConversations.filter(
+                user_id=user_id,
+                status=int(ChatConversationStatus.ACTIVE),
+                kind=ChatConversationKind.PROMPT_ASSISTANT.value,
+            ).first()
+            if row is None:
+                raise AppError(
+                    ErrorCode.INTERNAL_ERROR,
+                    "prompt assistant session missing after unique conflict",
+                )
+            if row.default_model != model_key:
+                row.default_model = model_key
+                await row.save(update_fields=["default_model", "updated_at"])
+        return self._to_conversation_view(row)
+
     async def list_conversations(self, user_id: int, offset: int, limit: int) -> ConversationListResponse:
-        query = ChatConversations.filter(user_id=user_id, status=int(ChatConversationStatus.ACTIVE))
+        query = ChatConversations.filter(
+            user_id=user_id,
+            status=int(ChatConversationStatus.ACTIVE),
+            kind=ChatConversationKind.CHAT.value,
+        )
         total = await query.count()
         rows = await query.order_by("-updated_at").offset(offset).limit(limit)
         conversation_ids = [row.id for row in rows]
@@ -341,9 +403,35 @@ class ChatService:
         cancel_event: asyncio.Event,
         selected_skills: tuple[SelectedSkillDTO, ...] | None = None,
         turn_target: WorkshopTurnTarget | None = None,
+        composer_context: GenerateComposerContext | None = None,
     ) -> AsyncIterator[str]:
         logger.info("chat.stream_turn.start", conversation_id=conversation_id, model=model_key, turn=turn_id)
         try:
+            kind = parse_conversation_kind(conversation.kind)
+            if composer_context is not None and kind is not ChatConversationKind.PROMPT_ASSISTANT:
+                raise AppError(
+                    ErrorCode.INVALID_PARAMS,
+                    "composer_context is only valid for prompt_assistant conversations",
+                )
+            if kind is ChatConversationKind.PROMPT_ASSISTANT:
+                from app.agent.prompt_assistant.turn.orchestrator import stream_prompt_assistant_turn
+
+                async for chunk in stream_prompt_assistant_turn(
+                    conversation=conversation,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    user_input=user_input,
+                    content_text=content_text,
+                    model_key=model_key,
+                    enable_tools=enable_tools,
+                    client_turn_id=client_turn_id,
+                    cancel_event=cancel_event,
+                    turn_id=turn_id,
+                    composer_context=composer_context,
+                ):
+                    yield chunk
+                return
+
             from app.composition import workshop_project_service, workshop_task_orchestrator
 
             project = await workshop_project_service.get_project_by_group_chat(
@@ -517,6 +605,7 @@ class ChatService:
             title=row.title,
             default_model=row.default_model,
             status=row.status,
+            kind=parse_conversation_kind(row.kind),
             is_generating=is_generating,
             awaiting_user_gate=bool(
                 gate_pending and str(gate_pending.get("status") or "pending") == "pending"

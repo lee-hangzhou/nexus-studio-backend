@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, UUID4, model_validator
 
+from app.contracts.composer_prompt import GenerateComposerContext
 from app.contracts.workshop import WorkshopTurnTarget
 from app.contracts.turn_content import (
     TurnContentBlock,
@@ -12,6 +13,7 @@ from app.contracts.turn_content import (
     TurnUserInput,
     validate_turn_user_input,
 )
+from app.server.chat.domain.enums import ChatConversationKind
 
 
 class ChatModelItem(BaseModel):
@@ -74,6 +76,7 @@ class MessageStreamRequest(BaseModel):
     client_turn_id: Optional[str] = None
     project_id: Optional[int] = None
     turn_target: Optional[WorkshopTurnTarget] = None
+    composer_context: GenerateComposerContext | None = None
 
     @model_validator(mode="after")
     def _validate_turn_input(self) -> MessageStreamRequest:
@@ -87,6 +90,13 @@ class MessageStreamRequest(BaseModel):
             raise ValueError(str(exc)) from exc
         return self
 
+
+class PromptAssistantSessionRequest(BaseModel):
+    """获取或创建创作提示词助手常驻会话。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model: str = Field(min_length=1)
 
 class ToolStepView(BaseModel):
     name: str
@@ -164,6 +174,7 @@ class ConversationView(BaseModel):
     title: str
     default_model: str
     status: int
+    kind: ChatConversationKind
     is_generating: bool = False
     awaiting_user_gate: bool = False
     awaiting_upgrade_invite: bool = False

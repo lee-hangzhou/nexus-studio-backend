@@ -76,6 +76,8 @@ from app.server.chat.services.upgrade_invite import UpgradeInviteService
 from app.server.generation.schemas import (
     GenerateMaterialUploadResponse,
     GenerateModelsResponse,
+    GenerateTaskListRequest,
+    GenerateTaskListResponse,
     GenerateTaskSubmitResponse,
     SubmitGenerateRequest,
 )
@@ -111,6 +113,11 @@ class GenerationPortAdapter(GenerationPort, object):
 
     async def list_models(self, kind: GenerationKind) -> GenerateModelsResponse:
         return await self._service.list_models(kind)
+
+    async def list_tasks(
+        self, user_id: int, req: GenerateTaskListRequest
+    ) -> GenerateTaskListResponse:
+        return await self._service.list_tasks(user_id, req)
 
     async def resolve_tts_voice_id(
         self,

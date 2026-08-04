@@ -183,6 +183,7 @@ CREATE TABLE IF NOT EXISTS chat_conversations (
   title VARCHAR(255) NOT NULL,
   default_model VARCHAR(128) NOT NULL,
   status INTEGER NOT NULL,
+  kind VARCHAR(32) NOT NULL DEFAULT 'chat',
   active_turn_id VARCHAR(64),
   active_turn_started_at TIMESTAMPTZ,
   selected_expert_key VARCHAR(128),
@@ -196,6 +197,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_chat_conversations_id_user
 
 CREATE INDEX IF NOT EXISTS idx_chat_conversations_user_updated
   ON chat_conversations (user_id, updated_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_chat_conversations_user_prompt_assistant
+  ON chat_conversations (user_id)
+  WHERE kind = 'prompt_assistant' AND status = 1;
 
 DROP TRIGGER IF EXISTS trg_chat_conversations_updated_at ON chat_conversations;
 CREATE TRIGGER trg_chat_conversations_updated_at

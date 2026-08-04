@@ -125,6 +125,9 @@ async def workshop_harness(
     await Tortoise.get_connection("default").execute_query(
         "ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS selected_expert_key VARCHAR(128)"
     )
+    await Tortoise.get_connection("default").execute_query(
+        "ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS kind VARCHAR(32) NOT NULL DEFAULT 'chat'"
+    )
     repository = WorkshopRepository()
     projects = WorkshopProjectService(repository)
     orchestrator = WorkshopTaskOrchestrator(repository)

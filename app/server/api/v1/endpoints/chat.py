@@ -23,6 +23,8 @@ from app.agent.runtime.stream.replay import (
     validate_replay_cursor,
 )
 from app.composition import chat_service, user_skill_port, chat_selected_expert_service
+from app.server.chat.domain.enums import ChatConversationKind
+from app.agent.chat.service import parse_conversation_kind
 from app.contracts.workshop import (
     ClearChatSelectedExpertRequest,
     ExpertDirectoryResponse,
@@ -63,6 +65,7 @@ from app.server.chat.schemas import (
     MessageListRequest,
     MessageListResponse,
     MessageStreamRequest,
+    PromptAssistantSessionRequest,
     StreamReconnectRequest,
     TurnCancelRequest,
     TurnResumeRequest,
@@ -112,6 +115,19 @@ async def list_models() -> Response[list[ChatModelItem]]:
 async def create_conversation(request: Request, body: ConversationCreateRequest) -> Response[ConversationView]:
     user_id: int = request.state.user_id
     result = await chat_service.create_conversation(user_id, body.title, body.model)
+    return Response(data=result)
+
+
+@router.post("/prompt-assistant/session/get-or-create")
+async def get_or_create_prompt_assistant_session(
+    request: Request,
+    body: PromptAssistantSessionRequest,
+) -> Response[ConversationView]:
+    user_id: int = request.state.user_id
+    result = await chat_service.get_or_create_prompt_assistant_session(
+        user_id,
+        model=body.model,
+    )
     return Response(data=result)
 
 
@@ -193,12 +209,17 @@ async def stream_message(request: Request, body: MessageStreamRequest) -> Stream
                 allow_node=False,
             )
             content_text = compile_human_text(user_input.content)
-            selected_skills = await user_skill_port.resolve_selected(
-                surface=SkillSurface.CHAT,
-                user_id=user_id,
-                project_id=body.project_id,
-                paths=extract_skill_paths(user_input.content),
-            )
+            kind = parse_conversation_kind(conversation.kind)
+            if kind is ChatConversationKind.PROMPT_ASSISTANT:
+                # 助手面不挂用户 Chat Skill；禁止用 CHAT surface 静默错挂
+                selected_skills = ()
+            else:
+                selected_skills = await user_skill_port.resolve_selected(
+                    surface=SkillSurface.CHAT,
+                    user_id=user_id,
+                    project_id=body.project_id,
+                    paths=extract_skill_paths(user_input.content),
+                )
         except ValueError as exc:
             await replay_store.discard_starting(request_id)
             raise AppError(ErrorCode.INVALID_PARAMS, str(exc)) from exc
@@ -236,6 +257,7 @@ async def stream_message(request: Request, body: MessageStreamRequest) -> Stream
                     enable_tools=body.enable_tools,
                     client_turn_id=body.client_turn_id,
                     turn_target=body.turn_target,
+                    composer_context=body.composer_context,
                     cancel_event=cancel_event,
                     selected_skills=selected_skills,
                 ),

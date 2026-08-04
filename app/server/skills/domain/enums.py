@@ -6,6 +6,7 @@ class SkillSurface(StrEnum):
 
     CHAT = "chat"
     CANVAS = "canvas"
+    PROMPT_ASSISTANT = "prompt_assistant"
 
 
 class SkillScope(StrEnum):

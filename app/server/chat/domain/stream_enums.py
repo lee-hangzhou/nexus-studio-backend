@@ -63,6 +63,7 @@ class StreamFrameType(StrEnum):
     UPGRADE_INVITE_PROPOSED = "upgrade_invite_proposed"
     BROWSER_BLOCKED = "browser_blocked"
     BROWSER_FRAME = "browser_frame"
+    COMPOSER_PROMPT_APPLIED = "composer_prompt_applied"
 
 
 class TokenChannel(StrEnum):

@@ -1,9 +1,16 @@
-from enum import Enum, IntEnum
+from enum import Enum, IntEnum, StrEnum
 
 
 class ChatConversationStatus(IntEnum):
     ACTIVE = 1
     CLOSED = 2
+
+
+class ChatConversationKind(StrEnum):
+    """会话产品形态；prompt_assistant 为每人常驻创作提示词助手。"""
+
+    CHAT = "chat"
+    PROMPT_ASSISTANT = "prompt_assistant"
 
 
 class ChatMessageRole(IntEnum):
