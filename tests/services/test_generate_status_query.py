@@ -4,12 +4,18 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.server.api.v1.endpoints import generate as generate_endpoint
 from app.contracts.gateway import GatewayQueueResponse, GatewayTaskStatusResponse
+from app.server.api.v1.endpoints import generate as generate_endpoint
+from app.server.generation.domain.enums import GenerationKind, GenerationTaskStatus
 from app.server.generation.domain.gateway_status import GatewayTaskStatus
-from app.server.generation.domain.enums import GenerationTaskStatus
-from app.server.generation.schemas import GenerateCallbackPayload
 from app.server.generation.domain.terminal import GenerationTerminal
+from app.server.generation.schemas import (
+    GenerateCallbackPayload,
+    GenerateTasksStatusRequest,
+    GenerateTasksStatusResponse,
+    GenerateTaskStatusRequest,
+    GenerateTaskView,
+)
 from app.server.generation.schemas.callback import GenerationCallbackResult
 from app.server.generation.services import GenerationService
 
@@ -290,3 +296,77 @@ async def test_callback_endpoint_projects_canvas_after_write(
 
     handle.assert_awaited_once_with(payload)
     project.assert_awaited_once_with(9, 7)
+
+
+def _task_view(
+    *,
+    task_id: int,
+    status: GatewayTaskStatus,
+) -> GenerateTaskView:
+    return GenerateTaskView(
+        task_id=task_id,
+        kind=GenerationKind.IMAGE,
+        status=GenerationTaskStatus(status),
+        prompt=f"prompt-{task_id}",
+        model_id="image-model",
+        created_at=datetime(2026, 7, 21, tzinfo=timezone.utc),
+    )
+
+
+def _status_request() -> MagicMock:
+    request = MagicMock()
+    request.state.user_id = 7
+    return request
+
+
+@pytest.mark.asyncio
+async def test_tasks_status_endpoint_does_not_project_canvas(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = GenerateTasksStatusResponse(
+        items=[
+            _task_view(task_id=9, status=GatewayTaskStatus.SUCCEEDED),
+            _task_view(task_id=10, status=GatewayTaskStatus.RUNNING),
+        ],
+        missing_task_ids=[999],
+    )
+    get_tasks_status = AsyncMock(return_value=response)
+    project = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        generate_endpoint,
+        "generation_service",
+        SimpleNamespace(get_tasks_status=get_tasks_status),
+    )
+    monkeypatch.setattr(generate_endpoint, "project_from_task", project)
+
+    result = await generate_endpoint.get_tasks_status(
+        _status_request(),
+        GenerateTasksStatusRequest(task_ids=[9, 10, 999]),
+    )
+
+    assert result.data.items == response.items
+    get_tasks_status.assert_awaited_once_with([9, 10, 999], 7)
+    project.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_task_status_endpoint_does_not_project_canvas(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    get_task_status = AsyncMock(
+        return_value=_task_view(task_id=9, status=GatewayTaskStatus.FAILED)
+    )
+    project = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        generate_endpoint,
+        "generation_service",
+        SimpleNamespace(get_task_status=get_task_status),
+    )
+    monkeypatch.setattr(generate_endpoint, "project_from_task", project)
+
+    await generate_endpoint.get_task_status(
+        _status_request(),
+        GenerateTaskStatusRequest(task_id=9),
+    )
+
+    project.assert_not_called()

@@ -6,7 +6,6 @@ from collections.abc import Sequence
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
 from app.server.generation.domain.constants import (
-    MATERIAL_MAX_BYTES,
     MATERIAL_TYPE_LABELS,
     MIME_PREFIX_AUDIO,
     MIME_PREFIX_IMAGE,
@@ -24,14 +23,6 @@ def material_type_from_mime(mime_type: str) -> MaterialType:
     if mime_type.startswith(MIME_PREFIX_AUDIO):
         return MaterialType.AUDIO
     raise AppError(ErrorCode.INVALID_PARAMS, "仅支持引用图片、视频或音频素材")
-
-
-def validate_material_upload(*, mime_type: str, size: int) -> MaterialType:
-    if size <= 0:
-        raise AppError(ErrorCode.INVALID_PARAMS, "素材文件为空")
-    if size > MATERIAL_MAX_BYTES:
-        raise AppError(ErrorCode.INVALID_PARAMS, "素材文件过大")
-    return material_type_from_mime(mime_type)
 
 
 def reference_mode_requires_material(reference_mode: ReferenceMode | None) -> bool:

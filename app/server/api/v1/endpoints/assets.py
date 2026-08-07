@@ -1,25 +1,35 @@
 from datetime import datetime
 
-from fastapi import APIRouter, File, Request, UploadFile
+from fastapi import APIRouter, Request
 from tortoise.transactions import in_transaction
 
+from app.server.api.schemas import Response
+from app.server.assets.persistence.assets import Assets
 from app.server.assets.schemas import (
     AssetDeleteRequest,
     AssetIdRequest,
     AssetListRequest,
     AssetListResponse,
+    AssetRegisterRequest,
     AssetUpdateRequest,
+    AssetUploadUrlRequest,
+    AssetUploadUrlResponse,
     AssetViewResponse,
 )
 from app.server.assets.services.service import LIBRARY_SOURCE_TYPES, asset_service
-from app.server.assets.persistence.assets import Assets
-from app.server.api.schemas import Response
+from app.server.assets.domain.upload_rules import SOURCE_AGENT_UPLOAD, DirectUploadSourceType
+from app.server.exceptions.base import AppError
+from app.server.exceptions.codes import ErrorCode
+from app.server.projects.services.service import canvas_scope_service, project_service
 from app.server.projects.services.cover import cover_service
 
 router = APIRouter()
 
 
 def _asset_response(row: Assets) -> AssetViewResponse:
+    """组装资产 HTTP 视图"""
+    if row.created_at is None or row.updated_at is None:
+        raise AppError(ErrorCode.INTERNAL_ERROR, "资产缺少时间戳")
     view = asset_service.to_view(row)
     return AssetViewResponse(
         id=view.id,
@@ -33,15 +43,37 @@ def _asset_response(row: Assets) -> AssetViewResponse:
         status=view.status,
         favorite=view.favorite,
         preview_url=view.preview_url,
-        created_at=row.created_at.isoformat() if row.created_at else "",
-        updated_at=row.updated_at.isoformat() if row.updated_at else "",
+        created_at=row.created_at.isoformat(),
+        updated_at=row.updated_at.isoformat(),
     )
 
 
 def _parse_iso_datetime(value: str | None) -> datetime | None:
+    """解析可选 ISO 时间过滤条件"""
     if not value:
         return None
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+async def _resolve_direct_upload_project_id(
+    *,
+    user_id: int,
+    source_type: DirectUploadSourceType,
+    project_id: int | None,
+    episode_id: int | None,
+) -> int | None:
+    """解析直传 project_id，agent 强制写权限，episode 走画布 scope"""
+    if episode_id is not None:
+        scope = await canvas_scope_service.require_write_scope(user_id, episode_id)
+        if project_id is not None and project_id != scope.project_id:
+            raise AppError(ErrorCode.INVALID_PARAMS, "project_id 与 episode 不匹配")
+        return scope.project_id
+    if source_type == SOURCE_AGENT_UPLOAD:
+        if project_id is None:
+            raise AppError(ErrorCode.INVALID_PARAMS, "agent_upload 必须提供 project_id 或 episode_id")
+        await project_service.get_for_user(user_id, project_id)
+        return project_id
+    return project_id
 
 
 @router.post("/list")
@@ -92,10 +124,58 @@ async def get_asset(request: Request, body: AssetIdRequest) -> Response[AssetVie
     return Response(data=_asset_response(row))
 
 
-@router.post("/upload")
-async def upload_asset(request: Request, file: UploadFile = File(...)) -> Response[AssetViewResponse]:
+@router.post("/upload-url")
+async def create_asset_upload_url(
+    request: Request,
+    body: AssetUploadUrlRequest,
+) -> Response[AssetUploadUrlResponse]:
+    """签发资产车道 TOS 直传 PUT URL"""
     user_id: int = request.state.user_id
-    row = await asset_service.upload_manual_asset(user_id=user_id, file=file)
+    resolved_project_id = await _resolve_direct_upload_project_id(
+        user_id=user_id,
+        source_type=body.source_type,
+        project_id=body.project_id,
+        episode_id=body.episode_id,
+    )
+    minted = asset_service.create_upload_url(
+        user_id=user_id,
+        filename=body.filename,
+        source_type=body.source_type,
+        project_id=resolved_project_id,
+    )
+    return Response(
+        data=AssetUploadUrlResponse(
+            storage_key=minted.storage_key,
+            upload_url=minted.upload_url,
+            expires_in=minted.expires_in,
+            method="PUT",
+            source_type=minted.source_type,
+        )
+    )
+
+
+@router.post("/register")
+async def register_uploaded_asset(
+    request: Request,
+    body: AssetRegisterRequest,
+) -> Response[AssetViewResponse]:
+    """登记已直传对象为资产"""
+    user_id: int = request.state.user_id
+    resolved_project_id = await _resolve_direct_upload_project_id(
+        user_id=user_id,
+        source_type=body.source_type,
+        project_id=body.project_id,
+        episode_id=body.episode_id,
+    )
+    row = await asset_service.register_uploaded(
+        user_id=user_id,
+        storage_key=body.storage_key,
+        filename=body.filename,
+        mime_type=body.mime_type,
+        source_type=body.source_type,
+        project_id=resolved_project_id,
+        size_bytes=body.size_bytes,
+    )
     return Response(data=_asset_response(row))
 
 

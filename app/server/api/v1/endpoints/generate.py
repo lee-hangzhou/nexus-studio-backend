@@ -1,12 +1,12 @@
-from fastapi import APIRouter, File, Request, UploadFile
+from fastapi import APIRouter, Request
 
 from app.agent.canvas.services.generation_projection import project_from_task
 from app.composition import generation_service
 from app.server.api.schemas import Response
+from app.server.api.use_cases.generate_submit import submit_generate as submit_generate_use_case
 from app.server.generation.domain.enums import GenerationKind
 from app.server.generation.schemas import (
     GenerateCallbackPayload,
-    GenerateMaterialUploadResponse,
     GenerateModelsResponse,
     GenerateTaskListRequest,
     GenerateTaskListResponse,
@@ -30,24 +30,7 @@ async def submit_generate(
     body: SubmitGenerateRequest,
 ) -> Response[GenerateTaskSubmitResponse]:
     user_id: int = request.state.user_id
-    result = await generation_service.submit(user_id, body)
-    return Response(data=result)
-
-
-@router.post("/material/upload")
-async def upload_generate_material(
-    request: Request,
-    file: UploadFile = File(...),
-) -> Response[GenerateMaterialUploadResponse]:
-    user_id: int = request.state.user_id
-    await file.seek(0)
-    raw = await file.read()
-    result = await generation_service.upload_material(
-        user_id,
-        filename=file.filename or "",
-        mime_type=file.content_type or "",
-        raw_bytes=raw,
-    )
+    result = await submit_generate_use_case(user_id=user_id, body=body)
     return Response(data=result)
 
 
@@ -56,6 +39,7 @@ async def get_task_status(
     request: Request,
     body: GenerateTaskStatusRequest,
 ) -> Response[GenerateTaskView]:
+    """查询单任务；不对画布/工作流产生写副作用"""
     user_id: int = request.state.user_id
     result = await generation_service.get_task_status(body.task_id, user_id)
     return Response(data=result)
@@ -66,9 +50,11 @@ async def get_tasks_status(
     request: Request,
     body: GenerateTasksStatusRequest,
 ) -> Response[GenerateTasksStatusResponse]:
+    """批量查询任务；不对画布/工作流产生写副作用"""
+    user_id: int = request.state.user_id
     result = await generation_service.get_tasks_status(
         body.task_ids,
-        request.state.user_id,
+        user_id,
     )
     return Response(data=result)
 

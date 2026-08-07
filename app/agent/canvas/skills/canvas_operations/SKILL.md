@@ -49,7 +49,27 @@ Business fields under structured `data` (snake_case):
 - **text**: `content` = body string; `prompt_content` = generation input segments; `prompt` derived from `prompt_content`
 - **media**: `content` = structured prompt segments; `prompt` = derived plain text (do not write string `content`)
 - Media segments use `asset_id` (not `assetId`)
-- `status`, `generate_task_id`, `output_asset_ids`, `generate_error` are projection fields — do not invent them on create
+- `library_refs` — writable material tags attached to the node (`asset_id`, `type` = `image|video|audio`, `url`, optional `name`). Use it to tag a node's own materials (for example a locally uploaded image). On generation submit they are merged into the refs automatically; see `canvas_generation`.
+- `status`, `generate_task_id`, `output_asset_ids`, `output_source`, `asset_id`, `path`, `preview_url`, `paths`, `generate_error` are projection fields — do not invent them on create
+
+### `@` references live in structured `content` segments
+
+A UI-visible `@` reference on a media node is a media segment inside `data.content` (or `prompt_content`) — not a plain-text `@图片N` token:
+
+```json
+{
+  "type": "image_url",
+  "asset_id": 123,
+  "url": "https://...",
+  "label": "图片1"
+}
+```
+
+- Media node `content` = ordered array of `text` and `image_url|video_url|audio_url` segments interleaved with the prompt text
+- `asset_id` must be a real asset id from `query_canvas_nodes` / `resolve_node_inputs` / upload results
+- Do not write `@图片N` as literal text expecting it to render as a mention
+
+A node whose image was uploaded locally (`output_source=upload`) exposes that asset through its `output_asset_ids`, so downstream nodes can connect and reference it like any generated output.
 
 ## Node and edge IDs
 

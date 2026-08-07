@@ -7,10 +7,11 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from app.contracts.canvas import (
     NODE_DATA_CLIENT_FORBIDDEN_KEYS,
+    CanvasNodeAssetPath,
     CanvasNodeConfig,
     CanvasNodeData,
     CanvasNodeKind,
@@ -25,7 +26,7 @@ from app.server.exceptions.codes import ErrorCode
 
 def empty_node_data(*, status: CanvasNodeStatus = CanvasNodeStatus.IDLE) -> dict[str, Any]:
     """返回带默认 status 的空 data dict（omit None）"""
-    return CanvasNodeData(status=status).model_dump(mode="json", exclude_none=True)
+    return cast(dict[str, Any], CanvasNodeData(status=status).model_dump(mode="json", exclude_none=True))
 
 
 def parse_node_data(raw: Any) -> CanvasNodeData:
@@ -36,12 +37,12 @@ def parse_node_data(raw: Any) -> CanvasNodeData:
         return raw
     if not isinstance(raw, dict):
         raise AppError(ErrorCode.INVALID_PARAMS, "node data must be object")
-    return CanvasNodeData.model_validate(raw)
+    return cast(CanvasNodeData, CanvasNodeData.model_validate(raw))
 
 
 def dump_node_data(data: CanvasNodeData) -> dict[str, Any]:
     """序列化节点 data 写入 JSONB"""
-    return data.model_dump(mode="json", exclude_none=False)
+    return cast(dict[str, Any], data.model_dump(mode="json", exclude_none=False))
 
 
 def dump_client_writable_node_data(data: CanvasNodeData) -> dict[str, Any]:
@@ -49,7 +50,7 @@ def dump_client_writable_node_data(data: CanvasNodeData) -> dict[str, Any]:
     payload = data.model_dump(mode="json", exclude_none=True)
     for key in NODE_DATA_CLIENT_FORBIDDEN_KEYS:
         payload.pop(key, None)
-    return payload
+    return cast(dict[str, Any], payload)
 
 
 def merge_client_node_data(
@@ -79,7 +80,7 @@ def merge_client_node_data(
         validate_node_data_content(kind, merged)
     except ValueError as exc:
         raise AppError(ErrorCode.INVALID_PARAMS, str(exc)) from exc
-    return merged
+    return cast(CanvasNodeData, merged)
 
 
 def apply_generation_to_data(
@@ -120,7 +121,48 @@ def apply_generation_to_data(
     if resolution is not None:
         config["resolution"] = resolution
     payload["config"] = config or None
-    return CanvasNodeData.model_validate(payload)
+    return cast(CanvasNodeData, CanvasNodeData.model_validate(payload))
+
+
+def apply_upload_to_data(
+    existing: CanvasNodeData,
+    *,
+    asset_id: int,
+    preview_url: str,
+    filename: str,
+    asset_type: str,
+) -> CanvasNodeData:
+    """节点本地上传结果快照；不算参考标签，不写生命周期 status"""
+    del filename, asset_type
+    payload = existing.model_dump(mode="python")
+    payload["output_source"] = "upload"
+    payload["output_asset_ids"] = [asset_id]
+    payload["asset_id"] = asset_id
+    payload["path"] = preview_url
+    payload["preview_url"] = preview_url
+    payload["paths"] = [
+        CanvasNodeAssetPath(asset_id=asset_id, url=preview_url),
+    ]
+    return cast(CanvasNodeData, CanvasNodeData.model_validate(payload))
+
+
+def data_has_output_assets(data: CanvasNodeData | dict[str, Any] | None) -> bool:
+    """节点是否已有可引用的产出资产（任务结果或本地上传快照）"""
+    if data is None:
+        return False
+    if isinstance(data, dict):
+        ids = data.get("output_asset_ids") or []
+        path = data.get("path")
+        asset_id = data.get("asset_id")
+    else:
+        ids = data.output_asset_ids or []
+        path = data.path
+        asset_id = data.asset_id
+    if isinstance(ids, list) and any(isinstance(item, int) and item > 0 for item in ids):
+        return True
+    if isinstance(asset_id, int) and asset_id > 0:
+        return True
+    return bool(isinstance(path, str) and path.strip())
 
 
 def data_status(data: CanvasNodeData | dict[str, Any] | None) -> CanvasNodeStatus:
@@ -141,10 +183,10 @@ def _segment_texts(segments: list[Any] | None) -> str:
         return ""
     parts: list[str] = []
     for seg in segments:
-        seg_type = seg.type if hasattr(seg, "type") else seg.get("type")  # type: ignore[union-attr]
+        seg_type = seg.type if hasattr(seg, "type") else seg.get("type")
         if seg_type != "text":
             continue
-        text = seg.text if hasattr(seg, "text") else seg.get("text")  # type: ignore[union-attr]
+        text = seg.text if hasattr(seg, "text") else seg.get("text")
         if text:
             parts.append(str(text))
     return "\n".join(parts)
@@ -246,7 +288,7 @@ def ensure_create_defaults(kind: CanvasNodeKind | str, data: CanvasNodeData) -> 
     kind_value = kind.value if isinstance(kind, CanvasNodeKind) else str(kind)
     if kind_value == CanvasNodeKind.TEXT and payload.get("content") is None:
         payload["content"] = ""
-    return CanvasNodeData.model_validate(payload)
+    return cast(CanvasNodeData, CanvasNodeData.model_validate(payload))
 
 
 def sync_text_prompt_fields(prompt: str) -> dict[str, Any]:

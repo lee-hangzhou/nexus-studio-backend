@@ -207,6 +207,7 @@ class Settings(BaseSettings):
     TOS_ACCESS_KEY: str = Field(default="")
     TOS_SECRET_KEY: str = Field(default="")
     TOS_BUCKET: str = Field(default="union-llm")
+    # 浏览器直传 PUT 复用该值，上线前确认 bucket CORS 允许前端 Origin 的 PUT
     TOS_PRESIGN_EXPIRY_SECONDS: int = Field(default=86400)
     OBJECT_STORAGE_TIMEOUTS: ObjectStorageTimeoutConfig = Field(
         default_factory=ObjectStorageTimeoutConfig

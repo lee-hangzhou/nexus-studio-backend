@@ -194,6 +194,18 @@ from app.server.billing.schemas.http import (
     CreditPackView,
     WebhookApplyResponse,
 )
+from app.server.canvas.schemas.api import CanvasBindUploadRequest
+from app.server.assets.schemas import (
+    AssetDeleteRequest,
+    AssetIdRequest,
+    AssetListRequest,
+    AssetListResponse,
+    AssetRegisterRequest,
+    AssetUpdateRequest,
+    AssetUploadUrlRequest,
+    AssetUploadUrlResponse,
+    AssetViewResponse,
+)
 from app.server.generation.schemas import (
     GenerateModelItem,
     GenerateTaskListRequest,
@@ -218,7 +230,20 @@ CanvasContracts = Annotated[
     | PendingCanvasPatchOperation
     | PendingGenerateOperation
     | PendingSkillWriteOperation
-    | CanvasToolPendingOperation,
+    | CanvasToolPendingOperation
+    | CanvasBindUploadRequest,
+    Field(union_mode="left_to_right"),
+]
+AssetContracts = Annotated[
+    AssetListRequest
+    | AssetIdRequest
+    | AssetUpdateRequest
+    | AssetDeleteRequest
+    | AssetViewResponse
+    | AssetListResponse
+    | AssetUploadUrlRequest
+    | AssetUploadUrlResponse
+    | AssetRegisterRequest,
     Field(union_mode="left_to_right"),
 ]
 GenerationContracts = Annotated[
@@ -390,6 +415,7 @@ WorkshopContracts = Annotated[
 
 CONTRACTS: dict[str, TypeAdapter[Any]] = {
     "billing": TypeAdapter(BillingContracts),
+    "assets": TypeAdapter(AssetContracts),
     "canvas": TypeAdapter(CanvasContracts),
     "ecommerce": TypeAdapter(EcommerceContracts),
     "generation": TypeAdapter(GenerationContracts),

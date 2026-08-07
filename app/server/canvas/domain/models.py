@@ -53,6 +53,7 @@ class ResolvedCanvasInputs:
     local_prompt: str
     upstream_texts: tuple[UpstreamText, ...] = ()
     refs: tuple[RefSlot, ...] = ()
+    library_ref_asset_ids: tuple[int, ...] = ()
     waiting_on: tuple[CanvasInputWait, ...] = ()
     sources: tuple[CanvasInputSource, ...] = ()
 

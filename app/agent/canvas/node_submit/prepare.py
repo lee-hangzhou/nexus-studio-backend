@@ -3,9 +3,11 @@ from __future__ import annotations
 from typing import Literal
 
 from app.agent.canvas.node_submit.collect_refs import (
+    collect_library_ref_asset_ids,
     collect_submit_material_refs,
     pick_connected_reference_asset_ids,
 )
+from app.agent.canvas.node_submit.graph_serializer import graph_edge_data, graph_node_data
 from app.agent.canvas.node_submit.types import (
     ManualMaterialRef,
     MentionItemRef,
@@ -16,48 +18,23 @@ from app.agent.canvas.workflow.inputs import resolve_node_inputs
 from app.agent.runtime.ports import get_canvas_port
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
-from app.server.ports.product import CanvasEdgeDTO, CanvasNodeDTO
-
-
-def _edge_to_graph(edge: CanvasEdgeDTO) -> dict:
-    return {
-        "source": edge.source_node_id,
-        "target": edge.target_node_id,
-        "data": {"source_port": edge.source_port.value, "target_port": edge.target_port.value},
-    }
-
-
-def _node_to_graph(node: CanvasNodeDTO) -> dict:
-    from app.server.canvas.domain.node_data import (
-        data_output_asset_ids,
-        data_output_text,
-        data_prompt_text,
-        data_status,
-        parse_node_data,
-    )
-
-    data = parse_node_data(node.data)
-    return {
-        "id": node.id,
-        "data": {
-            "status": data_status(data).value,
-            "input_prompt": data_prompt_text(data, node.kind),
-            "output_text": data_output_text(data),
-            "output_asset_ids": list(data_output_asset_ids(data)),
-            "prompt": data.prompt,
-            "content": data.content,
-            "prompt_content": (
-                [seg.model_dump(mode="json") for seg in data.prompt_content]
-                if data.prompt_content
-                else None
-            ),
-        },
-    }
 
 
 async def _load_incoming_graph(episode_id: int, node_id: str) -> tuple[list[dict], list[dict]]:
     graph = await get_canvas_port().get_incoming_graph(episode_id, node_id)
-    return [_node_to_graph(node) for node in graph.nodes], [_edge_to_graph(edge) for edge in graph.edges]
+    return [graph_node_data(node) for node in graph.nodes], [graph_edge_data(edge) for edge in graph.edges]
+
+
+def _self_library_ref_asset_ids(node_id: str, nodes: list[dict]) -> list[int]:
+    """收集目标节点自身 data.library_refs 的 asset_id（本地上传素材标签）"""
+    for node in nodes:
+        if str(node.get("id")) != node_id:
+            continue
+        raw_refs = (node.get("data") or {}).get("library_refs")
+        if not isinstance(raw_refs, list):
+            return []
+        return collect_library_ref_asset_ids(raw_refs)
+    return []
 
 
 def _expected_refs_from_graph(
@@ -75,6 +52,7 @@ def _expected_refs_from_graph(
         connected_asset_ids=connected_asset_ids,
         manual_refs=manual_refs,
         preview_media_refs=preview_media_refs,
+        library_ref_ids=_self_library_ref_asset_ids(node_id, nodes),
     )
 
 
@@ -175,6 +153,7 @@ async def prepare_node_submit(
         resolved_asset_ids=resolved_asset_ids,
         got_asset_ids=ref_asset_ids,
     )
+    final_asset_ids = tuple(dict.fromkeys([*final_asset_ids, *resolved.library_ref_asset_ids]))
     return PrepareNodeSubmitResult(
         prompt=prompt.strip(),
         ref_asset_ids=final_asset_ids,

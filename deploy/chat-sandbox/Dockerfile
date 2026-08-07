@@ -15,6 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     npm \
     poppler-utils \
     pandoc \
+    fontconfig \
+    fonts-noto-cjk \
+    fonts-noto-cjk-extra \
+    fonts-liberation \
+    && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir -i ${PIP_INDEX} \

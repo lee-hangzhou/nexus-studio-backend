@@ -1,19 +1,22 @@
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from io import BytesIO
 from typing import Any
 from uuid import uuid4
 
-from fastapi import UploadFile
-
 from app.contracts.gateway import GatewayGenerateMaterial
+from app.server.assets.domain.upload_rules import (
+    DirectUploadSourceType,
+    assert_storage_key_owned,
+    expected_key_prefix,
+    validate_direct_upload_media,
+)
 from app.server.assets.persistence.assets import Assets
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
 from app.server.generation.domain.enums import MaterialType
+from app.server.infra.config import settings
 from app.server.infra.object_storage import TosObjectStorage, safe_filename
 
 ASSET_SOURCE_CHAT_UPLOAD = "chat_upload"
@@ -37,6 +40,7 @@ ASSET_TYPE_IMAGE = "image"
 ASSET_TYPE_VIDEO = "video"
 ASSET_TYPE_AUDIO = "audio"
 ASSET_TYPE_TEXT = "text"
+
 
 def asset_type_from_mime(mime_type: str) -> str:
     if mime_type.startswith("image/"):
@@ -73,6 +77,14 @@ class AssetView:
     status: str
     favorite: bool
     preview_url: str
+
+
+@dataclass(frozen=True)
+class AssetUploadUrl:
+    storage_key: str
+    upload_url: str
+    expires_in: int
+    source_type: DirectUploadSourceType
 
 
 class AssetService:
@@ -130,73 +142,98 @@ class AssetService:
             raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "asset not found")
         return row
 
-    async def upload_manual_asset(self, *, user_id: int, file: UploadFile) -> Assets:
-        filename = safe_filename(file.filename or "upload.bin")
-        mime_type = file.content_type or "application/octet-stream"
-        storage_key = f"assets/{user_id}/{uuid4().hex}/{filename}"
-        await self.storage.put_upload_file(storage_key, file, content_type=mime_type)
-        return await self.create_asset(
+    def mint_storage_key(
+        self,
+        *,
+        user_id: int,
+        source_type: DirectUploadSourceType,
+        filename: str,
+        project_id: int | None = None,
+    ) -> str:
+        """按来源铸造唯一 storage_key"""
+        prefix = expected_key_prefix(
+            source_type=source_type,
             user_id=user_id,
-            storage_key=storage_key,
+            project_id=project_id,
+        )
+        return f"{prefix}{uuid4().hex}/{safe_filename(filename)}"
+
+    def create_upload_url(
+        self,
+        *,
+        user_id: int,
+        filename: str,
+        source_type: DirectUploadSourceType,
+        project_id: int | None = None,
+    ) -> AssetUploadUrl:
+        """签发资产车道直传 PUT URL，不写库"""
+        storage_key = self.mint_storage_key(
+            user_id=user_id,
+            source_type=source_type,
             filename=filename,
-            mime_type=mime_type,
-            asset_type=asset_type_from_mime(mime_type),
-            source_type=ASSET_SOURCE_MANUAL_UPLOAD,
-            metadata={"filename": filename},
+            project_id=project_id,
+        )
+        expires_in = settings.TOS_PRESIGN_EXPIRY_SECONDS
+        upload_url = self.storage.presigned_put_url(storage_key, expires=expires_in)
+        return AssetUploadUrl(
+            storage_key=storage_key,
+            upload_url=upload_url,
+            expires_in=expires_in,
+            source_type=source_type,
         )
 
-    async def upload_generate_material(
+    async def register_uploaded(
         self,
         *,
         user_id: int,
+        storage_key: str,
         filename: str,
         mime_type: str,
-        raw_bytes: bytes,
+        source_type: DirectUploadSourceType,
+        project_id: int | None = None,
+        size_bytes: int | None = None,
     ) -> Assets:
-        """上传生成参考素材并登记为 generate_material 资产"""
+        """HEAD 确认对象后登记资产，同用户同 key 同 source 幂等"""
+        assert_storage_key_owned(
+            storage_key=storage_key,
+            source_type=source_type,
+            user_id=user_id,
+            project_id=project_id,
+        )
+        head = await self.storage.head_object(storage_key)
+        if size_bytes is not None and size_bytes != head.size_bytes:
+            raise AppError(
+                ErrorCode.INVALID_PARAMS,
+                "客户端声明大小与对象实际大小不一致",
+                {"client_size": size_bytes, "object_size": head.size_bytes},
+            )
+        content_type = mime_type.strip()
+        if not content_type:
+            raise AppError(ErrorCode.INVALID_PARAMS, "素材 Content-Type 不能为空")
+        asset_type = validate_direct_upload_media(mime_type=content_type, size=head.size_bytes)
         safe_name = safe_filename(filename)
-        file_sha256 = hashlib.sha256(raw_bytes).hexdigest()
-        storage_key = f"materials/{user_id}/{uuid4().hex}/{safe_name}"
-        upload = UploadFile(file=BytesIO(raw_bytes), filename=safe_name)
-        await self.storage.put_upload_file(storage_key, upload, content_type=mime_type)
-        return await self.create_asset(
+
+        existing = await Assets.filter(
             user_id=user_id,
             storage_key=storage_key,
-            filename=safe_name,
-            mime_type=mime_type,
-            asset_type=asset_type_from_mime(mime_type),
-            source_type=ASSET_SOURCE_GENERATE_MATERIAL,
-            metadata={"file_sha256": file_sha256, "size": len(raw_bytes)},
-        )
+            source_type=source_type,
+            deleted_at__isnull=True,
+        ).first()
+        if existing is not None:
+            return existing
 
-    async def upload_agent_asset(
-        self,
-        *,
-        user_id: int,
-        project_id: int,
-        filename: str,
-        mime_type: str,
-        raw_bytes: bytes,
-    ) -> Assets:
-        """上传画布 Agent 会话素材并登记为 agent_upload 资产"""
-        safe_name = safe_filename(filename)
-        file_sha256 = hashlib.sha256(raw_bytes).hexdigest()
-        storage_key = f"agent/{user_id}/{project_id}/{uuid4().hex}/{safe_name}"
-        upload = UploadFile(file=BytesIO(raw_bytes), filename=safe_name)
-        await self.storage.put_upload_file(storage_key, upload, content_type=mime_type)
+        metadata: dict[str, Any] = {"size": head.size_bytes, "filename": safe_name}
+        if project_id is not None:
+            metadata["project_id"] = project_id
         return await self.create_asset(
             user_id=user_id,
             project_id=project_id,
             storage_key=storage_key,
             filename=safe_name,
-            mime_type=mime_type,
-            asset_type=asset_type_from_mime(mime_type),
-            source_type=ASSET_SOURCE_AGENT_UPLOAD,
-            metadata={
-                "file_sha256": file_sha256,
-                "size": len(raw_bytes),
-                "project_id": project_id,
-            },
+            mime_type=content_type,
+            asset_type=asset_type,
+            source_type=source_type,
+            metadata=metadata,
         )
 
     async def update_asset(

@@ -3,19 +3,31 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import threading
+from dataclasses import dataclass
 from pathlib import Path
 
 import tos
 from fastapi import UploadFile
+from tos.exceptions import TosServerError
 
+from app.server.exceptions.base import AppError
+from app.server.exceptions.codes import ErrorCode
 from app.server.infra.config import settings
 from app.server.infra.logger import logger
 
 _CHUNK_SIZE = 8 * 1024 * 1024  # 8 MB
 
 
+@dataclass(frozen=True)
+class ObjectHeadResult:
+    """对象 HEAD 元数据"""
+
+    size_bytes: int
+    content_type: str | None
+
+
 class TosObjectStorage:
-    """火山引擎 TOS 对象存储适配器（无重试，跨云失败直接向上抛）"""
+    """火山引擎 TOS 对象存储适配器，无重试，失败向上抛"""
 
     def __init__(self) -> None:
         self._client_instance: tos.TosClientV2 | None = None
@@ -166,10 +178,54 @@ class TosObjectStorage:
         )
         return result.signed_url
 
+    def presigned_put_url(self, storage_key: str, *, expires: int | None = None) -> str:
+        """签发浏览器直传 PUT URL，不绑定 Content-Type"""
+        if not self._is_configured:
+            raise RuntimeError("TOS 配置缺失，无法生成上传链接")
+
+        expiry = expires if expires is not None else settings.TOS_PRESIGN_EXPIRY_SECONDS
+        result = self._client().pre_signed_url(
+            http_method=tos.HttpMethodType.Http_Method_Put,
+            bucket=settings.TOS_BUCKET,
+            key=storage_key,
+            expires=expiry,
+        )
+        return result.signed_url
+
+    async def head_object(self, storage_key: str) -> ObjectHeadResult:
+        """读取对象元数据，不存在时抛 RESOURCE_NOT_FOUND"""
+        if not self._is_configured:
+            raise RuntimeError("TOS 配置缺失，无法查询对象")
+
+        client = self._client()
+        bucket = settings.TOS_BUCKET
+
+        def _head() -> ObjectHeadResult:
+            """同步 HEAD 对象并规范化元数据"""
+            try:
+                output = client.head_object(bucket, storage_key)
+            except TosServerError as exc:
+                if exc.status_code == 404:
+                    raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "storage object not found") from exc
+                raise
+            size = output.content_length
+            if size is None:
+                raise AppError(ErrorCode.INVALID_PARAMS, "storage object missing content-length")
+            content_type = output.content_type if isinstance(output.content_type, str) else None
+            return ObjectHeadResult(size_bytes=int(size), content_type=content_type)
+
+        return await asyncio.wait_for(
+            asyncio.to_thread(_head),
+            timeout=settings.OBJECT_STORAGE_TIMEOUTS.operation_seconds,
+        )
+
 
 def safe_filename(filename: str) -> str:
+    """取路径末段并拒绝空文件名"""
     name = Path(filename).name.strip()
-    return name or "upload.bin"
+    if not name:
+        raise AppError(ErrorCode.INVALID_PARAMS, "文件名无效")
+    return name
 
 
 object_storage = TosObjectStorage()

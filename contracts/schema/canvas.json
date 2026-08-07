@@ -1,5 +1,21 @@
 {
   "$defs": {
+    "CanvasBindUploadRequest": {
+      "additionalProperties": false,
+      "description": "将已登记资产绑定为节点上传结果",
+      "properties": {
+        "asset_id": {
+          "minimum": 1,
+          "title": "Asset Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "asset_id"
+      ],
+      "title": "CanvasBindUploadRequest",
+      "type": "object"
+    },
     "CanvasEdgeType": {
       "enum": [
         "dependency"
@@ -1989,6 +2005,9 @@
           "$ref": "#/$defs/PendingSkillWriteOperation"
         }
       ]
+    },
+    {
+      "$ref": "#/$defs/CanvasBindUploadRequest"
     }
   ]
 }

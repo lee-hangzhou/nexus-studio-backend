@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from app.agent.canvas.node_submit.collect_refs import pick_connected_reference_asset_ids
+from app.agent.canvas.node_submit.collect_refs import (
+    collect_library_ref_asset_ids,
+    pick_connected_reference_asset_ids,
+)
+from app.agent.canvas.node_submit.graph_serializer import graph_edge_data, graph_node_data
 from app.agent.canvas.node_submit.labels import assign_media_label, node_kind_to_media_kind
 from app.agent.runtime.ports import get_canvas_port
 from app.server.canvas.domain.enums import (
@@ -18,6 +22,7 @@ from app.server.canvas.domain.models import (
     UpstreamText,
 )
 from app.server.canvas.domain.node_data import (
+    data_has_output_assets,
     data_output_asset_ids,
     data_output_text,
     data_prompt_text,
@@ -26,38 +31,11 @@ from app.server.canvas.domain.node_data import (
 )
 from app.server.exceptions.base import AppError
 from app.server.exceptions.codes import ErrorCode
-from app.server.ports.product import CanvasEdgeDTO, CanvasNodeDTO
+from app.server.ports.product import CanvasNodeDTO
 
 
 def _asset_ids(node: CanvasNodeDTO) -> list[int]:
     return list(data_output_asset_ids(parse_node_data(node.data)))
-
-
-def _node_to_graph(node: CanvasNodeDTO) -> dict:
-    data = parse_node_data(node.data)
-    return {
-        "id": node.id,
-        "data": {
-            "status": data_status(data).value,
-            "output_text": data_output_text(data),
-            "output_asset_ids": _asset_ids(node),
-            "prompt": data.prompt,
-            "content": data.content,
-            "prompt_content": (
-                [seg.model_dump(mode="json") for seg in data.prompt_content]
-                if data.prompt_content
-                else None
-            ),
-        },
-    }
-
-
-def _edge_to_graph(edge: CanvasEdgeDTO) -> dict:
-    return {
-        "source": edge.source_node_id,
-        "target": edge.target_node_id,
-        "data": {"source_port": edge.source_port.value, "target_port": edge.target_port.value},
-    }
 
 
 async def resolve_node_inputs(episode_id: int, node_id: str) -> ResolvedCanvasInputs:
@@ -72,12 +50,12 @@ async def resolve_node_inputs(episode_id: int, node_id: str) -> ResolvedCanvasIn
     local_prompt = data_prompt_text(target_data, target.kind).strip()
     waiting_on: list[CanvasInputWait] = []
     sources: list[CanvasInputSource] = []
-    graph_nodes: list[dict] = [_node_to_graph(target)]
+    graph_nodes: list[dict] = [graph_node_data(target)]
     graph_edges: list[dict] = []
     source_rows: dict[str, CanvasNodeDTO] = {}
 
     for edge in graph.edges:
-        graph_edges.append(_edge_to_graph(edge))
+        graph_edges.append(graph_edge_data(edge))
         source = nodes_by_id.get(edge.source_node_id)
         if source is None:
             waiting_on.append(
@@ -92,7 +70,7 @@ async def resolve_node_inputs(episode_id: int, node_id: str) -> ResolvedCanvasIn
         source_data = parse_node_data(source.data)
         source_status = data_status(source_data)
         if all(str(node["id"]) != source.id for node in graph_nodes):
-            graph_nodes.append(_node_to_graph(source))
+            graph_nodes.append(graph_node_data(source))
 
         source_info = CanvasInputSource(
             node_id=source.id,
@@ -130,7 +108,7 @@ async def resolve_node_inputs(episode_id: int, node_id: str) -> ResolvedCanvasIn
             ids = _asset_ids(source)
             if (
                 edge.source_port != CanvasSourcePort.OUTPUT_ASSET
-                or source_status != CanvasNodeStatus.SUCCESS
+                or not data_has_output_assets(source_data)
                 or not ids
             ):
                 waiting_on.append(
@@ -164,6 +142,7 @@ async def resolve_node_inputs(episode_id: int, node_id: str) -> ResolvedCanvasIn
         local_prompt=local_prompt,
         upstream_texts=tuple(upstream_texts),
         refs=tuple(refs),
+        library_ref_asset_ids=tuple(collect_library_ref_asset_ids(target_data.library_refs)),
         waiting_on=tuple(waiting_on),
         sources=tuple(sources),
     )

@@ -270,6 +270,31 @@ def test_manual_confirm_tools_exclude_edge_tool() -> None:
     assert "apply_canvas_arrange" not in tools
 
 
+def test_apply_upload_to_data_writes_upload_projection() -> None:
+    from app.server.canvas.domain.node_data import apply_upload_to_data
+
+    existing = CanvasNodeData(prompt="本地参考图")
+    merged = apply_upload_to_data(
+        existing,
+        asset_id=42,
+        preview_url="https://storage/x/42",
+        filename="cat.png",
+        asset_type="image",
+    )
+    assert merged.output_source == "upload"
+    assert merged.output_asset_ids == [42]
+    assert merged.asset_id == 42
+    assert merged.path == "https://storage/x/42"
+    assert merged.preview_url == "https://storage/x/42"
+    assert [path.model_dump(mode="json") for path in merged.paths or []] == [
+        {"asset_id": 42, "url": "https://storage/x/42", "thumb_url": None}
+    ]
+    assert merged.library_refs is None
+    assert merged.status is None
+    # 原有可写字段保留
+    assert merged.prompt == "本地参考图"
+
+
 def test_dump_client_writable_strips_projection_and_nulls() -> None:
     from app.server.canvas.domain.node_data import dump_client_writable_node_data
 

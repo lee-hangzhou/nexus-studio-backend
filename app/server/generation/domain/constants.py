@@ -1,11 +1,10 @@
+from app.server.assets.domain.upload_rules import MATERIAL_MAX_BYTES
 from app.server.generation.domain.enums import (
     GatewayContentType,
     GenerationKind,
     MaterialType,
     ReferenceMode,
 )
-
-MATERIAL_MAX_BYTES = 200 * 1024 * 1024
 
 MIME_PREFIX_IMAGE = "image/"
 MIME_PREFIX_VIDEO = "video/"

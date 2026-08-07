@@ -15,7 +15,6 @@ from app.server.chat.domain.enums import ChatMessageRole
 from app.server.generation.domain.enums import GenerationKind
 from app.server.generation.domain.models import GenerationModelCapabilities
 from app.server.generation.schemas import (
-    GenerateMaterialUploadResponse,
     GenerateModelsResponse,
     GenerateTaskListRequest,
     GenerateTaskListResponse,
@@ -149,15 +148,6 @@ class GenerationPort(Protocol):
         model_id: str,
         kind: GenerationKind,
     ) -> GenerationModelCapabilities: ...
-
-    async def upload_material(
-        self,
-        user_id: int,
-        *,
-        filename: str,
-        mime_type: str,
-        raw_bytes: bytes,
-    ) -> GenerateMaterialUploadResponse: ...
 
 
 @runtime_checkable

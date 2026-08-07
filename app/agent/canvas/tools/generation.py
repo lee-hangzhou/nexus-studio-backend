@@ -8,20 +8,33 @@ from langchain_core.tools import StructuredTool
 
 from app.agent.canvas.errors import GENERATION_FAILED, NODE_GENERATION_IN_PROGRESS
 from app.agent.canvas.node_execution.generation_guard import (
-    NodeGenerationInProgressError,
-    claim_node_for_generation,
     node_generation_in_progress_detail,
 )
 from app.agent.canvas.node_submit.prepare import prepare_node_submit
 from app.agent.chat.tools.result import ToolResult
 from app.agent.runtime.ports import get_canvas_port, get_generation_port
-from app.contracts.canvas import CanvasPatchResponse, GenerationProgress
-from app.server.canvas.domain.enums import CanvasNodeStatus
+from app.contracts.canvas import CanvasNodeData, CanvasNodeView, CanvasPosition
 from app.server.canvas.schemas.generation import SubmitNodeGenerationInput
 from app.server.canvas.services.episode_fence import canvas_episode_fence
 from app.server.exceptions.base import AppError
+from app.server.exceptions.codes import ErrorCode
 from app.server.generation.domain.enums import GenerationKind
 from app.server.generation.schemas import SubmitGenerateRequest
+from app.server.ports.product import CanvasNodeDTO
+
+
+def _node_view_from_dto(dto: CanvasNodeDTO) -> CanvasNodeView:
+    """将 Port 节点 DTO 转为契约 CanvasNodeView"""
+    return CanvasNodeView(
+        id=UUID(dto.id),
+        kind=dto.kind,
+        revision=dto.revision,
+        position=CanvasPosition(x=dto.position_x, y=dto.position_y),
+        width=dto.width,
+        height=dto.height,
+        data=CanvasNodeData.model_validate(dto.data),
+        output_asset_urls=list(dto.output_asset_urls) or None,
+    )
 
 
 async def submit_node_generation_for_episode(
@@ -30,21 +43,20 @@ async def submit_node_generation_for_episode(
     user_id: int,
     args: SubmitNodeGenerationInput,
 ) -> tuple[ToolResult, dict[str, Any] | None]:
-    """提交生成任务, 节点标为 running, 返回 ToolResult 与可选 SSE delta"""
+    """Agent 提交节点生成，prepare 后走 GenerationService.submit 绑定节点"""
+    del project_id
     async with canvas_episode_fence.generation(episode_id):
-        return await _submit_node_generation_locked(project_id, episode_id, user_id, args)
+        return await _submit_node_generation_locked(episode_id, user_id, args)
 
 
 async def _submit_node_generation_locked(
-    project_id: int,
     episode_id: int,
     user_id: int,
     args: SubmitNodeGenerationInput,
 ) -> tuple[ToolResult, dict[str, Any] | None]:
-    """已持生成栅栏的提交实现"""
+    """已持生成栅栏的 Agent 提交实现"""
     canvas = get_canvas_port()
     try:
-        rev, _claimed_view = await claim_node_for_generation(episode_id, args.node_id)
         voice_id = args.voice_id
         if args.kind == GenerationKind.AUDIO:
             node_row = await canvas.get_node(episode_id, args.node_id)
@@ -76,62 +88,14 @@ async def _submit_node_generation_locked(
             duration=args.duration,
             reference_mode=args.reference_mode,
             ref_asset_ids=list(prepared.ref_asset_ids),
+            episode_id=episode_id,
+            node_id=args.node_id,
         )
-        try:
-            submitted = await get_generation_port().submit(user_id, req)
-        except Exception as exc:
-            error_message = exc.message if isinstance(exc, AppError) else "generation failed"
-            fail_rev, fail_view = await canvas.update_node_generation(
-                episode_id,
-                args.node_id,
-                task_id=None,
-                status=CanvasNodeStatus.FAILED,
-                error_message=error_message,
-                expected_revision=rev,
-            )
-            await canvas.publish_episode_graph_event(
-                episode_id,
-                canvas_patch=CanvasPatchResponse(
-                    nodes=[fail_view],
-                    edges=[],
-                    deleted_node_ids=[],
-                    deleted_edge_ids=[],
-                ),
-                progress=GenerationProgress(
-                    node_id=UUID(args.node_id),
-                    task_id=None,
-                    status=CanvasNodeStatus.FAILED,
-                    revision=fail_rev,
-                ),
-            )
-            raise
-        rev, node_view = await canvas.update_node_generation(
-            episode_id,
-            args.node_id,
-            task_id=submitted.task_id,
-            status=CanvasNodeStatus.RUNNING,
-            model_id=args.model_id,
-            voice_id=voice_id,
-            duration_sec=args.duration if args.kind == GenerationKind.VIDEO else None,
-            ratio=args.ratio,
-            resolution=args.resolution,
-            expected_revision=rev,
-        )
-        await canvas.publish_episode_graph_event(
-            episode_id,
-            canvas_patch=CanvasPatchResponse(
-                nodes=[node_view],
-                edges=[],
-                deleted_node_ids=[],
-                deleted_edge_ids=[],
-            ),
-            progress=GenerationProgress(
-                node_id=UUID(args.node_id),
-                task_id=submitted.task_id,
-                status=CanvasNodeStatus.RUNNING,
-                revision=rev,
-            ),
-        )
+        submitted = await get_generation_port().submit(user_id, req)
+        node_dto = await canvas.get_node(episode_id, args.node_id)
+        if node_dto is None:
+            raise AppError(ErrorCode.RESOURCE_NOT_FOUND, f"node {args.node_id} not found")
+        node_view = _node_view_from_dto(node_dto)
         delta = {
             "nodes": [node_view.model_dump(mode="json")],
             "edges": [],
@@ -141,27 +105,30 @@ async def _submit_node_generation_locked(
         out = {
             "task_id": submitted.task_id,
             "status": submitted.status,
-            "revision": rev,
+            "revision": node_view.revision,
             "node_id": args.node_id,
         }
         return ToolResult.ok(json.dumps(out, ensure_ascii=False)), delta
-    except NodeGenerationInProgressError as exc:
-        task_id = exc.details.get("task_id") if exc.details else None
-        return (
-            ToolResult.fail(
-                NODE_GENERATION_IN_PROGRESS,
-                detail=node_generation_in_progress_detail(
-                    task_id=int(task_id) if task_id is not None else None
+    except AppError as exc:
+        if exc.code == ErrorCode.CANVAS_NODE_GENERATION_IN_PROGRESS:
+            task_id = None
+            if exc.details and exc.details.get("task_id") is not None:
+                task_id = int(exc.details["task_id"])
+            return (
+                ToolResult.fail(
+                    NODE_GENERATION_IN_PROGRESS,
+                    detail=node_generation_in_progress_detail(task_id=task_id),
                 ),
-            ),
-            None,
-        )
-    except Exception:
-        return ToolResult.fail(GENERATION_FAILED, detail="generation failed"), None
+                None,
+            )
+        return ToolResult.fail(GENERATION_FAILED, detail=exc.message), None
+    except Exception as exc:
+        return ToolResult.fail(GENERATION_FAILED, detail=str(exc) or "generation failed"), None
 
 
 def build_submit_node_generation_tool(*, project_id: int, episode_id: int, user_id: int) -> StructuredTool:
     """构建 submit_node_generation 结构化工具"""
+
     async def _run(**kwargs: Any) -> str:
         """工具入口, 校验参数后提交节点生成"""
         args = SubmitNodeGenerationInput.model_validate(kwargs)

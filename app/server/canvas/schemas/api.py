@@ -128,7 +128,16 @@ class CanvasNodeGenerateResponse(BaseModel):
     error_message: str | None = None
 
 
+class CanvasBindUploadRequest(BaseModel):
+    """将已登记资产绑定为节点上传结果"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int = Field(ge=1)
+
+
 __all__ = [
+    "CanvasBindUploadRequest",
     "CanvasCancelRequest",
     "CanvasEdgeView",
     "CanvasMessageView",

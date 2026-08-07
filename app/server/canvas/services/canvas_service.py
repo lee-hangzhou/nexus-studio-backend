@@ -11,15 +11,19 @@ from tortoise.transactions import in_transaction
 
 from app.contracts.canvas import CanvasNodeData, CanvasRevisionConflictItem
 from app.server.assets.persistence.assets import Assets
-from app.server.assets.services.service import ASSET_SOURCE_GENERATE_RESULT, asset_service
+from app.server.assets.services.service import (
+    ASSET_SOURCE_GENERATE_RESULT,
+    asset_service,
+    asset_type_from_mime,
+)
 from app.server.canvas.domain.constants import (
     CANVAS_OPERATION_STATUS_APPLIED,
     CANVAS_OPERATION_TYPE_APPLY_PATCH,
 )
-from app.server.canvas.domain.enums import CanvasNodeStatus
+from app.server.canvas.domain.enums import CanvasNodeKind, CanvasNodeStatus
 from app.server.canvas.domain.node_data import (
     apply_generation_to_data,
-    data_status,
+    apply_upload_to_data,
     dump_node_data,
     ensure_create_defaults,
     merge_client_node_data,
@@ -105,6 +109,25 @@ def _metadata_int(metadata: dict | None, key: str) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+_NODE_UPLOAD_ALLOWED_TYPES: dict[CanvasNodeKind, frozenset[str]] = {
+    CanvasNodeKind.IMAGE: frozenset({"image"}),
+    CanvasNodeKind.VIDEO: frozenset({"image"}),
+}
+
+
+def _require_upload_compatible(kind: CanvasNodeKind, asset_type: str) -> None:
+    """节点类型与上传素材类型必须兼容, 文本与音频节点暂不支持上传"""
+    allowed = _NODE_UPLOAD_ALLOWED_TYPES.get(kind)
+    if allowed is None:
+        raise AppError(ErrorCode.INVALID_PARAMS, f"node kind {kind.value} 不支持上传素材")
+    if asset_type not in allowed:
+        raise AppError(
+            ErrorCode.INVALID_PARAMS,
+            f"node kind {kind.value} 不支持上传 {asset_type} 素材",
+            details={"kind": kind.value, "asset_type": asset_type},
+        )
 
 
 def _asset_allowed_for_node(scope: CanvasScope, node: CanvasNodeView, asset: Assets) -> bool:
@@ -681,6 +704,66 @@ class CanvasService:
             node_view = node_view_from_row(row)
         return rev, node_view
 
+    async def upload_node_asset(
+        self,
+        scope: CanvasScope,
+        node_id: str,
+        *,
+        asset_id: int,
+        preview_url: str,
+        filename: str,
+        mime_type: str,
+    ) -> tuple[int, CanvasNodeView]:
+        """写回节点本地上传结果快照（output_source=upload）并 bump revision"""
+        asset_type = asset_type_from_mime(mime_type)
+        async with in_transaction():
+            episode = await ProjectEpisodes.select_for_update().filter(
+                id=scope.episode_id,
+                deleted_at__isnull=True,
+            ).first()
+            if episode is None:
+                raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "episode not found")
+            meta = await CanvasEpisodeMeta.select_for_update().filter(episode_id=scope.episode_id).first()
+            if meta is None:
+                raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "canvas episode meta not found")
+            asset = await Assets.filter(
+                id=asset_id,
+                user_id=scope.user_id,
+                deleted_at__isnull=True,
+            ).first()
+            if asset is None:
+                raise AppError(ErrorCode.RESOURCE_NOT_FOUND, f"asset {asset_id} not found")
+            asset_metadata = dict(asset.metadata or {})
+            asset_metadata.setdefault("project_id", scope.project_id)
+            asset_metadata.setdefault("episode_id", scope.episode_id)
+            asset_metadata.setdefault("node_id", node_id)
+            await Assets.filter(id=asset_id).update(metadata=asset_metadata)
+
+            row = await self._get_node_for_update(scope.episode_id, UUID(node_id))
+            _require_upload_compatible(row.kind, asset_type)
+            existing = parse_node_data(row.data)
+            merged = apply_upload_to_data(
+                existing,
+                asset_id=asset_id,
+                preview_url=preview_url,
+                filename=filename,
+                asset_type=asset_type,
+            )
+            row.data = dump_node_data(merged)
+            row.revision = row.revision + 1
+            await row.save()
+            episode.updated_at = datetime.now(timezone.utc)
+            await episode.save(update_fields=["updated_at"])
+            rev = row.revision
+            node_view = node_view_from_row(row)
+
+        await refresh_node_asset_urls([node_view], scope=scope)
+        await publish_canvas_patch(
+            scope.episode_id,
+            CanvasPatchResponse(nodes=[node_view]),
+        )
+        return rev, node_view
+
     async def _require_nodes(self, episode_id: int, node_ids: list[UUID]) -> None:
         """确认节点均存在且未删除"""
         unique_ids = list(dict.fromkeys(node_ids))
@@ -691,6 +774,17 @@ class CanvasService:
         ).count()
         if count != len(unique_ids):
             raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "node not found")
+
+    async def require_upload_compatible_node(self, episode_id: int, node_id: str, *, mime_type: str) -> None:
+        """上传前校验节点存在且类型与素材兼容, 先于资产落库以避免孤儿资产"""
+        node = await CanvasNodes.filter(
+            id=UUID(node_id),
+            episode_id=episode_id,
+            deleted_at__isnull=True,
+        ).first()
+        if node is None:
+            raise AppError(ErrorCode.RESOURCE_NOT_FOUND, f"node {node_id} not found")
+        _require_upload_compatible(node.kind, asset_type_from_mime(mime_type))
 
     async def _get_node_for_update(self, episode_id: int, node_id: UUID) -> CanvasNodes:
         """行锁读取待更新节点"""

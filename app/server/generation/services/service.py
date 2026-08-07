@@ -47,7 +47,6 @@ from app.server.generation.domain.gateway_status import (
 from app.server.generation.domain.models import GenerationModelCapabilities
 from app.server.generation.domain.rules import (
     material_type_from_mime,
-    validate_material_upload,
     validate_reference_materials,
     validate_submit_params,
 )
@@ -55,7 +54,6 @@ from app.server.generation.persistence.generate_task import GenerateTask
 from app.server.generation.persistence.repository import GenerateTaskQuery, GenerateTaskRepository
 from app.server.generation.schemas import (
     GenerateCallbackPayload,
-    GenerateMaterialUploadResponse,
     GenerateModelItem,
     GenerateModelsResponse,
     GenerateRefMaterial,
@@ -113,6 +111,21 @@ class GenerationService:
         self._capabilities_expires_at: float = 0.0
 
     async def submit(self, user_id: int, req: SubmitGenerateRequest) -> GenerateTaskSubmitResponse:
+        canvas_episode_id = req.episode_id
+        canvas_node_id = req.node_id.strip() if req.node_id else None
+        if canvas_episode_id is not None and canvas_node_id:
+            from app.server.canvas.services.episode_fence import canvas_episode_fence
+            from app.server.canvas.services.generation_bind import (
+                assert_node_has_no_active_generate_task,
+            )
+
+            await canvas_episode_fence.assert_writable(canvas_episode_id)
+            await assert_node_has_no_active_generate_task(
+                episode_id=canvas_episode_id,
+                node_id=canvas_node_id,
+                user_id=user_id,
+            )
+
         capabilities = await self.require_model_capabilities(req.model_id, req.kind)
         validate_submit_params(
             kind=req.kind,
@@ -178,41 +191,24 @@ class GenerationService:
 
         await self._tasks.bind_union_task_queued(task.id, union_task_id)
         task = await self._tasks.get_by_id_required(task.id)
+        if canvas_episode_id is not None and canvas_node_id:
+            from app.server.canvas.services.generation_bind import bind_generate_task_to_node
+
+            await bind_generate_task_to_node(
+                episode_id=canvas_episode_id,
+                node_id=canvas_node_id,
+                user_id=user_id,
+                task_id=task.id,
+            )
         logger.info(
             "generate.submit.ok",
             task_id=task.id,
             union_task_id=union_task_id,
             status=task.status,
+            episode_id=canvas_episode_id,
+            node_id=canvas_node_id,
         )
         return GenerateTaskSubmitResponse(task_id=task.id, status=task.status)
-
-    async def upload_material(
-        self,
-        user_id: int,
-        *,
-        filename: str,
-        mime_type: str,
-        raw_bytes: bytes,
-    ) -> GenerateMaterialUploadResponse:
-        name = filename.strip()
-        content_type = mime_type.strip()
-        if not name:
-            raise AppError(ErrorCode.INVALID_PARAMS, "素材文件名不能为空")
-        if not content_type:
-            raise AppError(ErrorCode.INVALID_PARAMS, "素材 Content-Type 不能为空")
-        validate_material_upload(mime_type=content_type, size=len(raw_bytes))
-        asset = await self._asset_service.upload_generate_material(
-            user_id=user_id,
-            filename=name,
-            mime_type=content_type,
-            raw_bytes=raw_bytes,
-        )
-        return GenerateMaterialUploadResponse(
-            asset_id=asset.id,
-            filename=asset.filename,
-            mime_type=asset.mime_type,
-            url=self._asset_service.preview_url(asset.storage_key),
-        )
 
     async def get_task_status(self, task_id: int, user_id: int) -> GenerateTaskView:
         observed = await self.observe_task(task_id, user_id)

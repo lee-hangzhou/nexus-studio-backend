@@ -1,14 +1,25 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 from app.contracts.gateway import GatewayGenerateCallback, GatewayResultItem
 from app.contracts.generation import GenerateParamOptions
 from app.server.generation.domain.enums import GenerationKind, GenerationTaskStatus, ReferenceMode
 
 
+class SubmitGenerateManualRef(BaseModel):
+    """画布人手提交时的参考资产（与前端 manual_refs 对齐）"""
+
+    asset_id: int = Field(ge=1)
+
+
 class SubmitGenerateRequest(BaseModel):
+    """提交生成；可选绑定画布节点（episode_id+node_id 须同时出现或不出现）
+
+    绑定语义：任务入队成功后只写节点 generate_task_id，不维护节点生命周期 status
+    """
+
     kind: GenerationKind
     prompt: str = Field(..., min_length=1)
     model_id: str = Field(..., min_length=1)
@@ -19,18 +30,28 @@ class SubmitGenerateRequest(BaseModel):
     duration: Optional[int] = Field(default=None, ge=3, le=15)
     reference_mode: Optional[ReferenceMode] = None
     ref_asset_ids: List[int] = Field(default_factory=list)
+    episode_id: int | None = Field(default=None, ge=1)
+    node_id: str | None = None
+    submit_content: list[dict] | None = Field(
+        default=None,
+        description="画布编辑器 content，人手绑定时用于 refs 校验",
+    )
+    manual_refs: list[SubmitGenerateManualRef] = Field(default_factory=list)
+    preview_media_asset_ids: list[int] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _canvas_binding_pair(self) -> "SubmitGenerateRequest":
+        """episode_id 与 node_id 必须同有或同无"""
+        has_episode = self.episode_id is not None
+        has_node = bool(self.node_id and self.node_id.strip())
+        if has_episode != has_node:
+            raise ValueError("episode_id 与 node_id 必须同时提供或同时省略")
+        return self
 
 
 class GenerateTaskSubmitResponse(BaseModel):
     task_id: int
     status: GenerationTaskStatus
-
-
-class GenerateMaterialUploadResponse(BaseModel):
-    asset_id: int
-    filename: str
-    mime_type: str
-    url: str
 
 
 class GenerateTaskStatusRequest(BaseModel):

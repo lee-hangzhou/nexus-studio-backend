@@ -74,7 +74,6 @@ from app.server.assets.persistence.repository import AssetRepository
 from app.server.chat.persistence.attachment_repository import ChatAttachmentRepository
 from app.server.chat.services.upgrade_invite import UpgradeInviteService
 from app.server.generation.schemas import (
-    GenerateMaterialUploadResponse,
     GenerateModelsResponse,
     GenerateTaskListRequest,
     GenerateTaskListResponse,
@@ -145,21 +144,6 @@ class GenerationPortAdapter(GenerationPort, object):
         kind: GenerationKind,
     ) -> GenerationModelCapabilities:
         return await self._service.require_model_capabilities(model_id, kind)
-
-    async def upload_material(
-        self,
-        user_id: int,
-        *,
-        filename: str,
-        mime_type: str,
-        raw_bytes: bytes,
-    ) -> GenerateMaterialUploadResponse:
-        return await self._service.upload_material(
-            user_id,
-            filename=filename,
-            mime_type=mime_type,
-            raw_bytes=raw_bytes,
-        )
 
 
 def _task_dto(task: GenerateTask) -> GenerationTaskDTO:
@@ -416,7 +400,6 @@ class CanvasPortAdapter(CanvasPort, object):
                 raise AppError(ErrorCode.RESOURCE_NOT_FOUND, f"node {node_id} not found")
             from app.server.canvas.domain.node_data import (
                 apply_generation_to_data,
-                data_status,
                 dump_node_data,
                 parse_node_data,
             )
@@ -430,7 +413,8 @@ class CanvasPortAdapter(CanvasPort, object):
                 ).first()
                 if task is not None and GatewayTaskStatus(task.status).is_non_terminal:
                     active_task_id = task.id
-            if data_status(existing) == CanvasNodeStatus.RUNNING or active_task_id is not None:
+            # 任务权威：仅非终态任务占用；忽略陈旧的节点 status=running
+            if active_task_id is not None:
                 return CanvasNodeClaimDTO(claimed=False, active_task_id=active_task_id)
             claimed = apply_generation_to_data(
                 existing,
@@ -454,48 +438,22 @@ class CanvasPortAdapter(CanvasPort, object):
         *,
         allowed_statuses: tuple[CanvasNodeStatus, ...],
     ) -> tuple[int, CanvasNodeView] | None:
+        """工作流占位：仅当无在途任务且无成功产出时返回 revision；不写节点 RUNNING"""
+        del allowed_statuses
         await canvas_episode_fence.assert_writable(episode_id)
-        async with in_transaction():
-            episode = await ProjectEpisodes.select_for_update().filter(
-                id=episode_id,
-                deleted_at__isnull=True,
-            ).first()
-            if episode is None:
-                # episode 已删除等: 静默跳过, 与抢占失败同语义
-                return None
-            # meta 无字段变更; 仍加锁以保持与 apply_patch 一致的锁顺序
-            meta = await CanvasEpisodeMeta.select_for_update().filter(episode_id=episode_id).first()
-            if meta is None:
-                # episode 在而 meta 缺失属于数据损坏, 不是 claim 竞态
-                raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "canvas episode meta not found")
-            row = await CanvasNodes.select_for_update().filter(
-                episode_id=episode_id,
-                id=UUID(node_id),
-                deleted_at__isnull=True,
-            ).first()
-            if row is None:
-                return None
-            from app.server.canvas.domain.node_data import (
-                apply_generation_to_data,
-                data_status,
-                dump_node_data,
-                parse_node_data,
-            )
+        from app.server.canvas.services.generation_bind import classify_node_generate_gate
 
-            existing = parse_node_data(row.data)
-            if existing.generate_task_id is not None:
-                return None
-            if data_status(existing) not in allowed_statuses:
-                return None
-            claimed = apply_generation_to_data(
-                existing,
-                status=CanvasNodeStatus.RUNNING,
-                generate_error="",
-            )
-            row.data = dump_node_data(claimed)
-            row.revision = row.revision + 1
-            await row.save()
-            return row.revision, node_view_from_row(row)
+        gate = await classify_node_generate_gate(episode_id=episode_id, node_id=node_id)
+        if gate != "idle":
+            return None
+        row = await CanvasNodes.filter(
+            episode_id=episode_id,
+            id=UUID(node_id),
+            deleted_at__isnull=True,
+        ).first()
+        if row is None:
+            return None
+        return row.revision, node_view_from_row(row)
 
     async def list_episode_node_task_ids(self, episode_id: int, *, limit: int) -> list[int]:
         """列出本集节点上的 generate_task_id（有任务的节点，按 updated_at 新到旧）

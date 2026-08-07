@@ -49,6 +49,13 @@ Do not write placeholder sentences like「根据上游提示词与参考图…�
 
 Multi-image: align character descriptions with ref slots (e.g. 图片1 = 男主, 图片2 = 女主).
 
+## Node-local materials: `library_refs` and upload results
+
+- `data.library_refs` on the **target node** are **asset-library** reference tags (writable via `apply_canvas_patch`). They are not projection fields.
+- Node **upload** writes a result snapshot (`output_source=upload`, `output_asset_ids`) — it is **not** a `library_refs` entry.
+- On submit, the target node's own `library_refs` are **auto-merged** into `ref_asset_ids`, ordered **after** connected refs — do **not** add those `asset_id`s yourself, or submit validation fails. If the fused `prompt` needs to reference one, describe it naturally in text.
+- A node with upload/result snapshot exposes `output_asset_ids` to downstream `resolve_node_inputs.refs` when connected.
+
 ## Text → image → video
 
 - Text node: user request / body in `data.content` (string).

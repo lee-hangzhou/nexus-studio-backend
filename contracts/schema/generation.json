@@ -769,7 +769,23 @@
       "title": "ReferenceModeOption",
       "type": "object"
     },
+    "SubmitGenerateManualRef": {
+      "description": "画布人手提交时的参考资产（与前端 manual_refs 对齐）",
+      "properties": {
+        "asset_id": {
+          "minimum": 1,
+          "title": "Asset Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "asset_id"
+      ],
+      "title": "SubmitGenerateManualRef",
+      "type": "object"
+    },
     "SubmitGenerateRequest": {
+      "description": "提交生成；可选绑定画布节点（episode_id+node_id 须同时出现或不出现）\n\n绑定语义：任务入队成功后只写节点 generate_task_id，不维护节点生命周期 status",
       "properties": {
         "count": {
           "default": 1,
@@ -792,13 +808,52 @@
           "default": null,
           "title": "Duration"
         },
+        "episode_id": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Episode Id"
+        },
         "kind": {
           "$ref": "#/$defs/GenerationKind"
+        },
+        "manual_refs": {
+          "items": {
+            "$ref": "#/$defs/SubmitGenerateManualRef"
+          },
+          "title": "Manual Refs",
+          "type": "array"
         },
         "model_id": {
           "minLength": 1,
           "title": "Model Id",
           "type": "string"
+        },
+        "node_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Node Id"
+        },
+        "preview_media_asset_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Preview Media Asset Ids",
+          "type": "array"
         },
         "prompt": {
           "minLength": 1,
@@ -846,6 +901,23 @@
           ],
           "default": null,
           "title": "Resolution"
+        },
+        "submit_content": {
+          "anyOf": [
+            {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "画布编辑器 content，人手绑定时用于 refs 校验",
+          "title": "Submit Content"
         },
         "voice_id": {
           "anyOf": [

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from app.agent.canvas.node_submit.types import (
     ManualMaterialRef,
     MentionItemRef,
     SubmitMaterialRefs,
     WorkflowPromptContent,
 )
+from app.contracts.canvas import ImagePromptLibraryRef
 
 _MEDIA_SEGMENT_TYPES = frozenset({"image_url", "video_url", "audio_url"})
 
@@ -23,7 +26,7 @@ def pick_connected_reference_asset_ids(
     nodes: list[dict],
     edges: list[dict],
 ) -> list[int]:
-    """按 edges 顺序收集 REFERENCE_ASSET 连线的成功节点 output_asset_ids"""
+    """按 edges 顺序收集 REFERENCE_ASSET 连线且已有产出资产的节点"""
     node_by_id = {str(node["id"]): node for node in nodes}
     ids: list[int] = []
     seen: set[int] = set()
@@ -38,10 +41,8 @@ def pick_connected_reference_asset_ids(
         if source is None:
             continue
         source_data = source.get("data") or {}
-        if source_data.get("status") != "success":
-            continue
         raw_ids = source_data.get("output_asset_ids") or []
-        if not isinstance(raw_ids, list):
+        if not isinstance(raw_ids, list) or not raw_ids:
             continue
         for asset_id in raw_ids:
             if not isinstance(asset_id, int) or asset_id <= 0 or asset_id in seen:
@@ -78,14 +79,35 @@ def collect_asset_ids_from_mention_items(items: list[MentionItemRef]) -> list[in
     return ids
 
 
+def collect_library_ref_asset_ids(
+    library_refs: Sequence[dict | ImagePromptLibraryRef] | None,
+) -> list[int]:
+    """从节点自身 library_refs 收集 asset_id（按序去重, 非法条目跳过）"""
+    ids: list[int] = []
+    seen: set[int] = set()
+    for ref in library_refs or []:
+        if isinstance(ref, dict):
+            asset_id = ref.get("asset_id")
+        elif isinstance(ref, ImagePromptLibraryRef):
+            asset_id = ref.asset_id
+        else:
+            continue
+        if not isinstance(asset_id, int) or asset_id <= 0 or asset_id in seen:
+            continue
+        seen.add(asset_id)
+        ids.append(asset_id)
+    return ids
+
+
 def collect_submit_material_refs(
     *,
     content: WorkflowPromptContent,
     connected_asset_ids: list[int],
     manual_refs: list[ManualMaterialRef] | None = None,
     preview_media_refs: list[MentionItemRef] | None = None,
+    library_ref_ids: list[int] | None = None,
 ) -> SubmitMaterialRefs:
-    """四段合并去重收集 submit 用 ref_asset_ids"""
+    """五段合并去重收集 submit 用 ref_asset_ids"""
     ref_asset_ids: list[int] = []
     seen_assets: set[int] = set()
 
@@ -102,5 +124,8 @@ def collect_submit_material_refs(
         if ref.asset_id <= 0:
             raise ValueError(f"manual_ref asset_id must be >= 1, got {ref.asset_id}")
         _push_unique_id(ref_asset_ids, seen_assets, ref.asset_id)
+
+    for asset_id in library_ref_ids or []:
+        _push_unique_id(ref_asset_ids, seen_assets, asset_id)
 
     return SubmitMaterialRefs(ref_asset_ids=tuple(ref_asset_ids))
