@@ -1,0 +1,456 @@
+{
+  "$defs": {
+    "AssetDeleteRequest": {
+      "properties": {
+        "asset_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Asset Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "asset_ids"
+      ],
+      "title": "AssetDeleteRequest",
+      "type": "object"
+    },
+    "AssetIdRequest": {
+      "properties": {
+        "asset_id": {
+          "minimum": 1,
+          "title": "Asset Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "asset_id"
+      ],
+      "title": "AssetIdRequest",
+      "type": "object"
+    },
+    "AssetListRequest": {
+      "properties": {
+        "asset_type": {
+          "default": "all",
+          "title": "Asset Type",
+          "type": "string"
+        },
+        "created_from": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created From"
+        },
+        "created_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created To"
+        },
+        "favorites_only": {
+          "default": false,
+          "title": "Favorites Only",
+          "type": "boolean"
+        },
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "page_size": {
+          "default": 40,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Page Size",
+          "type": "integer"
+        },
+        "query": {
+          "default": "",
+          "title": "Query",
+          "type": "string"
+        },
+        "source_type": {
+          "default": "library",
+          "title": "Source Type",
+          "type": "string"
+        }
+      },
+      "title": "AssetListRequest",
+      "type": "object"
+    },
+    "AssetListResponse": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/AssetViewResponse"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "page": {
+          "title": "Page",
+          "type": "integer"
+        },
+        "page_size": {
+          "title": "Page Size",
+          "type": "integer"
+        },
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "page",
+        "page_size",
+        "total"
+      ],
+      "title": "AssetListResponse",
+      "type": "object"
+    },
+    "AssetRegisterRequest": {
+      "description": "登记已直传到 TOS 的对象为资产",
+      "properties": {
+        "episode_id": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Episode Id"
+        },
+        "filename": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Filename",
+          "type": "string"
+        },
+        "mime_type": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Mime Type",
+          "type": "string"
+        },
+        "project_id": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Id"
+        },
+        "size_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size Bytes"
+        },
+        "source_type": {
+          "enum": [
+            "manual_upload",
+            "generate_material",
+            "agent_upload"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        },
+        "storage_key": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Storage Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "storage_key",
+        "filename",
+        "mime_type",
+        "source_type"
+      ],
+      "title": "AssetRegisterRequest",
+      "type": "object"
+    },
+    "AssetUpdateRequest": {
+      "properties": {
+        "asset_id": {
+          "minimum": 1,
+          "title": "Asset Id",
+          "type": "integer"
+        },
+        "favorite": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Favorite"
+        },
+        "filename": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Filename"
+        }
+      },
+      "required": [
+        "asset_id"
+      ],
+      "title": "AssetUpdateRequest",
+      "type": "object"
+    },
+    "AssetUploadUrlRequest": {
+      "description": "申请资产车道直传 PUT URL",
+      "properties": {
+        "episode_id": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Episode Id"
+        },
+        "filename": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Filename",
+          "type": "string"
+        },
+        "project_id": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Id"
+        },
+        "source_type": {
+          "enum": [
+            "manual_upload",
+            "generate_material",
+            "agent_upload"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "filename",
+        "source_type"
+      ],
+      "title": "AssetUploadUrlRequest",
+      "type": "object"
+    },
+    "AssetUploadUrlResponse": {
+      "properties": {
+        "expires_in": {
+          "title": "Expires In",
+          "type": "integer"
+        },
+        "method": {
+          "const": "PUT",
+          "default": "PUT",
+          "title": "Method",
+          "type": "string"
+        },
+        "source_type": {
+          "enum": [
+            "manual_upload",
+            "generate_material",
+            "agent_upload"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        },
+        "storage_key": {
+          "title": "Storage Key",
+          "type": "string"
+        },
+        "upload_url": {
+          "title": "Upload Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "storage_key",
+        "upload_url",
+        "expires_in",
+        "source_type"
+      ],
+      "title": "AssetUploadUrlResponse",
+      "type": "object"
+    },
+    "AssetViewResponse": {
+      "properties": {
+        "asset_type": {
+          "title": "Asset Type",
+          "type": "string"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "favorite": {
+          "title": "Favorite",
+          "type": "boolean"
+        },
+        "filename": {
+          "title": "Filename",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        },
+        "mime_type": {
+          "title": "Mime Type",
+          "type": "string"
+        },
+        "preview_url": {
+          "title": "Preview Url",
+          "type": "string"
+        },
+        "project_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Id"
+        },
+        "source_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Id"
+        },
+        "source_type": {
+          "title": "Source Type",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "filename",
+        "mime_type",
+        "asset_type",
+        "source_type",
+        "metadata",
+        "status",
+        "favorite",
+        "preview_url",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "AssetViewResponse",
+      "type": "object"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/AssetListRequest"
+    },
+    {
+      "$ref": "#/$defs/AssetIdRequest"
+    },
+    {
+      "$ref": "#/$defs/AssetUpdateRequest"
+    },
+    {
+      "$ref": "#/$defs/AssetDeleteRequest"
+    },
+    {
+      "$ref": "#/$defs/AssetViewResponse"
+    },
+    {
+      "$ref": "#/$defs/AssetListResponse"
+    },
+    {
+      "$ref": "#/$defs/AssetUploadUrlRequest"
+    },
+    {
+      "$ref": "#/$defs/AssetUploadUrlResponse"
+    },
+    {
+      "$ref": "#/$defs/AssetRegisterRequest"
+    }
+  ]
+}
